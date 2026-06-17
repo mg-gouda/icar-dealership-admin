@@ -26,17 +26,18 @@ export default function VehiclesPage() {
   const router = useRouter();
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
-  const { data: vehicles, loading, error } = useQuery<Vehicle[]>(
+  const { data: vehiclesRes, loading, error } = useQuery<{ data: Vehicle[]; meta: { total: number } }>(
     `/vehicles?${new URLSearchParams({ ...(status && { status }), ...(search && { search }), limit: '50' })}`,
     [status, search],
   );
+  const vehicles = vehiclesRes?.data ?? [];
 
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-white">Vehicles</h1>
-          <p className="text-xs text-gray-500 mt-0.5">Inventory management</p>
+          <p className="text-xs text-gray-500 mt-0.5">{vehiclesRes?.meta?.total ?? 0} vehicles</p>
         </div>
         <Link
           href="/vehicles/new"
@@ -81,7 +82,7 @@ export default function VehiclesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {(vehicles ?? []).map((v) => (
+              {vehicles.map((v) => (
                 <tr key={v.id}
                   onClick={() => router.push(`/vehicles/${v.id}`)}
                   className="hover:bg-white/5 transition cursor-pointer">
@@ -98,7 +99,7 @@ export default function VehiclesPage() {
                   <td className="px-4 py-3"><StatusBadge status={v.status} /></td>
                 </tr>
               ))}
-              {vehicles?.length === 0 && (
+              {vehicles.length === 0 && (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500 text-sm">No vehicles found.</td></tr>
               )}
             </tbody>
