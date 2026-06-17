@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import StatusBadge from '../../../../components/StatusBadge';
+import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 
 interface Activity {
   id: string; type: string; notes: string; outcome?: string;
@@ -98,10 +99,12 @@ export default function LeadDetailPage() {
       <div className="rounded-xl border border-white/5 bg-gray-900 p-4 mb-6">
         <p className="text-xs text-gray-500 mb-3 font-medium uppercase tracking-wide">Log Activity</p>
         <div className="flex gap-3 mb-3">
-          <select value={activityForm.type} onChange={(e) => setActivityForm((p) => ({ ...p, type: e.target.value }))}
-            className="px-3 py-1.5 bg-gray-800 border border-white/10 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-blue-500">
-            {ACTIVITY_TYPES.map((t) => <option key={t}>{t}</option>)}
-          </select>
+          <SearchableCombobox
+            options={ACTIVITY_TYPES.map((t) => ({ value: t, label: t.replace(/_/g, ' ') }))}
+            value={activityForm.type}
+            onChange={(v) => setActivityForm((p) => ({ ...p, type: v }))}
+            className="w-44"
+          />
           <input value={activityForm.outcome} onChange={(e) => setActivityForm((p) => ({ ...p, outcome: e.target.value }))}
             placeholder="Outcome (optional)"
             className="flex-1 px-3 py-1.5 bg-gray-800 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" />

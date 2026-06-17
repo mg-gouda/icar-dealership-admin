@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery } from '../../../lib/useApi';
 import StatusBadge from '../../../components/StatusBadge';
+import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 
 interface Vehicle {
   id: string; make: string; model: string; year: number;
@@ -12,7 +13,13 @@ interface Vehicle {
   location?: { name: string };
 }
 
-const STATUSES = ['', 'AVAILABLE', 'RESERVED', 'SOLD', 'IN_TRANSIT', 'PENDING_INSPECTION'];
+const STATUS_OPTIONS = [
+  { value: 'AVAILABLE', label: 'Available' },
+  { value: 'RESERVED', label: 'Reserved' },
+  { value: 'SOLD', label: 'Sold' },
+  { value: 'IN_TRANSIT', label: 'In Transit' },
+  { value: 'PENDING_INSPECTION', label: 'Pending Inspection' },
+];
 
 export default function VehiclesPage() {
   const [status, setStatus] = useState('');
@@ -37,7 +44,6 @@ export default function VehiclesPage() {
         </Link>
       </div>
 
-      {/* Filters */}
       <div className="flex gap-3 mb-5">
         <input
           value={search}
@@ -45,15 +51,15 @@ export default function VehiclesPage() {
           placeholder="Search make, model, stock #…"
           className="flex-1 px-3 py-1.5 bg-gray-900 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
         />
-        <select
+        <SearchableCombobox
+          options={STATUS_OPTIONS}
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="px-3 py-1.5 bg-gray-900 border border-white/10 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-blue-500"
-        >
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>{s || 'All Statuses'}</option>
-          ))}
-        </select>
+          onChange={setStatus}
+          placeholder="All Statuses"
+          clearable
+          clearLabel="All Statuses"
+          className="w-44"
+        />
       </div>
 
       {loading && <p className="text-gray-500 text-sm">Loading…</p>}

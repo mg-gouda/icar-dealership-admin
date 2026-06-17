@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery } from '../../../lib/useApi';
 import StatusBadge from '../../../components/StatusBadge';
+import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 
 interface Lead {
   id: string; firstName: string; lastName: string; phone: string; email?: string;
@@ -13,7 +14,14 @@ interface Lead {
   location?: { name: string };
 }
 
-const STATUSES = ['', 'NEW', 'CONTACTED', 'QUALIFIED', 'NEGOTIATING', 'CLOSED_WON', 'CLOSED_LOST', 'CONVERTED'];
+const STATUS_OPTIONS = [
+  { value: 'NEW', label: 'New' },
+  { value: 'CONTACTED', label: 'Contacted' },
+  { value: 'QUALIFIED', label: 'Qualified' },
+  { value: 'NEGOTIATING', label: 'Negotiating' },
+  { value: 'CLOSED_WON', label: 'Closed Won' },
+  { value: 'CLOSED_LOST', label: 'Closed Lost' },
+];
 
 export default function CrmPage() {
   const [status, setStatus] = useState('');
@@ -45,13 +53,17 @@ export default function CrmPage() {
         <input value={search} onChange={(e) => setSearch(e.target.value)}
           placeholder="Search name, phone…"
           className="flex-1 px-3 py-1.5 bg-gray-900 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" />
-        <select value={status} onChange={(e) => setStatus(e.target.value)}
-          className="px-3 py-1.5 bg-gray-900 border border-white/10 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-blue-500">
-          {STATUSES.map((s) => <option key={s} value={s}>{s || 'All Statuses'}</option>)}
-        </select>
+        <SearchableCombobox
+          options={STATUS_OPTIONS}
+          value={status}
+          onChange={setStatus}
+          placeholder="All Statuses"
+          clearable
+          clearLabel="All Statuses"
+          className="w-44"
+        />
       </div>
 
-      {/* Summary strip */}
       <div className="grid grid-cols-4 gap-3 mb-6">
         {(['NEW', 'CONTACTED', 'QUALIFIED', 'NEGOTIATING'] as const).map((s) => (
           <button key={s} onClick={() => setStatus(status === s ? '' : s)}

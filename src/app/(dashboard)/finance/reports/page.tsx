@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { apiFetch } from '../../../../lib/useApi';
-import StatusBadge from '../../../../components/StatusBadge';
+import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 
 type ReportType = 'trial-balance' | 'income-statement' | 'balance-sheet' | 'aged-receivables' | 'aged-payables';
 
@@ -60,13 +60,13 @@ export default function ReportsPage() {
 
       {/* Report selector + date inputs */}
       <div className="rounded-xl border border-white/5 bg-gray-900 p-4 mb-4 flex flex-wrap gap-3 items-end">
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Report</label>
-          <select value={report} onChange={(e) => { setReport(e.target.value as ReportType); setData(null); }}
-            className="bg-gray-800 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
-            {REPORTS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-          </select>
-        </div>
+        <SearchableCombobox
+          label="Report"
+          options={REPORTS.map((r) => ({ value: r.key, label: r.label }))}
+          value={report}
+          onChange={(v) => { setReport(v as ReportType); setData(null); }}
+          className="w-52"
+        />
         {active.needsRange ? (
           <>
             <div>

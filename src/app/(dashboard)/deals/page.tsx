@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery } from '../../../lib/useApi';
 import StatusBadge from '../../../components/StatusBadge';
+import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 
 interface Deal {
   id: string; status: string; purchaseMethod: string; salePrice: number;
@@ -14,8 +15,19 @@ interface Deal {
   location?: { name: string };
 }
 
-const STATUSES = ['', 'DRAFT', 'PENDING_FINANCE', 'APPROVED', 'FINALIZED', 'CANCELLED'];
-const METHODS = ['', 'CASH', 'DEALERSHIP_INSTALLMENT', 'BANK_FINANCING'];
+const STATUS_OPTIONS = [
+  { value: 'DRAFT', label: 'Draft' },
+  { value: 'PENDING_FINANCE', label: 'Pending Finance' },
+  { value: 'APPROVED', label: 'Approved' },
+  { value: 'FINALIZED', label: 'Finalized' },
+  { value: 'CANCELLED', label: 'Cancelled' },
+];
+
+const METHOD_OPTIONS = [
+  { value: 'CASH', label: 'Cash' },
+  { value: 'DEALERSHIP_INSTALLMENT', label: 'Dealership Installment' },
+  { value: 'BANK_FINANCING', label: 'Bank Financing' },
+];
 
 export default function DealsPage() {
   const [status, setStatus] = useState('');
@@ -40,14 +52,24 @@ export default function DealsPage() {
       </div>
 
       <div className="flex gap-3 mb-5">
-        <select value={status} onChange={(e) => setStatus(e.target.value)}
-          className="px-3 py-1.5 bg-gray-900 border border-white/10 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-blue-500">
-          {STATUSES.map((s) => <option key={s} value={s}>{s || 'All Statuses'}</option>)}
-        </select>
-        <select value={method} onChange={(e) => setMethod(e.target.value)}
-          className="px-3 py-1.5 bg-gray-900 border border-white/10 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-blue-500">
-          {METHODS.map((m) => <option key={m} value={m}>{m || 'All Methods'}</option>)}
-        </select>
+        <SearchableCombobox
+          options={STATUS_OPTIONS}
+          value={status}
+          onChange={setStatus}
+          placeholder="All Statuses"
+          clearable
+          clearLabel="All Statuses"
+          className="w-44"
+        />
+        <SearchableCombobox
+          options={METHOD_OPTIONS}
+          value={method}
+          onChange={setMethod}
+          placeholder="All Methods"
+          clearable
+          clearLabel="All Methods"
+          className="w-52"
+        />
       </div>
 
       {loading && <p className="text-gray-500 text-sm">Loading…</p>}
