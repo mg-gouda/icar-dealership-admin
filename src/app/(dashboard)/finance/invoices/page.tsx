@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '../../../../lib/useApi';
 import StatusBadge from '../../../../components/StatusBadge';
 
@@ -19,6 +20,7 @@ interface Invoice {
 }
 
 export default function InvoicesPage() {
+  const router = useRouter();
   const [type, setType] = useState('CUSTOMER_INVOICE');
   const { data, loading, error } = useQuery<{ items: Invoice[]; total: number }>(
     `/finance/invoices?type=${type}&limit=30`,
@@ -71,7 +73,9 @@ export default function InvoicesPage() {
             </thead>
             <tbody className="divide-y divide-white/5">
               {invoices.map((inv) => (
-                <tr key={inv.id} className="hover:bg-white/2 transition">
+                <tr key={inv.id}
+                  onClick={() => router.push(`/finance/invoices/${inv.id}`)}
+                  className="hover:bg-white/5 transition cursor-pointer">
                   <td className="px-4 py-2.5 text-gray-300 text-xs">
                     {new Date(inv.date).toLocaleDateString('en-EG')}
                   </td>

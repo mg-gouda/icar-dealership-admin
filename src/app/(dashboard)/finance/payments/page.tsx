@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '../../../../lib/useApi';
 import StatusBadge from '../../../../components/StatusBadge';
 
@@ -18,6 +19,7 @@ interface Payment {
 }
 
 export default function PaymentsPage() {
+  const router = useRouter();
   const [type, setType] = useState('INBOUND');
   const { data, loading, error } = useQuery<{ items: Payment[]; total: number }>(
     `/finance/payments?type=${type}&limit=30`,
@@ -69,7 +71,9 @@ export default function PaymentsPage() {
             </thead>
             <tbody className="divide-y divide-white/5">
               {payments.map((p) => (
-                <tr key={p.id} className="hover:bg-white/2 transition">
+                <tr key={p.id}
+                  onClick={() => router.push(`/finance/payments/${p.id}`)}
+                  className="hover:bg-white/5 transition cursor-pointer">
                   <td className="px-4 py-2.5 text-gray-300 text-xs">
                     {new Date(p.date).toLocaleDateString('en-EG')}
                   </td>
