@@ -359,9 +359,9 @@ export default function VehicleDetailPage() {
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Features</p>
               <div className="flex flex-wrap gap-2">
                 {v.features!.map((f) => (
-                  <span key={f.name}
+                  <span key={f.feature}
                     className="px-2.5 py-1 bg-gray-800 text-gray-300 text-xs rounded-full border border-white/5">
-                    {f.name}
+                    {f.feature}
                   </span>
                 ))}
               </div>
