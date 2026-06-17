@@ -23,6 +23,7 @@ const MODULES = [
   { label: 'Taxes', href: '/finance/taxes', desc: 'VAT rates & groups' },
   { label: 'Reconciliation', href: '/finance/reconciliation', desc: 'Match GL to bank lines' },
   { label: 'Commissions', href: '/finance/commissions', desc: 'Accrued → payable → paid' },
+  { label: 'Commission Plans', href: '/finance/commission-plans', desc: 'Plans, percentages & tiers' },
 ];
 
 export default function FinancePage() {

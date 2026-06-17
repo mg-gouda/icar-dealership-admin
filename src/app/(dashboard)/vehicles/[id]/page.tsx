@@ -6,6 +6,8 @@ import { useQuery, apiFetch } from '../../../../lib/useApi';
 import StatusBadge from '../../../../components/StatusBadge';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 
+interface VehicleImage { id: string; url: string; order: number; }
+
 interface Vehicle {
   id: string; make: string; model: string; trim?: string; year: number;
   vin: string; status: string; condition?: string;
@@ -15,8 +17,8 @@ interface Vehicle {
   adminFeeOverride?: number; insuranceFeeOverride?: number;
   description?: string;
   location?: { name: string; city?: string };
-  images?: { id: string; url: string; isPrimary: boolean; caption?: string }[];
-  features?: { name: string; category?: string }[];
+  images?: VehicleImage[];
+  features?: { feature: string }[];
 }
 
 const STATUSES = [
@@ -44,6 +46,8 @@ export default function VehicleDetailPage() {
   const [saveErr, setSaveErr] = useState('');
   const [form, setForm] = useState<Partial<Vehicle>>({});
   const [activeImg, setActiveImg] = useState(0);
+  const [addImgUrl, setAddImgUrl] = useState('');
+  const [addingImg, setAddingImg] = useState(false);
 
   useEffect(() => {
     if (v) setForm({
@@ -85,7 +89,25 @@ export default function VehicleDetailPage() {
     </div>
   );
 
-  const images = [...(v.images ?? [])].sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
+  const images = [...(v.images ?? [])].sort((a, b) => a.order - b.order);
+
+  async function addImage(e: React.FormEvent) {
+    e.preventDefault();
+    if (!addImgUrl) return;
+    setAddingImg(true);
+    try {
+      await apiFetch(`/vehicles/${id}/images`, { method: 'POST', body: JSON.stringify({ url: addImgUrl, order: images.length }) });
+      setAddImgUrl('');
+      await reload();
+    } catch (e: any) { alert(e.message); }
+    finally { setAddingImg(false); }
+  }
+
+  async function deleteImage(imageId: string) {
+    if (!confirm('Delete this image?')) return;
+    await apiFetch(`/vehicles/${id}/images/${imageId}`, { method: 'DELETE' }).catch((e) => alert(e.message));
+    await reload();
+  }
 
   return (
     <div className="p-6 max-w-5xl">
@@ -159,6 +181,29 @@ export default function VehicleDetailPage() {
               ))}
             </div>
           )}
+
+          {/* Image management */}
+          <div className="rounded-xl border border-white/5 bg-gray-900 p-4">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Images</p>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {images.map((img, i) => (
+                <div key={img.id} className={`relative group w-20 h-16 rounded-lg overflow-hidden border-2 cursor-pointer transition ${i === activeImg ? 'border-blue-500' : 'border-white/10'}`}
+                  onClick={() => setActiveImg(i)}>
+                  <img src={img.url} alt="" className="w-full h-full object-cover" />
+                  <button onClick={(e) => { e.stopPropagation(); deleteImage(img.id); }}
+                    className="absolute inset-0 bg-black/60 hidden group-hover:flex items-center justify-center text-white text-xs">✕</button>
+                </div>
+              ))}
+            </div>
+            <form onSubmit={addImage} className="flex gap-2">
+              <input value={addImgUrl} onChange={(e) => setAddImgUrl(e.target.value)} placeholder="Image URL…"
+                className="flex-1 px-3 py-1.5 bg-gray-800 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500" />
+              <button type="submit" disabled={addingImg || !addImgUrl}
+                className="px-3 py-1.5 text-xs text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition">
+                {addingImg ? '…' : 'Add'}
+              </button>
+            </form>
+          </div>
 
           {/* Specs grid */}
           <div className="rounded-xl border border-white/5 bg-gray-900 p-5">
