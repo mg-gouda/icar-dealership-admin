@@ -17,7 +17,7 @@ interface Deal {
     lines: { id: string; lineNumber: number; dueDate: string; amount: number; status: string }[];
   };
   bankApproval?: { status: string; approvedAmount?: number; bankName?: string };
-  invoices?: { id: string; number: string; status: string; total: number }[];
+  invoices?: { id: string; type: string; date: string; status: string; amountTotal: number; paymentStatus: string }[];
   commissions?: { salesRep: { firstName: string; lastName: string }; amount: number; status: string }[];
 }
 
@@ -160,16 +160,21 @@ export default function DealDetailPage() {
           <p className="text-xs text-gray-500 mb-3 font-medium uppercase tracking-wide">Invoices</p>
           <table className="w-full text-xs">
             <thead className="text-gray-400"><tr>
-              <th className="text-left pb-2">Number</th>
+              <th className="text-left pb-2">Type</th>
+              <th className="text-left pb-2">Date</th>
               <th className="text-right pb-2">Total</th>
               <th className="text-left pb-2 pl-3">Status</th>
+              <th className="text-left pb-2 pl-3">Payment</th>
             </tr></thead>
             <tbody className="divide-y divide-white/5">
               {deal.invoices!.map((inv) => (
-                <tr key={inv.id}>
-                  <td className="py-1.5 font-mono text-gray-300">{inv.number}</td>
-                  <td className="py-1.5 text-right text-white">{Number(inv.total).toLocaleString()} EGP</td>
+                <tr key={inv.id} className="hover:bg-white/5 cursor-pointer transition"
+                  onClick={() => router.push(`/finance/invoices/${inv.id}`)}>
+                  <td className="py-1.5 text-gray-300">{inv.type.replace(/_/g, ' ')}</td>
+                  <td className="py-1.5 text-gray-400">{new Date(inv.date).toLocaleDateString('en-EG')}</td>
+                  <td className="py-1.5 text-right text-white">{Number(inv.amountTotal).toLocaleString()} EGP</td>
                   <td className="py-1.5 pl-3"><StatusBadge status={inv.status} /></td>
+                  <td className="py-1.5 pl-3"><StatusBadge status={inv.paymentStatus} /></td>
                 </tr>
               ))}
             </tbody>

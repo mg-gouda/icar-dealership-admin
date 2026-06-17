@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '../../../../lib/useApi';
 import StatusBadge from '../../../../components/StatusBadge';
 
@@ -14,6 +15,7 @@ interface JournalEntry {
 }
 
 export default function GlPage() {
+  const router = useRouter();
   const { data, loading, error } = useQuery<{ items: JournalEntry[]; total: number }>(
     '/finance/gl?limit=30',
   );
@@ -57,7 +59,9 @@ export default function GlPage() {
                 const totalDebit = e.lines?.reduce((s, l) => s + Number(l.debit), 0) ?? 0;
                 const totalCredit = e.lines?.reduce((s, l) => s + Number(l.credit), 0) ?? 0;
                 return (
-                  <tr key={e.id} className="hover:bg-white/2 transition">
+                  <tr key={e.id}
+                    onClick={() => router.push(`/finance/gl/${e.id}`)}
+                    className="hover:bg-white/5 transition cursor-pointer">
                     <td className="px-4 py-2.5 text-gray-300 text-xs">
                       {new Date(e.date).toLocaleDateString('en-EG')}
                     </td>
