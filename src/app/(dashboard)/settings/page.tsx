@@ -7,7 +7,7 @@ import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 
 interface Location {
   id: string; name: string; city?: string; phone?: string; address?: string;
-  defaultAdminFee?: number; defaultInsuranceFee?: number; isActive: boolean;
+  defaultAdminFee?: number; defaultInsuranceFee?: number;
   _count?: { users: number; vehicles: number };
 }
 
@@ -145,9 +145,6 @@ export default function SettingsPage() {
                   <div className="flex items-center gap-4 text-xs text-gray-500">
                     <span>{loc._count?.users ?? 0} users</span>
                     <span>{loc._count?.vehicles ?? 0} vehicles</span>
-                    <span className={loc.isActive ? 'text-green-400' : 'text-red-400'}>
-                      {loc.isActive ? 'Active' : 'Inactive'}
-                    </span>
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-4 pt-4 border-t border-white/5 text-sm">
