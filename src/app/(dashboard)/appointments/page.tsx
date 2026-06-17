@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '../../../lib/useApi';
+import { useRouter } from 'next/navigation';
 import StatusBadge from '../../../components/StatusBadge';
 
 interface Appointment {
@@ -15,6 +16,7 @@ interface Appointment {
 }
 
 export default function AppointmentsPage() {
+  const router = useRouter();
   const { data, loading, error } = useQuery<{ items: Appointment[]; total: number }>(
     '/appointments?limit=30',
   );
@@ -47,7 +49,7 @@ export default function AppointmentsPage() {
             </thead>
             <tbody className="divide-y divide-white/5">
               {appts.map((a) => (
-                <tr key={a.id} className="hover:bg-white/2 transition">
+                <tr key={a.id} onClick={() => router.push(`/appointments/${a.id}`)} className="hover:bg-white/5 cursor-pointer transition">
                   <td className="px-4 py-2.5 text-gray-300 text-xs">
                     {new Date(a.scheduledAt).toLocaleString('en-EG', { dateStyle: 'short', timeStyle: 'short' })}
                   </td>

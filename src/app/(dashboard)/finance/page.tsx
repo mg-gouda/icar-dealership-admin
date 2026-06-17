@@ -20,6 +20,9 @@ const MODULES = [
   { label: 'Fixed Assets', href: '/finance/assets', desc: 'Depreciation schedules' },
   { label: 'Currencies', href: '/finance/currencies', desc: 'Exchange rates' },
   { label: 'Fiscal Years', href: '/finance/fiscal-years', desc: 'Periods & lock dates' },
+  { label: 'Taxes', href: '/finance/taxes', desc: 'VAT rates & groups' },
+  { label: 'Reconciliation', href: '/finance/reconciliation', desc: 'Match GL to bank lines' },
+  { label: 'Commissions', href: '/finance/commissions', desc: 'Accrued → payable → paid' },
 ];
 
 export default function FinancePage() {
