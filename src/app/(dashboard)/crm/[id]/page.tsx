@@ -12,11 +12,10 @@ interface Activity {
 }
 
 interface Lead {
-  id: string; firstName: string; lastName: string; phone: string; email?: string;
+  id: string; name: string; phone?: string; email?: string;
   status: string; source?: string; notes?: string; createdAt: string;
-  followUpDate?: string; lastContactDate?: string;
-  vehicle?: { make: string; model: string; year: number; stockNumber: string };
-  assignedTo?: { firstName: string; lastName: string; email: string };
+  vehicle?: { make: string; model: string; year: number };
+  assignedTo?: { name: string; email?: string };
   location?: { name: string };
   activities?: Activity[];
 }
@@ -60,7 +59,7 @@ export default function LeadDetailPage() {
 
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-white">{lead.firstName} {lead.lastName}</h1>
+          <h1 className="text-xl font-semibold text-white">{lead.name}</h1>
           <p className="text-xs text-gray-500 mt-0.5">{lead.phone} {lead.email && `· ${lead.email}`}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -79,7 +78,7 @@ export default function LeadDetailPage() {
         </div>
         <div className="rounded-xl border border-white/5 bg-gray-900 p-4">
           <p className="text-xs text-gray-500 mb-2">Assigned To</p>
-          <p className="text-white text-sm">{lead.assignedTo ? `${lead.assignedTo.firstName} ${lead.assignedTo.lastName}` : '—'}</p>
+          <p className="text-white text-sm">{lead.assignedTo?.name ?? '—'}</p>
         </div>
       </div>
 

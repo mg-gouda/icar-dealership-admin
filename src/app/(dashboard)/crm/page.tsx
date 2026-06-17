@@ -2,15 +2,16 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '../../../lib/useApi';
 import StatusBadge from '../../../components/StatusBadge';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 
 interface Lead {
-  id: string; firstName: string; lastName: string; phone: string; email?: string;
-  status: string; source?: string; createdAt: string;
+  id: string; name: string; phone?: string; email?: string;
+  status: string; source?: string; createdAt: string; notes?: string;
   vehicle?: { make: string; model: string; year: number };
-  assignedTo?: { firstName: string; lastName: string };
+  assignedTo?: { name: string };
   location?: { name: string };
 }
 
@@ -31,10 +32,11 @@ export default function CrmPage() {
     [status],
   );
 
+  const router = useRouter();
   const filtered = (leads ?? []).filter((l) => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return [l.firstName, l.lastName, l.phone, l.email].some((f) => f?.toLowerCase().includes(q));
+    return [l.name, l.phone, l.email].some((f) => f?.toLowerCase().includes(q));
   });
 
   return (
@@ -90,34 +92,30 @@ export default function CrmPage() {
                 <th className="text-left px-4 py-3 font-medium">Assigned To</th>
                 <th className="text-left px-4 py-3 font-medium">Status</th>
                 <th className="text-left px-4 py-3 font-medium">Date</th>
-                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {filtered.map((l) => (
-                <tr key={l.id} className="hover:bg-white/2 transition">
+                <tr key={l.id}
+                  onClick={() => router.push(`/crm/${l.id}`)}
+                  className="hover:bg-white/5 transition cursor-pointer">
                   <td className="px-4 py-3">
-                    <p className="text-white font-medium">{l.firstName} {l.lastName}</p>
+                    <p className="text-white font-medium">{l.name}</p>
                     <p className="text-xs text-gray-500">{l.phone}</p>
                   </td>
                   <td className="px-4 py-3 text-gray-400 text-xs">
                     {l.vehicle ? `${l.vehicle.year} ${l.vehicle.make} ${l.vehicle.model}` : '—'}
                   </td>
                   <td className="px-4 py-3 text-gray-400 text-xs">{l.source ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-400">
-                    {l.assignedTo ? `${l.assignedTo.firstName} ${l.assignedTo.lastName}` : '—'}
-                  </td>
+                  <td className="px-4 py-3 text-gray-400">{l.assignedTo?.name ?? '—'}</td>
                   <td className="px-4 py-3"><StatusBadge status={l.status} /></td>
                   <td className="px-4 py-3 text-gray-500 text-xs">
                     {new Date(l.createdAt).toLocaleDateString()}
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link href={`/crm/${l.id}`} className="text-blue-400 hover:text-blue-300 text-xs">View →</Link>
-                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500 text-sm">No leads found.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500 text-sm">No leads found.</td></tr>
               )}
             </tbody>
           </table>
