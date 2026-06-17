@@ -7,18 +7,18 @@ import StatusBadge from '../../../../components/StatusBadge';
 
 interface Deal {
   id: string; status: string; purchaseMethod: string; salePrice: number;
-  adminFee: number; insuranceFee: number; notes?: string; createdAt: string;
-  vehicle?: { make: string; model: string; year: number; stockNumber: string; condition: string };
-  customer?: { firstName: string; lastName: string; phone: string; email?: string };
-  salesRep?: { firstName: string; lastName: string };
+  adminFee?: number; insuranceFee?: number; createdAt: string;
+  vehicle?: { make: string; model: string; year: number; vin?: string };
+  customer?: { name: string; phone?: string; email?: string };
+  salesRep?: { name: string };
   location?: { name: string };
   installmentPlan?: {
     downPayment: number; installmentAmount: number; numberOfInstallments: number;
-    lines: { id: string; lineNumber: number; dueDate: string; amount: number; status: string }[];
+    installments: { id: string; dueDate: string; amount: number; status: string; sequence: number }[];
   };
-  bankApproval?: { status: string; approvedAmount?: number; bankName?: string };
-  invoices?: { id: string; type: string; date: string; status: string; amountTotal: number; paymentStatus: string }[];
-  commissions?: { salesRep: { firstName: string; lastName: string }; amount: number; status: string }[];
+  financeApplication?: { status?: string; bankName?: string; approvedAmount?: number };
+  invoices?: { id: string; status: string; amountTotal: number; dueDate?: string }[];
+  commissions?: { user: { name: string }; amount: number; status: string }[];
 }
 
 export default function DealDetailPage() {
@@ -81,7 +81,7 @@ export default function DealDetailPage() {
         {/* Customer */}
         <div className="rounded-xl border border-white/5 bg-gray-900 p-4">
           <p className="text-xs text-gray-500 mb-3 font-medium uppercase tracking-wide">Customer</p>
-          <p className="text-white font-medium">{deal.customer ? `${deal.customer.firstName} ${deal.customer.lastName}` : '—'}</p>
+          <p className="text-white font-medium">{deal.customer?.name ?? '—'}</p>
           <p className="text-gray-400 text-sm">{deal.customer?.phone}</p>
           <p className="text-gray-400 text-sm">{deal.customer?.email}</p>
         </div>
@@ -89,7 +89,7 @@ export default function DealDetailPage() {
         <div className="rounded-xl border border-white/5 bg-gray-900 p-4">
           <p className="text-xs text-gray-500 mb-3 font-medium uppercase tracking-wide">Vehicle</p>
           <p className="text-white font-medium">{deal.vehicle ? `${deal.vehicle.year} ${deal.vehicle.make} ${deal.vehicle.model}` : '—'}</p>
-          <p className="text-gray-400 text-sm">Stock #{deal.vehicle?.stockNumber} · {deal.vehicle?.condition}</p>
+          {deal.vehicle?.vin && <p className="text-gray-400 text-sm font-mono">VIN: {deal.vehicle.vin}</p>}
         </div>
         {/* Pricing */}
         <div className="rounded-xl border border-white/5 bg-gray-900 p-4">
@@ -113,10 +113,10 @@ export default function DealDetailPage() {
         {/* Sales Rep */}
         <div className="rounded-xl border border-white/5 bg-gray-900 p-4">
           <p className="text-xs text-gray-500 mb-3 font-medium uppercase tracking-wide">Sales Rep</p>
-          <p className="text-white font-medium">{deal.salesRep ? `${deal.salesRep.firstName} ${deal.salesRep.lastName}` : '—'}</p>
+          <p className="text-white font-medium">{deal.salesRep?.name ?? '—'}</p>
           {deal.commissions?.map((c, i) => (
-            <div key={i} className="mt-2 text-sm text-gray-400">
-              Commission: {Number(c.amount).toLocaleString()} EGP · <StatusBadge status={c.status} />
+            <div key={i} className="mt-2 text-sm text-gray-400 flex items-center gap-2">
+              {c.user?.name} · {Number(c.amount).toLocaleString()} EGP · <StatusBadge status={c.status} />
             </div>
           ))}
         </div>
@@ -141,9 +141,9 @@ export default function DealDetailPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {deal.installmentPlan.lines.map((l) => (
+              {deal.installmentPlan.installments.map((l) => (
                 <tr key={l.id}>
-                  <td className="py-1.5 text-gray-400">{l.lineNumber}</td>
+                  <td className="py-1.5 text-gray-400">{l.sequence}</td>
                   <td className="py-1.5 text-gray-300">{new Date(l.dueDate).toLocaleDateString()}</td>
                   <td className="py-1.5 text-right text-white">{Number(l.amount).toLocaleString()} EGP</td>
                   <td className="py-1.5 pl-3"><StatusBadge status={l.status} /></td>
@@ -160,21 +160,17 @@ export default function DealDetailPage() {
           <p className="text-xs text-gray-500 mb-3 font-medium uppercase tracking-wide">Invoices</p>
           <table className="w-full text-xs">
             <thead className="text-gray-400"><tr>
-              <th className="text-left pb-2">Type</th>
-              <th className="text-left pb-2">Date</th>
               <th className="text-right pb-2">Total</th>
+              <th className="text-left pb-2 pl-3">Due Date</th>
               <th className="text-left pb-2 pl-3">Status</th>
-              <th className="text-left pb-2 pl-3">Payment</th>
             </tr></thead>
             <tbody className="divide-y divide-white/5">
               {deal.invoices!.map((inv) => (
                 <tr key={inv.id} className="hover:bg-white/5 cursor-pointer transition"
                   onClick={() => router.push(`/finance/invoices/${inv.id}`)}>
-                  <td className="py-1.5 text-gray-300">{inv.type.replace(/_/g, ' ')}</td>
-                  <td className="py-1.5 text-gray-400">{new Date(inv.date).toLocaleDateString('en-EG')}</td>
                   <td className="py-1.5 text-right text-white">{Number(inv.amountTotal).toLocaleString()} EGP</td>
+                  <td className="py-1.5 pl-3 text-gray-400">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('en-EG') : '—'}</td>
                   <td className="py-1.5 pl-3"><StatusBadge status={inv.status} /></td>
-                  <td className="py-1.5 pl-3"><StatusBadge status={inv.paymentStatus} /></td>
                 </tr>
               ))}
             </tbody>

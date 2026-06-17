@@ -2,16 +2,17 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '../../../lib/useApi';
 import StatusBadge from '../../../components/StatusBadge';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 
 interface Deal {
   id: string; status: string; purchaseMethod: string; salePrice: number;
-  adminFee: number; insuranceFee: number; createdAt: string;
-  vehicle?: { make: string; model: string; year: number; stockNumber: string };
-  customer?: { firstName: string; lastName: string; phone: string };
-  salesRep?: { firstName: string; lastName: string };
+  adminFee?: number; insuranceFee?: number; createdAt: string;
+  vehicle?: { make: string; model: string; year: number; price: number };
+  customer?: { name: string; phone?: string };
+  salesRep?: { name: string };
   location?: { name: string };
 }
 
@@ -32,6 +33,7 @@ const METHOD_OPTIONS = [
 export default function DealsPage() {
   const [status, setStatus] = useState('');
   const [method, setMethod] = useState('');
+  const router = useRouter();
   const { data: deals, loading, error } = useQuery<Deal[]>(
     `/deals?${new URLSearchParams({ ...(status && { status }), ...(method && { purchaseMethod: method }), limit: '50' })}`,
     [status, method],
@@ -86,35 +88,30 @@ export default function DealsPage() {
                 <th className="text-left px-4 py-3 font-medium">Sales Rep</th>
                 <th className="text-right px-4 py-3 font-medium">Total</th>
                 <th className="text-left px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {(deals ?? []).map((d) => (
-                <tr key={d.id} className="hover:bg-white/2 transition">
+                <tr key={d.id}
+                  onClick={() => router.push(`/deals/${d.id}`)}
+                  className="hover:bg-white/5 transition cursor-pointer">
                   <td className="px-4 py-3 text-white font-medium">
-                    {d.customer ? `${d.customer.firstName} ${d.customer.lastName}` : '—'}
+                    {d.customer?.name ?? '—'}
                     {d.customer?.phone && <div className="text-xs text-gray-500">{d.customer.phone}</div>}
                   </td>
                   <td className="px-4 py-3 text-gray-300">
                     {d.vehicle ? `${d.vehicle.year} ${d.vehicle.make} ${d.vehicle.model}` : '—'}
-                    {d.vehicle?.stockNumber && <div className="text-xs text-gray-500 font-mono">{d.vehicle.stockNumber}</div>}
                   </td>
                   <td className="px-4 py-3 text-gray-400 text-xs">{d.purchaseMethod?.replace(/_/g, ' ')}</td>
-                  <td className="px-4 py-3 text-gray-400">
-                    {d.salesRep ? `${d.salesRep.firstName} ${d.salesRep.lastName}` : '—'}
-                  </td>
+                  <td className="px-4 py-3 text-gray-400">{d.salesRep?.name ?? '—'}</td>
                   <td className="px-4 py-3 text-right text-white">
-                    {total(d).toLocaleString('ar-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 0 })}
+                    {total(d).toLocaleString('en-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 0 })}
                   </td>
                   <td className="px-4 py-3"><StatusBadge status={d.status} /></td>
-                  <td className="px-4 py-3 text-right">
-                    <Link href={`/deals/${d.id}`} className="text-blue-400 hover:text-blue-300 text-xs">View →</Link>
-                  </td>
                 </tr>
               ))}
               {deals?.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500 text-sm">No deals found.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500 text-sm">No deals found.</td></tr>
               )}
             </tbody>
           </table>
