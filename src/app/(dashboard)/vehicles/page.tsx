@@ -2,14 +2,15 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '../../../lib/useApi';
 import StatusBadge from '../../../components/StatusBadge';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 
 interface Vehicle {
   id: string; make: string; model: string; year: number;
-  stockNumber: string; status: string; listPrice: number;
-  condition: string; bodyType: string; color?: string;
+  vin: string; status: string; price: number;
+  condition?: string; bodyType?: string; color?: string;
   location?: { name: string };
 }
 
@@ -22,6 +23,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function VehiclesPage() {
+  const router = useRouter();
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
   const { data: vehicles, loading, error } = useQuery<Vehicle[]>(
@@ -70,19 +72,20 @@ export default function VehiclesPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-900 text-gray-400 text-xs">
               <tr>
-                <th className="text-left px-4 py-3 font-medium">Stock #</th>
+                <th className="text-left px-4 py-3 font-medium">VIN (last 8)</th>
                 <th className="text-left px-4 py-3 font-medium">Vehicle</th>
                 <th className="text-left px-4 py-3 font-medium">Condition</th>
                 <th className="text-left px-4 py-3 font-medium">Location</th>
                 <th className="text-right px-4 py-3 font-medium">Price</th>
                 <th className="text-left px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {(vehicles ?? []).map((v) => (
-                <tr key={v.id} className="hover:bg-white/2 transition">
-                  <td className="px-4 py-3 font-mono text-gray-300 text-xs">{v.stockNumber}</td>
+                <tr key={v.id}
+                  onClick={() => router.push(`/vehicles/${v.id}`)}
+                  className="hover:bg-white/5 transition cursor-pointer">
+                  <td className="px-4 py-3 font-mono text-gray-400 text-xs">{v.vin?.slice(-8) ?? '—'}</td>
                   <td className="px-4 py-3 text-white font-medium">
                     {v.year} {v.make} {v.model}
                     {v.color && <span className="ml-1 text-gray-500">· {v.color}</span>}
@@ -90,18 +93,13 @@ export default function VehiclesPage() {
                   <td className="px-4 py-3 text-gray-400">{v.condition}</td>
                   <td className="px-4 py-3 text-gray-400">{v.location?.name ?? '—'}</td>
                   <td className="px-4 py-3 text-right text-white">
-                    {v.listPrice?.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 0 })}
+                    {Number(v.price).toLocaleString('en-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 0 })}
                   </td>
                   <td className="px-4 py-3"><StatusBadge status={v.status} /></td>
-                  <td className="px-4 py-3 text-right">
-                    <Link href={`/vehicles/${v.id}`} className="text-blue-400 hover:text-blue-300 text-xs">
-                      View →
-                    </Link>
-                  </td>
                 </tr>
               ))}
               {vehicles?.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500 text-sm">No vehicles found.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500 text-sm">No vehicles found.</td></tr>
               )}
             </tbody>
           </table>
