@@ -9,6 +9,7 @@ const navItems = [
   { href: '/vehicles', label: 'Vehicles' },
   { href: '/deals', label: 'Deals' },
   { href: '/crm', label: 'CRM' },
+  { href: '/appointments', label: 'Appointments' },
   { href: '/finance', label: 'Finance' },
   { href: '/settings', label: 'Settings' },
 ];
