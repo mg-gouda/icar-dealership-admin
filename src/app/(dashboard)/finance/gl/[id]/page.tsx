@@ -23,7 +23,7 @@ interface JournalEntry {
   journal?: { code: string; name: string };
   currency?: { code: string };
   lines: JELine[];
-  createdBy?: { firstName: string; lastName: string };
+  createdBy?: { name: string };
 }
 
 const fmt = (n: number) =>

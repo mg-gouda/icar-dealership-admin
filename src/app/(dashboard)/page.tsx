@@ -68,7 +68,7 @@ export default function DashboardHome() {
               {(deals ?? []).slice(0, 5).map((d: any) => (
                 <tr key={d.id} className="hover:bg-white/2 transition">
                   <td className="py-2.5 text-white font-medium">
-                    {d.customer ? `${d.customer.firstName} ${d.customer.lastName}` : '—'}
+                    {d.customer?.name ?? '—'}
                   </td>
                   <td className="py-2.5 text-gray-400 text-xs">
                     {d.vehicle ? `${d.vehicle.year} ${d.vehicle.make} ${d.vehicle.model}` : '—'}
