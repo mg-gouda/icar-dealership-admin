@@ -10,6 +10,7 @@ const navItems = [
   { href: '/deals', label: 'Deals' },
   { href: '/crm', label: 'CRM' },
   { href: '/appointments', label: 'Appointments' },
+  { href: '/purchase-orders', label: 'Purchase Orders' },
   { href: '/finance', label: 'Finance' },
   { href: '/settings', label: 'Settings' },
 ];
