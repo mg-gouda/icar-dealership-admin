@@ -49,6 +49,18 @@ export default function LeadDetailPage() {
     reload();
   }
 
+  async function convertToDeal() {
+    if (!confirm('Convert this lead to a deal? This will mark the lead CLOSED_WON and create a draft deal.')) return;
+    setConverting(true);
+    try {
+      const deal = await apiFetch<{ id: string }>(`/leads/${id}/convert`, { method: 'PATCH' });
+      router.push(`/deals/${deal.id}`);
+    } catch (e: any) { alert(e.message); }
+    finally { setConverting(false); }
+  }
+
+  const [converting, setConverting] = useState(false);
+
   if (loading) return <div className="p-6 text-gray-500 text-sm">Loading…</div>;
   if (error) return <div className="p-6 text-red-400 text-sm">{error}</div>;
   if (!lead) return null;
@@ -64,6 +76,12 @@ export default function LeadDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge status={lead.status} />
+          {['QUALIFIED', 'NEGOTIATING'].includes(lead.status) && (
+            <button onClick={convertToDeal} disabled={converting}
+              className="px-3 py-1.5 text-xs font-medium text-white bg-green-700 hover:bg-green-600 disabled:opacity-50 rounded-lg transition">
+              {converting ? '…' : 'Convert to Deal →'}
+            </button>
+          )}
         </div>
       </div>
 
