@@ -53,8 +53,13 @@ export default function LeadDetailPage() {
     if (!confirm('Convert this lead to a deal? This will mark the lead CLOSED_WON and create a draft deal.')) return;
     setConverting(true);
     try {
-      const deal = await apiFetch<{ id: string }>(`/leads/${id}/convert`, { method: 'PATCH' });
-      router.push(`/deals/${deal.id}`);
+      const result = await apiFetch<{ id: string | null; leadId?: string }>(`/leads/${id}/convert`, { method: 'PATCH' });
+      if (result.id) {
+        router.push(`/deals/${result.id}`);
+      } else {
+        // No customer/vehicle on lead — go to new deal form
+        router.push(`/deals/new?leadId=${id}`);
+      }
     } catch (e: any) { alert(e.message); }
     finally { setConverting(false); }
   }
