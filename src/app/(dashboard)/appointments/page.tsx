@@ -1,7 +1,8 @@
 'use client';
 
-import { useQuery } from '../../../lib/useApi';
+import { useQuery, apiFetch } from '../../../lib/useApi';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import StatusBadge from '../../../components/StatusBadge';
 
 interface Appointment {
@@ -17,9 +18,24 @@ interface Appointment {
 
 export default function AppointmentsPage() {
   const router = useRouter();
-  const { data, loading, error } = useQuery<{ items: Appointment[]; total: number }>(
+  const { data, loading, error, reload } = useQuery<{ items: Appointment[]; total: number }>(
     '/appointments?limit=30',
   );
+
+  const [acting, setActing] = useState<Record<string, boolean>>({});
+
+  async function updateStatus(apptId: string, status: string) {
+    setActing((p) => ({ ...p, [apptId]: true }));
+    try {
+      await apiFetch(`/appointments/${apptId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      });
+      reload();
+    } finally {
+      setActing((p) => ({ ...p, [apptId]: false }));
+    }
+  }
 
   const appts = data?.items ?? [];
 
@@ -45,6 +61,7 @@ export default function AppointmentsPage() {
                 <th className="px-4 py-3 text-left font-medium">Vehicle</th>
                 <th className="px-4 py-3 text-left font-medium">Assigned To</th>
                 <th className="px-4 py-3 text-left font-medium">Status</th>
+                <th className="px-4 py-3 text-left font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
@@ -60,10 +77,38 @@ export default function AppointmentsPage() {
                   </td>
                   <td className="px-4 py-2.5 text-gray-400">{a.assignedTo?.name ?? '—'}</td>
                   <td className="px-4 py-2.5"><StatusBadge status={a.status} /></td>
+                  <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-1.5">
+                      {a.status === 'SCHEDULED' && (
+                        <button
+                          disabled={!!acting[a.id]}
+                          onClick={() => updateStatus(a.id, 'CONFIRMED')}
+                          className="px-2 py-0.5 text-xs font-medium rounded bg-blue-600/20 text-blue-300 hover:bg-blue-600/40 disabled:opacity-50 transition">
+                          {acting[a.id] ? '…' : 'Confirm'}
+                        </button>
+                      )}
+                      {a.status === 'CONFIRMED' && (
+                        <>
+                          <button
+                            disabled={!!acting[a.id]}
+                            onClick={() => updateStatus(a.id, 'COMPLETED')}
+                            className="px-2 py-0.5 text-xs font-medium rounded bg-green-600/20 text-green-300 hover:bg-green-600/40 disabled:opacity-50 transition">
+                            {acting[a.id] ? '…' : 'Complete'}
+                          </button>
+                          <button
+                            disabled={!!acting[a.id]}
+                            onClick={() => updateStatus(a.id, 'CANCELLED')}
+                            className="px-2 py-0.5 text-xs font-medium rounded bg-red-600/20 text-red-300 hover:bg-red-600/40 disabled:opacity-50 transition">
+                            Cancel
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
               {appts.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-600 text-sm">No appointments.</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-600 text-sm">No appointments.</td></tr>
               )}
             </tbody>
           </table>

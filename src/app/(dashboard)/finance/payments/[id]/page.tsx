@@ -2,9 +2,10 @@
 
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, apiFetch } from '../../../../../lib/useApi';
 import StatusBadge from '../../../../../components/StatusBadge';
+import SearchableCombobox from '../../../../../components/ui/SearchableCombobox';
 
 interface PaymentAllocation {
   id: string;
@@ -36,6 +37,14 @@ interface Payment {
   allocations: PaymentAllocation[];
 }
 
+interface InvoiceOption {
+  id: string;
+  type: string;
+  amountTotal: number;
+  amountDue: number;
+  partner?: { name: string };
+}
+
 const fmt = (n: number) =>
   Number(n).toLocaleString('en-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 2 });
 
@@ -47,14 +56,79 @@ export default function PaymentDetailPage() {
   const [cancelling, setCancelling] = useState(false);
   const [actionErr, setActionErr] = useState('');
 
+  const [showAllocate, setShowAllocate] = useState(false);
+  const [allocInvoiceId, setAllocInvoiceId] = useState('');
+  const [allocAmount, setAllocAmount] = useState('');
+  const [allocating, setAllocating] = useState(false);
+  const [allocErr, setAllocErr] = useState('');
+
+  const partnerId = payment?.partner?.id ?? null;
+  const { data: invoiceList } = useQuery<{ items?: InvoiceOption[] } | InvoiceOption[]>(
+    showAllocate && partnerId ? `/finance/invoices?status=POSTED&partnerId=${partnerId}&limit=50` : null,
+    [showAllocate, partnerId],
+  );
+
+  const invoiceOpts = useMemo(() => {
+    const raw = Array.isArray(invoiceList)
+      ? invoiceList
+      : (invoiceList as { items?: InvoiceOption[] } | null)?.items ?? [];
+    return (raw as InvoiceOption[]).map((inv) => ({
+      value: inv.id,
+      label: `${inv.id.slice(0, 8)}… — ${inv.type} — ${fmt(inv.amountDue)} due`,
+    }));
+  }, [invoiceList]);
+
+  const totalAllocated = useMemo(
+    () => (payment?.allocations ?? []).reduce((s, a) => s + Number(a.amount), 0),
+    [payment],
+  );
+  const remaining = payment ? Number(payment.amount) - totalAllocated : 0;
+
+  function openAllocate() {
+    setAllocInvoiceId('');
+    setAllocAmount('');
+    setAllocErr('');
+    setShowAllocate(true);
+  }
+
+  function onAllocInvoiceChange(invoiceId: string) {
+    setAllocInvoiceId(invoiceId);
+    const raw = Array.isArray(invoiceList)
+      ? invoiceList
+      : (invoiceList as { items?: InvoiceOption[] } | null)?.items ?? [];
+    const inv = (raw as InvoiceOption[]).find((i) => i.id === invoiceId);
+    if (inv) {
+      const def = Math.min(remaining, Number(inv.amountDue));
+      setAllocAmount(def > 0 ? String(def) : '');
+    }
+  }
+
+  async function submitAllocation(e: React.FormEvent) {
+    e.preventDefault();
+    if (!allocInvoiceId || !allocAmount) { setAllocErr('Invoice and amount required.'); return; }
+    setAllocating(true); setAllocErr('');
+    try {
+      await apiFetch(`/finance/payments/${id}/allocate`, {
+        method: 'POST',
+        body: JSON.stringify({ invoiceId: allocInvoiceId, amount: parseFloat(allocAmount) }),
+      });
+      setShowAllocate(false);
+      await reload();
+    } catch (e: unknown) {
+      setAllocErr(e instanceof Error ? e.message : 'Failed to allocate');
+    } finally {
+      setAllocating(false);
+    }
+  }
+
   async function post() {
     setPosting(true);
     setActionErr('');
     try {
       await apiFetch(`/finance/payments/${id}/post`, { method: 'PATCH' });
       await reload();
-    } catch (e: any) {
-      setActionErr(e.message);
+    } catch (e: unknown) {
+      setActionErr(e instanceof Error ? e.message : 'Failed to post');
     } finally {
       setPosting(false);
     }
@@ -67,8 +141,8 @@ export default function PaymentDetailPage() {
     try {
       await apiFetch(`/finance/payments/${id}/cancel`, { method: 'PATCH' });
       await reload();
-    } catch (e: any) {
-      setActionErr(e.message);
+    } catch (e: unknown) {
+      setActionErr(e instanceof Error ? e.message : 'Failed to cancel');
     } finally {
       setCancelling(false);
     }
@@ -103,6 +177,12 @@ export default function PaymentDetailPage() {
         </div>
 
         <div className="flex gap-2">
+          {isPosted && remaining > 0 && (
+            <button onClick={openAllocate}
+              className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-medium rounded-lg transition">
+              Allocate →
+            </button>
+          )}
           {isDraft && (
             <button onClick={post} disabled={posting}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition">
@@ -148,8 +228,14 @@ export default function PaymentDetailPage() {
 
       {/* Allocations */}
       <div className="rounded-xl border border-white/5 bg-gray-900 overflow-hidden mb-4">
-        <div className="px-5 py-3 border-b border-white/5">
+        <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Applied to Invoices</p>
+          <div className="flex items-center gap-3 text-xs text-gray-500">
+            <span>Allocated: <span className="text-white tabular-nums">{fmt(totalAllocated)}</span></span>
+            {remaining > 0 && (
+              <span>Remaining: <span className="text-amber-400 tabular-nums">{fmt(remaining)}</span></span>
+            )}
+          </div>
         </div>
         {payment.allocations.length === 0 ? (
           <p className="p-5 text-gray-600 text-sm">No invoice allocations.</p>
@@ -219,6 +305,51 @@ export default function PaymentDetailPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {/* Allocate dialog */}
+      {showAllocate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowAllocate(false)} />
+          <div className="relative w-full max-w-md rounded-2xl bg-gray-900 border border-white/10 shadow-2xl">
+            <div className="flex items-center justify-between p-5 border-b border-white/5">
+              <h2 className="text-sm font-semibold text-white">Allocate to Invoice</h2>
+              <button onClick={() => setShowAllocate(false)} className="text-gray-500 hover:text-white text-lg">×</button>
+            </div>
+            <form onSubmit={submitAllocation} className="p-5 space-y-4">
+              <div className="p-3 rounded-lg bg-white/[0.04] text-xs text-gray-400">
+                Remaining unallocated: <span className="text-amber-400 font-semibold">{fmt(remaining)}</span>
+              </div>
+              <SearchableCombobox
+                label="Invoice *"
+                options={invoiceOpts}
+                value={allocInvoiceId}
+                onChange={onAllocInvoiceChange}
+                placeholder="Select posted invoice…"
+              />
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Amount *</label>
+                <input
+                  type="number" step="0.01" required
+                  value={allocAmount}
+                  onChange={(e) => setAllocAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              {allocErr && <p className="text-red-400 text-xs">{allocErr}</p>}
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={() => setShowAllocate(false)}
+                  className="flex-1 py-2 text-sm text-gray-400 border border-white/10 rounded-lg hover:text-white transition">
+                  Cancel
+                </button>
+                <button type="submit" disabled={allocating}
+                  className="flex-1 py-2 text-sm font-medium text-white bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 rounded-lg transition">
+                  {allocating ? 'Allocating…' : 'Allocate'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

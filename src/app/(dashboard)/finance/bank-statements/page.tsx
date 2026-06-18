@@ -2,6 +2,7 @@
 
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 
 interface BankAccount { id: string; name: string; accountNumber?: string; bank?: string; }
@@ -12,6 +13,7 @@ interface BankStatement {
 }
 
 export default function BankStatementsPage() {
+  const router = useRouter();
   const { data: statements, loading, reload } = useQuery<BankStatement[]>('/finance/bank-statements');
   const { data: bankAccounts } = useQuery<BankAccount[]>('/finance/bank-statements/bank-accounts');
   const [showCreate, setShowCreate] = useState(false);
@@ -40,7 +42,7 @@ export default function BankStatementsPage() {
         }),
       });
       setShowCreate(false); reload();
-    } catch (e: any) { setErr(e.message); }
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Error'); }
     finally { setSaving(false); }
   }
 
@@ -74,7 +76,7 @@ export default function BankStatementsPage() {
           </thead>
           <tbody className="divide-y divide-white/5">
             {stmts.map((s) => (
-              <tr key={s.id} className="hover:bg-white/5 transition">
+              <tr key={s.id} onClick={() => router.push(`/finance/bank-statements/${s.id}`)} className="hover:bg-white/5 cursor-pointer transition">
                 <td className="px-4 py-2.5 text-white font-mono text-xs">{s.reference}</td>
                 <td className="px-4 py-2.5 text-gray-300">{s.bankAccount?.name ?? '—'}</td>
                 <td className="px-4 py-2.5 text-gray-400 text-xs">{new Date(s.date).toLocaleDateString('en-EG')}</td>

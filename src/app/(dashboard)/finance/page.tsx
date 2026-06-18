@@ -16,6 +16,7 @@ const MODULES = [
   { label: 'Payments', href: '/finance/payments', desc: 'Cash & bank payments' },
   { label: 'Reports', href: '/finance/reports', desc: 'Trial balance, P&L, BS' },
   { label: 'Chart of Accounts', href: '/finance/accounts', desc: 'COA — view & create accounts' },
+  { label: 'Journals', href: '/finance/journals', desc: 'Sales, purchase, cash & bank journals' },
   { label: 'Bank Statements', href: '/finance/bank-statements', desc: 'Import & reconcile' },
   { label: 'Fixed Assets', href: '/finance/assets', desc: 'Depreciation schedules' },
   { label: 'Currencies', href: '/finance/currencies', desc: 'Exchange rates' },
