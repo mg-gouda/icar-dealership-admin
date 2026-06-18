@@ -25,6 +25,7 @@ const MODULES = [
   { label: 'Reconciliation', href: '/finance/reconciliation', desc: 'Match GL to bank lines' },
   { label: 'Commissions', href: '/finance/commissions', desc: 'Accrued → payable → paid' },
   { label: 'Commission Plans', href: '/finance/commission-plans', desc: 'Plans, percentages & tiers' },
+  { label: 'Recurring Templates', href: '/finance/gl/recurring', desc: 'Auto-generate journal entries' },
 ];
 
 export default function FinancePage() {

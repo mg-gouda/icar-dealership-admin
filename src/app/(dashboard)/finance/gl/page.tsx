@@ -113,6 +113,9 @@ export default function GlPage() {
           <Link href="/finance/reports" className="px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg border border-white/10 hover:border-white/20 transition">
             Reports
           </Link>
+          <Link href="/finance/gl/recurring" className="px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg border border-white/10 hover:border-white/20 transition">
+            Recurring Templates &rarr;
+          </Link>
           <button onClick={generateRecurring} disabled={generatingRecurring}
             className="px-3 py-1.5 text-xs bg-purple-700 hover:bg-purple-600 disabled:opacity-50 text-white rounded-lg transition">
             {generatingRecurring ? '…' : 'Generate Recurring'}

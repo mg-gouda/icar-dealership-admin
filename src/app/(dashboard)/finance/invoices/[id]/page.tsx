@@ -324,11 +324,32 @@ function AddLineForm({
   );
 }
 
+interface PurchaseOrder {
+  id: string;
+  amountTotal: number;
+}
+
 // ── Main Page ────────────────────────────────────────────────────────────────
 export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { data: invoice, loading, error, reload } = useQuery<Invoice>(`/finance/invoices/${id}`, [id]);
+
+  // 3-way match: fetch PO only for VENDOR_BILL with a linked deal
+  const dealId = invoice?.type === 'VENDOR_BILL' && invoice?.deal?.id ? invoice.deal.id : null;
+  const { data: poData } = useQuery<{ data: PurchaseOrder[] }>(
+    dealId ? `/purchase-orders?dealId=${dealId}&limit=1` : null,
+    [dealId],
+  );
+  const po = poData?.data?.[0] ?? null;
+  const poVariance = po && invoice
+    ? Number(invoice.amountTotal) - Number(po.amountTotal)
+    : null;
+  const showPoWarning =
+    invoice?.status === 'DRAFT' &&
+    po !== null &&
+    poVariance !== null &&
+    (Math.abs(poVariance) / Math.max(Number(po.amountTotal), 1) > 0.01 || Math.abs(poVariance) > 500);
 
   const [posting, setPosting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -423,6 +444,18 @@ export default function InvoiceDetailPage() {
       {actionErr && (
         <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
           {actionErr}
+        </div>
+      )}
+
+      {/* 3-way match PO variance warning */}
+      {showPoWarning && po && poVariance !== null && (
+        <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-start gap-2">
+          <span className="text-amber-400 text-sm shrink-0">&#9888;</span>
+          <p className="text-amber-300 text-xs">
+            <span className="font-semibold">PO variance detected</span>
+            {' '}&mdash;{' '}
+            PO total: {fmt(Number(po.amountTotal))} &middot; Invoice total: {fmt(Number(invoice!.amountTotal))} &middot; Variance: {fmt(Math.abs(poVariance))}
+          </p>
         </div>
       )}
 
