@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import StatusBadge from '../../../../components/StatusBadge';
@@ -15,9 +15,20 @@ interface FinanceApp {
   bankName?: string; bankBranch?: string; lenderName?: string;
   termMonths?: number; apr?: number; monthlyPayment?: number;
   creditScoreRange?: string; rejectionReason?: string;
-  applicantInfo: Record<string, any>;
+  applicantInfo: Record<string, unknown>;
   requiredDocuments: Document[];
   bankApproval?: BankApproval;
+}
+interface DealCommission {
+  id: string;
+  userId: string;
+  user: { id: string; name: string };
+  roleInDeal: string;
+  commissionPlan?: { name: string } | null;
+  baseAmount: number;
+  splitPercentage: number;
+  calculatedAmount: number;
+  status: string;
 }
 interface Deal {
   id: string; status: string; purchaseMethod: string; salePrice: number;
@@ -29,7 +40,7 @@ interface Deal {
   installmentPlan?: { downPayment: number; installmentAmount: number; numberOfInstallments: number; installments: InstallmentLine[]; };
   financeApplication?: FinanceApp;
   invoices?: { id: string; status: string; amountTotal: number; dueDate?: string }[];
-  commissions?: { user: { name: string }; calculatedAmount: number; status: string }[];
+  commissions?: DealCommission[];
 }
 
 const DOC_TYPES = [
@@ -53,6 +64,23 @@ const BFS_OPTS = [
   { value: 'REJECTED', label: 'Rejected' },
 ];
 
+const CALC_METHOD_OPTS = [
+  { value: 'FLAT_RATE', label: 'Flat Rate' },
+  { value: 'REDUCING_BALANCE', label: 'Reducing Balance' },
+];
+
+const ROLE_OPTS = ['PRIMARY_SALES_REP', 'CLOSER', 'FINANCE_MANAGER', 'SALES_MANAGER'].map((r) => ({
+  value: r,
+  label: r.replace(/_/g, ' '),
+}));
+
+// ponytail: default startDate = today + 1 month
+function defaultStartDate(): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function DealDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -67,26 +95,140 @@ export default function DealDetailPage() {
   // Installment collection
   const [collectingLine, setCollectingLine] = useState<string | null>(null);
 
+  // ── Task A: Installment plan generate form ─────────────────────────────
+  const [ipForm, setIpForm] = useState({
+    downPayment: 0,
+    durationMonths: 24,
+    interestRate: 0,
+    startDate: defaultStartDate(),
+    calculationMethod: 'FLAT_RATE',
+  });
+  const [generatingPlan, setGeneratingPlan] = useState(false);
+
+  // recompute when deal loads so downPayment default is valid
+  useEffect(() => {
+    if (deal) setIpForm((f) => ({ ...f, startDate: defaultStartDate() }));
+  }, [deal?.id]);
+
+  const principalAmount = Math.max(0, Number(deal?.salePrice ?? 0) - ipForm.downPayment);
+  const totalInterest = principalAmount * (ipForm.interestRate / 100) * (ipForm.durationMonths / 12);
+  const totalPayable = principalAmount + totalInterest;
+  const monthlyInstallment = ipForm.durationMonths > 0 ? totalPayable / ipForm.durationMonths : 0;
+
+  async function generateInstallmentPlan(e: React.FormEvent) {
+    e.preventDefault();
+    setGeneratingPlan(true);
+    try {
+      await apiFetch(`/deals/${id}/installment-plan`, {
+        method: 'POST',
+        body: JSON.stringify({
+          principalAmount,
+          downPayment: ipForm.downPayment,
+          interestRate: ipForm.interestRate,
+          durationMonths: ipForm.durationMonths,
+          calculationMethod: ipForm.calculationMethod,
+          totalPayable,
+          monthlyInstallment,
+          startDate: ipForm.startDate,
+        }),
+      });
+      reload();
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Error generating plan');
+    } finally {
+      setGeneratingPlan(false);
+    }
+  }
+
+  // ── Task B: Commission add/remove ──────────────────────────────────────
+  const [staffOptions, setStaffOptions] = useState<{ value: string; label: string }[]>([]);
+  const [planOptions, setPlanOptions] = useState<{ value: string; label: string }[]>([]);
+  const [commForm, setCommForm] = useState({
+    userId: '',
+    roleInDeal: '',
+    commissionPlanId: '',
+    baseAmount: 0,
+    splitPercentage: 100,
+  });
+  const [addingComm, setAddingComm] = useState(false);
+  const [removingComm, setRemovingComm] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiFetch('/auth/users?limit=100')
+      .then((res: unknown) => {
+        const list = Array.isArray(res) ? res : (res as { data?: unknown[] }).data ?? [];
+        setStaffOptions((list as { id: string; name: string }[]).map((u) => ({ value: u.id, label: u.name })));
+      })
+      .catch(() => {});
+    apiFetch('/commission-plans?limit=50')
+      .then((res: unknown) => {
+        const list = Array.isArray(res) ? res : (res as { data?: unknown[] }).data ?? [];
+        setPlanOptions((list as { id: string; name: string }[]).map((p) => ({ value: p.id, label: p.name })));
+      })
+      .catch(() => {});
+  }, []);
+
+  const commPreview = commForm.baseAmount > 0 && commForm.splitPercentage > 0
+    ? (commForm.baseAmount * commForm.splitPercentage / 100).toLocaleString('en-EG')
+    : null;
+
+  async function addCommission(e: React.FormEvent) {
+    e.preventDefault();
+    setAddingComm(true);
+    try {
+      await apiFetch(`/deals/${id}/commissions`, {
+        method: 'POST',
+        body: JSON.stringify({
+          userId: commForm.userId,
+          roleInDeal: commForm.roleInDeal,
+          ...(commForm.commissionPlanId ? { commissionPlanId: commForm.commissionPlanId } : {}),
+          baseAmount: commForm.baseAmount,
+          splitPercentage: commForm.splitPercentage,
+        }),
+      });
+      setCommForm({ userId: '', roleInDeal: '', commissionPlanId: '', baseAmount: 0, splitPercentage: 100 });
+      reload();
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Error adding commission');
+    } finally {
+      setAddingComm(false);
+    }
+  }
+
+  async function removeCommission(commId: string) {
+    if (!confirm('Remove this commission split?')) return;
+    setRemovingComm(commId);
+    try {
+      await apiFetch(`/deals/${id}/commissions/${commId}`, { method: 'DELETE' });
+      reload();
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Error removing commission');
+    } finally {
+      setRemovingComm(null);
+    }
+  }
+
+  // ── Installment collection ────────────────────────────────────────────
   async function collectInstallment(lineId: string) {
     if (!confirm('Mark this installment as collected and post GL entry?')) return;
     setCollectingLine(lineId);
     try { await apiFetch(`/deals/${id}/installment-plan/lines/${lineId}/collect`, { method: 'POST' }); reload(); }
-    catch (e: any) { alert(e.message); }
+    catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
     finally { setCollectingLine(null); }
   }
 
-  // Bank disbursement
+  // ── Bank disbursement ──────────────────────────────────────────────────
   const [disbursingBank, setDisbursingBank] = useState(false);
 
   async function postBankDisbursement() {
     if (!confirm('Post bank disbursement GL entry? This records the bank transfer against the AR and cannot be undone.')) return;
     setDisbursingBank(true);
     try { await apiFetch(`/deals/${id}/bank-disbursement`, { method: 'POST' }); reload(); }
-    catch (e: any) { alert(e.message); }
+    catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
     finally { setDisbursingBank(false); }
   }
 
-  // Finance app
+  // ── Finance app ────────────────────────────────────────────────────────
   const [showFACreate, setShowFACreate] = useState(false);
   const [faForm, setFaForm] = useState({ bankName: '', bankBranch: '', termMonths: '', apr: '', applicantInfo: '{}' });
   const [savingFA, setSavingFA] = useState(false);
@@ -96,7 +238,6 @@ export default function DealDetailPage() {
   const [newDocType, setNewDocType] = useState('');
   const [addingDoc, setAddingDoc] = useState(false);
 
-  // Actions
   async function action(path: string, method = 'POST', body?: object) {
     await apiFetch(`/deals/${id}/${path}`, { method, body: body ? JSON.stringify(body) : undefined });
     reload();
@@ -105,7 +246,7 @@ export default function DealDetailPage() {
   async function runFinalize() {
     setFinalizing(true); setFinalizeError('');
     try { await apiFetch(`/deals/${id}/finalize`, { method: 'POST' }); reload(); setShowFinalize(false); setFinalizeStep(0); }
-    catch (e: any) { setFinalizeError(e.message); }
+    catch (e: unknown) { setFinalizeError(e instanceof Error ? e.message : 'Error'); }
     finally { setFinalizing(false); }
   }
 
@@ -116,12 +257,12 @@ export default function DealDetailPage() {
       try { applicantInfo = JSON.parse(faForm.applicantInfo); } catch {}
       await apiFetch(`/deals/${id}/finance-application`, { method: 'POST', body: JSON.stringify({ ...faForm, applicantInfo, termMonths: Number(faForm.termMonths) || undefined, apr: Number(faForm.apr) || undefined }) });
       setShowFACreate(false); reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
     finally { setSavingFA(false); }
   }
 
   async function updateBFS(bankFinancingStatus: string) {
-    await apiFetch(`/deals/${id}/finance-application`, { method: 'PATCH', body: JSON.stringify({ bankFinancingStatus }) }).catch((e) => alert(e.message));
+    await apiFetch(`/deals/${id}/finance-application`, { method: 'PATCH', body: JSON.stringify({ bankFinancingStatus }) }).catch((e) => alert(e instanceof Error ? e.message : 'Error'));
     reload();
   }
 
@@ -129,12 +270,12 @@ export default function DealDetailPage() {
     if (!newDocType) return;
     setAddingDoc(true);
     try { await apiFetch(`/deals/${id}/finance-application/documents`, { method: 'POST', body: JSON.stringify({ documentType: newDocType }) }); setNewDocType(''); reload(); }
-    catch (e: any) { alert(e.message); }
+    catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
     finally { setAddingDoc(false); }
   }
 
   async function updateDoc(docId: string, updates: object) {
-    await apiFetch(`/deals/${id}/finance-application/documents/${docId}`, { method: 'PATCH', body: JSON.stringify(updates) }).catch((e) => alert(e.message));
+    await apiFetch(`/deals/${id}/finance-application/documents/${docId}`, { method: 'PATCH', body: JSON.stringify(updates) }).catch((e) => alert(e instanceof Error ? e.message : 'Error'));
     reload();
   }
 
@@ -143,7 +284,7 @@ export default function DealDetailPage() {
     try {
       await apiFetch(`/deals/${id}/finance-application/bank-approval`, { method: 'POST', body: JSON.stringify({ ...approvalForm, approvedAmount: Number(approvalForm.approvedAmount) }) });
       setShowApproval(false); reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
     finally { setSavingApproval(false); }
   }
 
@@ -160,7 +301,6 @@ export default function DealDetailPage() {
   const isBankFinancing = deal.purchaseMethod === 'BANK_FINANCING';
   const isInstallment = deal.purchaseMethod === 'DEALERSHIP_INSTALLMENT';
 
-  // Wizard steps
   const STEPS = isBankFinancing
     ? ['Review', 'Bank Financing', 'Confirm']
     : isInstallment
@@ -221,21 +361,209 @@ export default function DealDetailPage() {
             <span>Total</span><span className="tabular-nums">{total.toLocaleString()} EGP</span>
           </div>
         </div>
-        {/* Sales Rep + Commissions */}
+
+        {/* ── Task B: Sales Rep + Commissions ─────────────────────────── */}
         <div className="rounded-xl border border-white/5 bg-gray-900 p-4">
           <p className="text-xs text-gray-500 mb-3 font-medium uppercase tracking-wide">Sales Rep</p>
-          <p className="text-white font-medium mb-2">{deal.salesRep?.name ?? '—'}</p>
-          {deal.commissions?.map((c, i) => (
-            <div key={i} className="flex items-center justify-between text-xs text-gray-400 py-1 border-t border-white/5">
-              <span>{c.user?.name}</span>
-              <span className="tabular-nums">{Number(c.calculatedAmount).toLocaleString()} EGP</span>
-              <StatusBadge status={c.status} />
-            </div>
-          ))}
+          <p className="text-white font-medium mb-3">{deal.salesRep?.name ?? '—'}</p>
+
+          {/* Commission table */}
+          {(deal.commissions?.length ?? 0) > 0 && (
+            <table className="w-full text-xs mb-3">
+              <thead className="text-gray-500 border-b border-white/5">
+                <tr>
+                  <th className="text-left pb-1.5">Staff</th>
+                  <th className="text-left pb-1.5">Role</th>
+                  <th className="text-right pb-1.5">Base</th>
+                  <th className="text-right pb-1.5">Split%</th>
+                  <th className="text-right pb-1.5">Amount</th>
+                  <th className="text-left pb-1.5 pl-2">Status</th>
+                  <th className="pb-1.5" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {deal.commissions!.map((c) => (
+                  <tr key={c.id}>
+                    <td className="py-1.5 text-gray-300">{c.user?.name}</td>
+                    <td className="py-1.5 text-gray-400">{c.roleInDeal?.replace(/_/g, ' ')}</td>
+                    <td className="py-1.5 text-right tabular-nums text-gray-400">{Number(c.baseAmount).toLocaleString()}</td>
+                    <td className="py-1.5 text-right tabular-nums text-gray-400">{c.splitPercentage}%</td>
+                    <td className="py-1.5 text-right tabular-nums text-white">{Number(c.calculatedAmount).toLocaleString()} EGP</td>
+                    <td className="py-1.5 pl-2"><StatusBadge status={c.status} /></td>
+                    <td className="py-1.5 pl-1">
+                      {c.status === 'ACCRUED' && deal.status !== 'FINALIZED' && (
+                        <button
+                          onClick={() => removeCommission(c.id)}
+                          disabled={removingComm === c.id}
+                          className="text-red-400 hover:text-red-300 disabled:opacity-40 transition"
+                          title="Remove split"
+                        >
+                          {removingComm === c.id ? '…' : '✕'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* Add Split form */}
+          {deal.status !== 'FINALIZED' && (
+            <form onSubmit={addCommission} className="space-y-2 pt-2 border-t border-white/5">
+              <p className="text-xs text-gray-500 font-medium mb-1">Add Split</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Staff</label>
+                  <SearchableCombobox
+                    options={staffOptions}
+                    value={commForm.userId}
+                    onChange={(v) => setCommForm({ ...commForm, userId: v })}
+                    placeholder="Select staff…"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Role</label>
+                  <SearchableCombobox
+                    options={ROLE_OPTS}
+                    value={commForm.roleInDeal}
+                    onChange={(v) => setCommForm({ ...commForm, roleInDeal: v })}
+                    placeholder="Role…"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Commission Plan (optional)</label>
+                <SearchableCombobox
+                  options={planOptions}
+                  value={commForm.commissionPlanId}
+                  onChange={(v) => setCommForm({ ...commForm, commissionPlanId: v })}
+                  placeholder="Plan…"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Base Amount (EGP)</label>
+                  <input
+                    type="number" min="0" step="0.01"
+                    value={commForm.baseAmount}
+                    onChange={(e) => setCommForm({ ...commForm, baseAmount: Number(e.target.value) })}
+                    className="w-full px-2 py-1.5 bg-gray-800 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Split %</label>
+                  <input
+                    type="number" min="0" max="100" step="0.01"
+                    value={commForm.splitPercentage}
+                    onChange={(e) => setCommForm({ ...commForm, splitPercentage: Number(e.target.value) })}
+                    className="w-full px-2 py-1.5 bg-gray-800 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+              {commPreview && (
+                <p className="text-xs text-gray-500">Computed: {commPreview} EGP</p>
+              )}
+              <button
+                type="submit"
+                disabled={addingComm || !commForm.userId || !commForm.roleInDeal}
+                className="w-full py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition"
+              >
+                {addingComm ? '…' : '+ Add Split'}
+              </button>
+            </form>
+          )}
         </div>
       </div>
 
-      {/* Installment Plan */}
+      {/* ── Task A: Installment Plan Generate Form ───────────────────────── */}
+      {isInstallment && !deal.installmentPlan && (
+        <div className="rounded-xl border border-white/5 bg-gray-900 p-4 mb-4">
+          <p className="text-xs text-gray-500 mb-4 font-medium uppercase tracking-wide">Generate Installment Plan</p>
+          <form onSubmit={generateInstallmentPlan} className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Down Payment (EGP)</label>
+                <input
+                  type="number" min="0" step="0.01"
+                  value={ipForm.downPayment}
+                  onChange={(e) => setIpForm({ ...ipForm, downPayment: Number(e.target.value) })}
+                  className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Duration (months)</label>
+                <input
+                  type="number" min="1" step="1"
+                  value={ipForm.durationMonths}
+                  onChange={(e) => setIpForm({ ...ipForm, durationMonths: Number(e.target.value) })}
+                  className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+                  list="duration-options"
+                />
+                <datalist id="duration-options">
+                  {[6, 12, 18, 24, 36, 48, 60].map((m) => <option key={m} value={m} />)}
+                </datalist>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Annual Interest Rate (%)</label>
+                <input
+                  type="number" min="0" step="0.01"
+                  value={ipForm.interestRate}
+                  onChange={(e) => setIpForm({ ...ipForm, interestRate: Number(e.target.value) })}
+                  className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">First Payment Date</label>
+                <input
+                  type="date"
+                  value={ipForm.startDate}
+                  onChange={(e) => setIpForm({ ...ipForm, startDate: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-xs text-gray-500 mb-1">Calculation Method</label>
+                <SearchableCombobox
+                  options={CALC_METHOD_OPTS}
+                  value={ipForm.calculationMethod}
+                  onChange={(v) => setIpForm({ ...ipForm, calculationMethod: v })}
+                  placeholder="Select method…"
+                />
+              </div>
+            </div>
+
+            {/* Preview stats */}
+            <div className="grid grid-cols-3 gap-3 pt-1">
+              <div className="rounded-lg bg-gray-800 p-3">
+                <p className="text-xs text-gray-500 mb-1">Principal</p>
+                <p className="text-white text-sm font-medium tabular-nums">{principalAmount.toLocaleString('en-EG')} EGP</p>
+              </div>
+              <div className="rounded-lg bg-gray-800 p-3">
+                <p className="text-xs text-gray-500 mb-1">Total Payable</p>
+                <p className="text-white text-sm font-medium tabular-nums">{totalPayable.toLocaleString('en-EG')} EGP</p>
+              </div>
+              <div className="rounded-lg bg-gray-800 p-3">
+                <p className="text-xs text-gray-500 mb-1">Monthly</p>
+                <p className="text-white text-sm font-medium tabular-nums">{monthlyInstallment.toLocaleString('en-EG')} EGP</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={generatingPlan}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition"
+              >
+                {generatingPlan ? '…' : 'Generate Schedule'}
+              </button>
+              <p className="text-xs text-amber-400">Plan required before finalizing</p>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Installment Plan (existing) */}
       {deal.installmentPlan && (
         <div className="rounded-xl border border-white/5 bg-gray-900 p-4 mb-4">
           <p className="text-xs text-gray-500 mb-3 font-medium uppercase tracking-wide">Installment Plan</p>
