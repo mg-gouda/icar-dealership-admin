@@ -7,7 +7,7 @@ import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 
 interface User {
   id: string; name: string; email: string; phone?: string;
-  role: string; createdAt: string;
+  role: string; createdAt: string; isActive?: boolean;
   location?: { id: string; name: string };
 }
 interface Location { id: string; name: string; }
@@ -27,6 +27,7 @@ export default function UsersPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState<User | null>(null);
   const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
 
   const qs = roleFilter ? `?role=${roleFilter}&limit=50` : '?limit=50';
   const { data: res, loading, reload } = useQuery<{ items?: User[]; data?: User[] } | User[]>(`/users${qs}`);
@@ -50,7 +51,7 @@ export default function UsersPage() {
     try {
       await apiFetch('/users', { method: 'POST', body: JSON.stringify(form) });
       setShowCreate(false); reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
     finally { setSaving(false); }
   }
 
@@ -61,8 +62,18 @@ export default function UsersPage() {
     try {
       await apiFetch(`/users/${showEdit.id}`, { method: 'PATCH', body: JSON.stringify(editForm) });
       setShowEdit(null); reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
     finally { setSaving(false); }
+  }
+
+  async function toggleActive(u: User) {
+    setToggling(u.id);
+    const endpoint = u.isActive === false ? 'activate' : 'deactivate';
+    try {
+      await apiFetch(`/users/${u.id}/${endpoint}`, { method: 'PATCH' });
+      reload();
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
+    finally { setToggling(null); }
   }
 
   return (
@@ -94,12 +105,13 @@ export default function UsersPage() {
               <th className="px-4 py-3 text-left font-medium">Role</th>
               <th className="px-4 py-3 text-left font-medium">Location</th>
               <th className="px-4 py-3 text-left font-medium">Joined</th>
+              <th className="px-4 py-3 text-left font-medium">Status</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
             {users.filter((u) => u.role !== 'CUSTOMER').map((u) => (
-              <tr key={u.id} className="hover:bg-white/5 transition">
+              <tr key={u.id} className={`hover:bg-white/5 transition ${u.isActive === false ? 'opacity-60' : ''}`}>
                 <td className="px-4 py-2.5 text-white font-medium">{u.name}</td>
                 <td className="px-4 py-2.5 text-gray-400 text-xs">{u.email}</td>
                 <td className="px-4 py-2.5 text-gray-500 text-xs">{u.phone ?? '—'}</td>
@@ -108,14 +120,29 @@ export default function UsersPage() {
                 <td className="px-4 py-2.5 text-gray-500 text-xs">
                   {new Date(u.createdAt).toLocaleDateString('en-EG')}
                 </td>
-                <td className="px-4 py-2.5 text-right">
+                <td className="px-4 py-2.5">
+                  {u.isActive === false
+                    ? <span className="text-xs text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">Inactive</span>
+                    : <span className="text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">Active</span>}
+                </td>
+                <td className="px-4 py-2.5 text-right flex items-center justify-end gap-2">
                   <button onClick={() => openEdit(u)}
                     className="text-xs text-blue-400 hover:text-blue-300 transition">Edit</button>
+                  <button
+                    onClick={() => toggleActive(u)}
+                    disabled={toggling === u.id}
+                    className={`text-xs px-2 py-0.5 rounded transition disabled:opacity-50 ${
+                      u.isActive === false
+                        ? 'text-green-400 hover:text-green-300 border border-green-500/30 hover:border-green-400'
+                        : 'text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-400'
+                    }`}>
+                    {toggling === u.id ? '…' : u.isActive === false ? 'Activate' : 'Deactivate'}
+                  </button>
                 </td>
               </tr>
             ))}
             {users.filter((u) => u.role !== 'CUSTOMER').length === 0 && !loading && (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-600 text-sm">No staff users.</td></tr>
+              <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-600 text-sm">No staff users.</td></tr>
             )}
           </tbody>
         </table>

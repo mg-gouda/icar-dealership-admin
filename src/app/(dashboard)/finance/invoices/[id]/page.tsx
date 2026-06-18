@@ -111,8 +111,8 @@ function RegisterPaymentDialog({
         }),
       });
       onSuccess();
-    } catch (e: any) {
-      setErr(e.message);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Error');
     } finally {
       setSaving(false);
     }
@@ -192,6 +192,138 @@ function RegisterPaymentDialog({
   );
 }
 
+// ── Add Line Form ─────────────────────────────────────────────────────────────
+function AddLineForm({
+  invoiceId,
+  onSuccess,
+  onCancel,
+}: {
+  invoiceId: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const { data: accountsRaw } = useQuery<{ items?: { id: string; code: string; name: string }[] } | { id: string; code: string; name: string }[]>(
+    '/finance/accounts?limit=200',
+  );
+  const { data: taxesRaw } = useQuery<{ items?: { id: string; name: string }[] } | { id: string; name: string }[]>(
+    '/finance/taxes?limit=50',
+  );
+
+  const accountOpts = (() => {
+    const arr = Array.isArray(accountsRaw) ? accountsRaw : (accountsRaw as any)?.items ?? [];
+    return (arr as { id: string; code: string; name: string }[]).map((a) => ({
+      value: a.id,
+      label: `${a.code} — ${a.name}`,
+    }));
+  })();
+
+  const taxOpts = (() => {
+    const arr = Array.isArray(taxesRaw) ? taxesRaw : (taxesRaw as any)?.items ?? [];
+    return [
+      { value: '', label: 'No tax' },
+      ...(arr as { id: string; name: string }[]).map((t) => ({ value: t.id, label: t.name })),
+    ];
+  })();
+
+  const [form, setForm] = useState({
+    description: '',
+    quantity: '1',
+    unitPrice: '',
+    accountId: '',
+    taxId: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.accountId) { setErr('Select an account.'); return; }
+    setSaving(true); setErr('');
+    try {
+      await apiFetch(`/finance/invoices/${invoiceId}/lines`, {
+        method: 'POST',
+        body: JSON.stringify({
+          description: form.description,
+          quantity: Number(form.quantity),
+          unitPrice: Number(form.unitPrice),
+          accountId: form.accountId,
+          ...(form.taxId ? { taxId: form.taxId } : {}),
+        }),
+      });
+      onSuccess();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <tr className="border-t border-blue-500/20 bg-blue-900/10">
+      <td colSpan={6} className="px-5 py-4">
+        <form onSubmit={submit}>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
+            <div className="lg:col-span-2">
+              <label className="block text-xs text-gray-500 mb-1">Description *</label>
+              <input required value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+                placeholder="Line item description"
+                className="w-full px-3 py-1.5 bg-gray-800 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Qty *</label>
+              <input required type="number" min="0.01" step="0.01" value={form.quantity}
+                onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))}
+                className="w-full px-3 py-1.5 bg-gray-800 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Unit Price *</label>
+              <input required type="number" min="0" step="0.01" value={form.unitPrice}
+                onChange={(e) => setForm((p) => ({ ...p, unitPrice: e.target.value }))}
+                placeholder="0.00"
+                className="w-full px-3 py-1.5 bg-gray-800 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Subtotal</p>
+              <p className="px-3 py-1.5 text-xs text-white tabular-nums">
+                {form.quantity && form.unitPrice
+                  ? fmt(Number(form.quantity) * Number(form.unitPrice))
+                  : '—'}
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <SearchableCombobox
+              label="Account *"
+              options={accountOpts}
+              value={form.accountId}
+              onChange={(v) => setForm((p) => ({ ...p, accountId: v }))}
+              placeholder="Select account…"
+            />
+            <SearchableCombobox
+              label="Tax"
+              options={taxOpts}
+              value={form.taxId}
+              onChange={(v) => setForm((p) => ({ ...p, taxId: v }))}
+              placeholder="No tax"
+            />
+          </div>
+          {err && <p className="text-red-400 text-xs mb-2">{err}</p>}
+          <div className="flex gap-2">
+            <button type="button" onClick={onCancel}
+              className="px-3 py-1.5 text-xs text-gray-400 border border-white/10 rounded-lg hover:text-white transition">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving}
+              className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition">
+              {saving ? 'Adding…' : 'Add Line'}
+            </button>
+          </div>
+        </form>
+      </td>
+    </tr>
+  );
+}
+
 // ── Main Page ────────────────────────────────────────────────────────────────
 export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -201,6 +333,7 @@ export default function InvoiceDetailPage() {
   const [posting, setPosting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [showPayDialog, setShowPayDialog] = useState(false);
+  const [showAddLine, setShowAddLine] = useState(false);
   const [actionErr, setActionErr] = useState('');
 
   async function post() {
@@ -209,8 +342,8 @@ export default function InvoiceDetailPage() {
     try {
       await apiFetch(`/finance/invoices/${id}/post`, { method: 'PATCH' });
       await reload();
-    } catch (e: any) {
-      setActionErr(e.message);
+    } catch (e: unknown) {
+      setActionErr(e instanceof Error ? e.message : 'Error');
     } finally {
       setPosting(false);
     }
@@ -223,8 +356,8 @@ export default function InvoiceDetailPage() {
     try {
       await apiFetch(`/finance/invoices/${id}/cancel`, { method: 'PATCH' });
       await reload();
-    } catch (e: any) {
-      setActionErr(e.message);
+    } catch (e: unknown) {
+      setActionErr(e instanceof Error ? e.message : 'Error');
     } finally {
       setCancelling(false);
     }
@@ -366,8 +499,14 @@ export default function InvoiceDetailPage() {
 
       {/* Invoice lines */}
       <div className="rounded-xl border border-white/5 bg-gray-900 overflow-hidden mb-4">
-        <div className="px-5 py-3 border-b border-white/5">
+        <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Invoice Lines</p>
+          {isDraft && !showAddLine && (
+            <button onClick={() => setShowAddLine(true)}
+              className="text-xs text-blue-400 hover:text-blue-300 transition border border-blue-500/30 px-2 py-0.5 rounded">
+              + Add Line
+            </button>
+          )}
         </div>
         <table className="w-full text-sm">
           <thead className="text-xs text-gray-500 border-b border-white/5">
@@ -398,8 +537,23 @@ export default function InvoiceDetailPage() {
                 <td className="px-5 py-3 text-right text-white tabular-nums">{fmt(l.subtotal)}</td>
               </tr>
             ))}
+            {showAddLine && (
+              <AddLineForm
+                invoiceId={id}
+                onSuccess={() => { setShowAddLine(false); reload(); }}
+                onCancel={() => setShowAddLine(false)}
+              />
+            )}
           </tbody>
         </table>
+        {isDraft && !showAddLine && (
+          <div className="px-5 py-3 border-t border-white/5">
+            <button onClick={() => setShowAddLine(true)}
+              className="text-xs text-blue-400 hover:text-blue-300 transition">
+              + Add another line
+            </button>
+          </div>
+        )}
       </div>
 
       {/* GL entries (after post) */}

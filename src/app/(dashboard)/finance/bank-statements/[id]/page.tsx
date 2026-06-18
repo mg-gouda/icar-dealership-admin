@@ -27,6 +27,15 @@ interface Statement {
   lines: StatementLine[];
 }
 
+interface GlLine {
+  id: string;
+  label?: string;
+  debit: number;
+  credit: number;
+  account?: { code: string; name: string };
+  journalEntry?: { date: string; ref?: string };
+}
+
 const fmt = (n: number) =>
   Number(n).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -43,6 +52,114 @@ const blank = () => ({
   type: 'DEBIT',
 });
 
+// ── Match Modal ───────────────────────────────────────────────────────────────
+function MatchModal({
+  line,
+  onClose,
+  onSuccess,
+}: {
+  line: StatementLine;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const { data: glRaw, loading: glLoading } = useQuery<{ items?: GlLine[] } | GlLine[]>(
+    '/finance/reconciliation/unreconciled-lines',
+  );
+
+  const glLines: GlLine[] = Array.isArray(glRaw)
+    ? glRaw
+    : (glRaw as any)?.items ?? [];
+
+  const [selected, setSelected] = useState<string | null>(null);
+  const [matching, setMatching] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function confirm() {
+    if (!selected) return;
+    setMatching(true);
+    setErr('');
+    try {
+      await apiFetch('/finance/reconciliation', {
+        method: 'POST',
+        body: JSON.stringify({
+          pairs: [{ bankStatementLineId: line.id, journalEntryLineId: selected, amount: Math.abs(Number(line.amount)) }],
+        }),
+      });
+      onSuccess();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Match failed');
+    } finally {
+      setMatching(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-2xl rounded-2xl bg-gray-900 border border-white/10 shadow-2xl flex flex-col max-h-[80vh]">
+        <div className="flex items-center justify-between p-5 border-b border-white/5 flex-shrink-0">
+          <div>
+            <h2 className="text-sm font-semibold text-white">Match GL Line</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Statement line: {line.description ?? '—'} &nbsp;|&nbsp;
+              <span className={line.type === 'CREDIT' ? 'text-green-400' : 'text-red-400'}>
+                {line.type === 'CREDIT' ? '+' : '-'}{fmt(Math.abs(Number(line.amount)))} EGP
+              </span>
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white text-lg leading-none">×</button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-2">
+          {glLoading && <p className="p-4 text-gray-500 text-sm text-center">Loading GL lines…</p>}
+          {!glLoading && glLines.length === 0 && (
+            <p className="p-4 text-gray-600 text-sm text-center">No unreconciled GL lines found.</p>
+          )}
+          {glLines.map((gl) => (
+            <div
+              key={gl.id}
+              onClick={() => setSelected(gl.id)}
+              className={`flex items-center justify-between px-4 py-3 rounded-lg mb-1 cursor-pointer transition ${
+                selected === gl.id
+                  ? 'bg-blue-600/20 border border-blue-500/40'
+                  : 'hover:bg-white/5 border border-transparent'
+              }`}>
+              <div className="min-w-0">
+                <p className="text-sm text-white truncate">
+                  {gl.account ? `${gl.account.code} — ${gl.account.name}` : gl.id.slice(-8)}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {gl.journalEntry?.date ? new Date(gl.journalEntry.date).toLocaleDateString('en-EG') : '—'}
+                  {gl.journalEntry?.ref ? ` · ${gl.journalEntry.ref}` : ''}
+                  {gl.label ? ` · ${gl.label}` : ''}
+                </p>
+              </div>
+              <div className="text-right text-xs tabular-nums ml-4 flex-shrink-0">
+                {Number(gl.debit) > 0 && <span className="text-green-400">DR {fmt(gl.debit)}</span>}
+                {Number(gl.credit) > 0 && <span className="text-red-400">CR {fmt(gl.credit)}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {err && <p className="px-5 py-2 text-red-400 text-xs flex-shrink-0">{err}</p>}
+
+        <div className="flex gap-3 p-5 border-t border-white/5 flex-shrink-0">
+          <button onClick={onClose}
+            className="flex-1 py-2 text-sm text-gray-400 border border-white/10 rounded-lg hover:text-white transition">
+            Cancel
+          </button>
+          <button onClick={confirm} disabled={!selected || matching}
+            className="flex-1 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition">
+            {matching ? 'Matching…' : 'Match'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function BankStatementDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -55,6 +172,7 @@ export default function BankStatementDetailPage() {
   const [form, setForm] = useState(blank());
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
+  const [matchingLine, setMatchingLine] = useState<StatementLine | null>(null);
 
   function set(k: string, v: string) { setForm((p) => ({ ...p, [k]: v })); }
 
@@ -191,6 +309,7 @@ export default function BankStatementDetailPage() {
               <th className="px-5 py-3 text-left font-medium">Reference</th>
               <th className="px-5 py-3 text-right font-medium">Amount</th>
               <th className="px-5 py-3 text-center font-medium">Reconciled</th>
+              <th className="px-5 py-3 text-center font-medium">Match</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
@@ -211,10 +330,19 @@ export default function BankStatementDetailPage() {
                     ? <span className="text-green-400">&#10003;</span>
                     : <span className="text-gray-600">—</span>}
                 </td>
+                <td className="px-5 py-2.5 text-center">
+                  {!l.isReconciled && (
+                    <button
+                      onClick={() => setMatchingLine(l)}
+                      className="text-xs px-2 py-0.5 rounded border border-blue-500/30 text-blue-400 hover:text-blue-300 hover:border-blue-400 transition">
+                      Match
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
             {lines.length === 0 && (
-              <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-600 text-sm">No lines yet.</td></tr>
+              <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-600 text-sm">No lines yet.</td></tr>
             )}
           </tbody>
 
@@ -232,11 +360,20 @@ export default function BankStatementDetailPage() {
                     Net {net >= 0 ? '+' : ''}{fmt(net)}
                   </span>
                 </td>
+                <td />
               </tr>
             </tfoot>
           )}
         </table>
       </div>
+
+      {matchingLine && (
+        <MatchModal
+          line={matchingLine}
+          onClose={() => setMatchingLine(null)}
+          onSuccess={() => { setMatchingLine(null); reload(); }}
+        />
+      )}
     </div>
   );
 }

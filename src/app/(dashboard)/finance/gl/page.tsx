@@ -14,6 +14,8 @@ interface JournalEntry {
   status: string;
   journal?: { name: string; code: string };
   lines?: { debit: number; credit: number }[];
+  reversedEntryId?: string;
+  reversalEntry?: { id: string } | null;
 }
 
 interface EntryLine { accountId: string; debit: string; credit: string; label: string; }
@@ -130,7 +132,19 @@ export default function GlPage() {
                   <tr key={e.id} onClick={() => router.push(`/finance/gl/${e.id}`)}
                     className="hover:bg-white/5 transition cursor-pointer">
                     <td className="px-4 py-2.5 text-gray-300 text-xs">{new Date(e.date).toLocaleDateString('en-EG')}</td>
-                    <td className="px-4 py-2.5 font-mono text-gray-300 text-xs">{e.ref ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-xs">
+                      <span className="font-mono text-gray-300">{e.ref ?? '—'}</span>
+                      {e.reversedEntryId && (
+                        <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-700 text-gray-300">
+                          REV OF …{e.reversedEntryId.slice(-6)}
+                        </span>
+                      )}
+                      {e.reversalEntry && (
+                        <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/20 text-red-400">
+                          REVERSED
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5 text-gray-400 text-xs">{e.journal?.code ?? '—'}</td>
                     <td className="px-4 py-2.5 text-right text-white tabular-nums">
                       {totalDebit > 0 ? totalDebit.toLocaleString('en-EG', { maximumFractionDigits: 2 }) : '—'}
