@@ -1,7 +1,7 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useState, useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
@@ -21,10 +21,13 @@ const fmt = (n: number) =>
 
 export default function NewDealPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const leadId = searchParams.get('leadId');
 
   const { data: usersRaw } = useQuery<User[]>('/users');
   const { data: vehiclesRes } = useQuery<{ data: Vehicle[] }>('/vehicles?status=AVAILABLE&limit=200');
   const { data: locationsRaw } = useQuery<Location[]>('/locations');
+  const { data: lead } = useQuery<any>(leadId ? `/leads/${leadId}` : null);
 
   const customers = useMemo(() => (usersRaw ?? []).filter((u) => u.role === 'CUSTOMER'), [usersRaw]);
   const salesReps = useMemo(() => (usersRaw ?? []).filter((u) => ['SALES_REP', 'MANAGER'].includes(u.role)), [usersRaw]);
@@ -36,8 +39,35 @@ export default function NewDealPage() {
     purchaseMethod: 'CASH',
     salePrice: '', adminFee: '', insuranceFee: '',
   });
+  const [prefilled, setPrefilled] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
+
+  // Pre-populate form from lead when data loads
+  useEffect(() => {
+    if (!lead || prefilled) return;
+    const v = lead.vehicle;
+    setForm((p) => ({
+      ...p,
+      customerId: lead.customerId ?? p.customerId,
+      vehicleId: lead.vehicleId ?? p.vehicleId,
+      salesRepId: lead.assignedToUserId ?? p.salesRepId,
+      locationId: lead.locationId ?? p.locationId,
+      salePrice: v?.price ? String(v.price) : p.salePrice,
+    }));
+    // Fill location fees once locations load
+    if (lead.locationId && locations.length > 0) {
+      const l = locations.find((loc) => loc.id === lead.locationId);
+      if (l) {
+        setForm((p) => ({
+          ...p,
+          adminFee: l.defaultAdminFee ? String(l.defaultAdminFee) : p.adminFee,
+          insuranceFee: l.defaultInsuranceFee ? String(l.defaultInsuranceFee) : p.insuranceFee,
+        }));
+      }
+      setPrefilled(true);
+    }
+  }, [lead, locations, prefilled]);
 
   function set(k: string, v: string) { setForm((p) => ({ ...p, [k]: v })); }
 
@@ -80,6 +110,7 @@ export default function NewDealPage() {
           salePrice: Number(form.salePrice),
           adminFee: form.adminFee ? Number(form.adminFee) : undefined,
           insuranceFee: form.insuranceFee ? Number(form.insuranceFee) : undefined,
+          ...(leadId && { leadId }),
         }),
       });
       router.push(`/deals/${deal.id}`);
@@ -109,6 +140,13 @@ export default function NewDealPage() {
         <h1 className="text-xl font-semibold text-white">New Deal</h1>
       </div>
 
+      {leadId && lead && (
+        <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 text-sm flex items-center gap-2">
+          <span>Pre-filled from lead:</span>
+          <span className="font-medium text-white">{lead.name}</span>
+          {lead.vehicle && <span className="text-gray-400">· {lead.vehicle.year} {lead.vehicle.make} {lead.vehicle.model}</span>}
+        </div>
+      )}
       {err && (
         <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{err}</div>
       )}

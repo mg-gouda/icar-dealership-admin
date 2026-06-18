@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 
@@ -20,6 +21,7 @@ const METHODS = [
 ];
 
 export default function AssetsPage() {
+  const router = useRouter();
   const { data: res, loading, reload } = useQuery<{ items: Asset[]; total: number }>('/finance/assets');
   const { data: accounts } = useQuery<{ items: Account[] }>('/finance/accounts?limit=200');
 
@@ -92,7 +94,7 @@ export default function AssetsPage() {
           </thead>
           <tbody className="divide-y divide-white/5">
             {assets.map((a) => (
-              <tr key={a.id} className="hover:bg-white/5 transition">
+              <tr key={a.id} onClick={() => router.push(`/finance/assets/${a.id}`)} className="hover:bg-white/5 transition cursor-pointer">
                 <td className="px-4 py-2.5 text-white font-medium">{a.name}</td>
                 <td className="px-4 py-2.5 text-gray-400 text-xs">{a.depreciationMethod.replace(/_/g, ' ')}</td>
                 <td className="px-4 py-2.5 text-gray-400 text-xs">{new Date(a.acquisitionDate).toLocaleDateString('en-EG')}</td>

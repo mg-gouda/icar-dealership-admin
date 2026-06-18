@@ -2,21 +2,31 @@
 
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
+import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 
 interface Account {
   id: string; code: string; name: string; type: string;
-  normalBalance: string; active: boolean;
+  normalBalance: string; isActive: boolean;
   parent?: { code: string; name: string };
-  _count?: { debitLines: number; creditLines: number };
 }
 
-const ACCOUNT_TYPES = ['Asset','Liability','Equity','Revenue','Expense','ContraAsset','ContraLiability','ContraEquity','ContraRevenue','ContraExpense'];
+const ACCOUNT_TYPES = [
+  'Asset','Liability','Equity','Revenue','Expense',
+  'ContraAsset','ContraLiability','ContraEquity','ContraRevenue','ContraExpense',
+].map((t) => ({ value: t, label: t }));
+
+const NORMAL_BALANCE_OPTS = [
+  { value: 'DEBIT', label: 'Debit' },
+  { value: 'CREDIT', label: 'Credit' },
+];
 
 export default function AccountsPage() {
   const [search, setSearch] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ code: '', name: '', type: 'Asset', normalBalance: 'DEBIT', parentId: '' });
   const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
   const [err, setErr] = useState('');
 
   const { data: res, loading, reload } = useQuery<{ items: Account[]; total: number }>(
@@ -24,9 +34,11 @@ export default function AccountsPage() {
   );
 
   const accounts = res?.items ?? [];
-  const filtered = search
-    ? accounts.filter((a) => a.code.includes(search) || a.name.toLowerCase().includes(search.toLowerCase()))
-    : accounts;
+  const filtered = accounts.filter((a) => {
+    if (!showInactive && !a.isActive) return false;
+    if (!search) return true;
+    return a.code.includes(search) || a.name.toLowerCase().includes(search.toLowerCase());
+  });
 
   function set(k: string, v: string) { setForm((p) => ({ ...p, [k]: v })); }
 
@@ -50,6 +62,18 @@ export default function AccountsPage() {
     finally { setSaving(false); }
   }
 
+  async function toggleActive(account: Account) {
+    setToggling(account.id);
+    try {
+      const action = account.isActive ? 'deactivate' : 'activate';
+      await apiFetch(`/finance/accounts/${account.id}/${action}`, { method: 'PATCH' });
+      reload();
+    } catch (e: any) { alert(e.message); }
+    finally { setToggling(null); }
+  }
+
+  const parentOpts = accounts.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` }));
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -63,11 +87,17 @@ export default function AccountsPage() {
         </button>
       </div>
 
-      <input
-        value={search} onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search by code or name…"
-        className="w-full mb-4 px-3 py-2 bg-gray-900 border border-white/10 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
-      />
+      <div className="flex gap-3 mb-4">
+        <input
+          value={search} onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by code or name…"
+          className="flex-1 px-3 py-2 bg-gray-900 border border-white/10 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+        />
+        <button onClick={() => setShowInactive((p) => !p)}
+          className={`px-3 py-2 text-xs rounded-lg border transition ${showInactive ? 'border-amber-500/50 text-amber-400 bg-amber-500/10' : 'border-white/10 text-gray-500 hover:text-gray-300'}`}>
+          {showInactive ? 'Hide inactive' : 'Show inactive'}
+        </button>
+      </div>
 
       {loading && <p className="text-gray-500 text-sm">Loading…</p>}
 
@@ -80,12 +110,12 @@ export default function AccountsPage() {
               <th className="px-4 py-3 text-left font-medium">Type</th>
               <th className="px-4 py-3 text-left font-medium">Normal</th>
               <th className="px-4 py-3 text-left font-medium">Parent</th>
-              <th className="px-4 py-3 text-center font-medium">Active</th>
+              <th className="px-4 py-3 text-center font-medium w-28">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
             {filtered.map((a) => (
-              <tr key={a.id} className="hover:bg-white/5 transition">
+              <tr key={a.id} className={`hover:bg-white/5 transition ${!a.isActive ? 'opacity-50' : ''}`}>
                 <td className="px-4 py-2.5 font-mono text-blue-400 text-xs">{a.code}</td>
                 <td className="px-4 py-2.5 text-white">{a.name}</td>
                 <td className="px-4 py-2.5 text-gray-400 text-xs">{a.type}</td>
@@ -94,7 +124,14 @@ export default function AccountsPage() {
                   {a.parent ? `${a.parent.code} ${a.parent.name}` : '—'}
                 </td>
                 <td className="px-4 py-2.5 text-center">
-                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${a.active ? 'bg-green-400' : 'bg-gray-600'}`} />
+                  <button onClick={() => toggleActive(a)} disabled={toggling === a.id}
+                    className={`px-2 py-0.5 text-xs rounded border transition disabled:opacity-40 ${
+                      a.isActive
+                        ? 'border-green-500/30 text-green-400 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30'
+                        : 'border-gray-600 text-gray-500 hover:bg-green-500/10 hover:text-green-400 hover:border-green-500/30'
+                    }`}>
+                    {toggling === a.id ? '…' : a.isActive ? 'Active' : 'Inactive'}
+                  </button>
                 </td>
               </tr>
             ))}
@@ -118,21 +155,14 @@ export default function AccountsPage() {
                 <div><label className="block text-xs text-gray-500 mb-1">Code *</label>
                   <input required value={form.code} onChange={(e) => set('code', e.target.value)}
                     className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white font-mono focus:outline-none focus:border-blue-500" /></div>
-                <div><label className="block text-xs text-gray-500 mb-1">Type</label>
-                  <select value={form.type} onChange={(e) => set('type', e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500">
-                    {ACCOUNT_TYPES.map((t) => <option key={t}>{t}</option>)}
-                  </select></div>
+                <SearchableCombobox label="Type" options={ACCOUNT_TYPES} value={form.type} onChange={(v) => set('type', v)} />
               </div>
               <div><label className="block text-xs text-gray-500 mb-1">Name *</label>
                 <input required value={form.name} onChange={(e) => set('name', e.target.value)}
                   className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Normal Balance</label>
-                <select value={form.normalBalance} onChange={(e) => set('normalBalance', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500">
-                  <option value="DEBIT">Debit</option>
-                  <option value="CREDIT">Credit</option>
-                </select></div>
+              <SearchableCombobox label="Normal Balance" options={NORMAL_BALANCE_OPTS} value={form.normalBalance} onChange={(v) => set('normalBalance', v)} />
+              <SearchableCombobox label="Parent Account (optional)" options={parentOpts} value={form.parentId}
+                onChange={(v) => set('parentId', v)} placeholder="None (top level)" clearable />
               {err && <p className="text-red-400 text-xs">{err}</p>}
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => setShowCreate(false)}

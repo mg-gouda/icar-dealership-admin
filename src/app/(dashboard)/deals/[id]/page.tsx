@@ -64,6 +64,28 @@ export default function DealDetailPage() {
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeError, setFinalizeError] = useState('');
 
+  // Installment collection
+  const [collectingLine, setCollectingLine] = useState<string | null>(null);
+
+  async function collectInstallment(lineId: string) {
+    if (!confirm('Mark this installment as collected and post GL entry?')) return;
+    setCollectingLine(lineId);
+    try { await apiFetch(`/deals/${id}/installment-plan/lines/${lineId}/collect`, { method: 'POST' }); reload(); }
+    catch (e: any) { alert(e.message); }
+    finally { setCollectingLine(null); }
+  }
+
+  // Bank disbursement
+  const [disbursingBank, setDisbursingBank] = useState(false);
+
+  async function postBankDisbursement() {
+    if (!confirm('Post bank disbursement GL entry? This records the bank transfer against the AR and cannot be undone.')) return;
+    setDisbursingBank(true);
+    try { await apiFetch(`/deals/${id}/bank-disbursement`, { method: 'POST' }); reload(); }
+    catch (e: any) { alert(e.message); }
+    finally { setDisbursingBank(false); }
+  }
+
   // Finance app
   const [showFACreate, setShowFACreate] = useState(false);
   const [faForm, setFaForm] = useState({ bankName: '', bankBranch: '', termMonths: '', apr: '', applicantInfo: '{}' });
@@ -224,7 +246,7 @@ export default function DealDetailPage() {
           </div>
           <table className="w-full text-xs">
             <thead className="text-gray-400 border-b border-white/5">
-              <tr><th className="text-left pb-2">#</th><th className="text-left pb-2">Due</th><th className="text-right pb-2">Amount</th><th className="text-left pb-2 pl-3">Status</th></tr>
+              <tr><th className="text-left pb-2">#</th><th className="text-left pb-2">Due</th><th className="text-right pb-2">Amount</th><th className="text-left pb-2 pl-3">Status</th><th className="pb-2" /></tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {deal.installmentPlan.installments.slice(0, 6).map((l) => (
@@ -233,6 +255,14 @@ export default function DealDetailPage() {
                   <td className="py-1.5 text-gray-300">{new Date(l.dueDate).toLocaleDateString('en-EG')}</td>
                   <td className="py-1.5 text-right text-white tabular-nums">{Number(l.amount).toLocaleString()} EGP</td>
                   <td className="py-1.5 pl-3"><StatusBadge status={l.status} /></td>
+                  <td className="py-1.5 pl-2">
+                    {l.status === 'PENDING' && deal.status === 'FINALIZED' && (
+                      <button onClick={() => collectInstallment(l.id)} disabled={collectingLine === l.id}
+                        className="px-2 py-0.5 text-xs text-green-400 border border-green-400/30 hover:bg-green-400/10 rounded disabled:opacity-40 transition">
+                        {collectingLine === l.id ? '…' : 'Collect'}
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
               {deal.installmentPlan.installments.length > 6 && (
@@ -299,9 +329,19 @@ export default function DealDetailPage() {
               {/* Bank Approval */}
               {fa.bankApproval ? (
                 <div className="rounded-lg bg-green-900/20 border border-green-500/20 p-3">
-                  <p className="text-xs font-medium text-green-400 mb-1">Bank Approved</p>
-                  <p className="text-xs text-gray-300">Ref: {fa.bankApproval.approvalReferenceNumber} · Amount: {Number(fa.bankApproval.approvedAmount).toLocaleString()} EGP</p>
-                  <p className="text-xs text-gray-500">{new Date(fa.bankApproval.approvalDate).toLocaleDateString('en-EG')}</p>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-medium text-green-400 mb-1">Bank Approved</p>
+                      <p className="text-xs text-gray-300">Ref: {fa.bankApproval.approvalReferenceNumber} · Amount: {Number(fa.bankApproval.approvedAmount).toLocaleString()} EGP</p>
+                      <p className="text-xs text-gray-500">{new Date(fa.bankApproval.approvalDate).toLocaleDateString('en-EG')}</p>
+                    </div>
+                    {deal.status === 'FINALIZED' && (
+                      <button onClick={postBankDisbursement} disabled={disbursingBank}
+                        className="ml-3 px-3 py-1.5 text-xs font-medium text-white bg-blue-700 hover:bg-blue-600 disabled:opacity-50 rounded-lg transition whitespace-nowrap">
+                        {disbursingBank ? '…' : 'Post Disbursement'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <button onClick={() => setShowApproval(true)}

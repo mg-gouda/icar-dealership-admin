@@ -41,11 +41,20 @@ export default function FiscalYearsPage() {
   }
 
   async function lock(id: string) {
+    if (!confirm('Lock this fiscal year? Posting to locked periods requires Finance Admin override.')) return;
     try {
       await apiFetch(`/finance/fiscal-years/${id}/lock`, {
         method: 'PATCH',
         body: JSON.stringify({ lockDate: new Date().toISOString() }),
       });
+      reload();
+    } catch (e: any) { alert(e.message); }
+  }
+
+  async function unlock(id: string) {
+    if (!confirm('Unlock this fiscal year? This allows posting to previously locked periods.')) return;
+    try {
+      await apiFetch(`/finance/fiscal-years/${id}/unlock`, { method: 'PATCH' });
       reload();
     } catch (e: any) { alert(e.message); }
   }
@@ -79,7 +88,12 @@ export default function FiscalYearsPage() {
                 )}
               </div>
               <div className="flex gap-2">
-                {!fy.lockDate && (
+                {fy.lockDate ? (
+                  <button onClick={() => unlock(fy.id)}
+                    className="px-2.5 py-1 text-xs text-gray-400 border border-gray-600 rounded-lg hover:bg-gray-700 transition">
+                    Unlock
+                  </button>
+                ) : (
                   <button onClick={() => lock(fy.id)}
                     className="px-2.5 py-1 text-xs text-amber-400 border border-amber-400/30 rounded-lg hover:bg-amber-400/10 transition">
                     Lock

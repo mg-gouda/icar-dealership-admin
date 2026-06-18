@@ -25,12 +25,13 @@ export async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise
   return res.json();
 }
 
-export function useQuery<T>(path: string, deps: unknown[] = []) {
+export function useQuery<T>(path: string | null, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(path != null);
 
   const load = useCallback(async () => {
+    if (!path) return;
     setLoading(true);
     setError(null);
     try {

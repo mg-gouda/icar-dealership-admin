@@ -7,7 +7,7 @@ import StatusBadge from '../../../../components/StatusBadge';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 
 interface Activity {
-  id: string; type: string; notes: string; outcome?: string;
+  id: string; type: string; note: string; outcome?: string;
   createdAt: string; nextFollowUp?: string;
 }
 
@@ -26,18 +26,18 @@ export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { data: lead, loading, error, reload } = useQuery<Lead>(`/leads/${id}`);
-  const [activityForm, setActivityForm] = useState({ type: 'CALL', notes: '', outcome: '' });
+  const [activityForm, setActivityForm] = useState({ type: 'CALL', note: '', outcome: '' });
   const [saving, setSaving] = useState(false);
 
   async function addActivity() {
-    if (!activityForm.notes.trim()) return;
+    if (!activityForm.note.trim()) return;
     setSaving(true);
     try {
       await apiFetch(`/leads/${id}/activities`, {
         method: 'POST',
         body: JSON.stringify(activityForm),
       });
-      setActivityForm({ type: 'CALL', notes: '', outcome: '' });
+      setActivityForm({ type: 'CALL', note: '', outcome: '' });
       reload();
     } finally {
       setSaving(false);
@@ -132,10 +132,10 @@ export default function LeadDetailPage() {
             className="flex-1 px-3 py-1.5 bg-gray-800 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" />
         </div>
         <div className="flex gap-3">
-          <textarea value={activityForm.notes} onChange={(e) => setActivityForm((p) => ({ ...p, notes: e.target.value }))}
+          <textarea value={activityForm.note} onChange={(e) => setActivityForm((p) => ({ ...p, note: e.target.value }))}
             placeholder="Notes…" rows={2}
             className="flex-1 px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none" />
-          <button onClick={addActivity} disabled={saving || !activityForm.notes.trim()}
+          <button onClick={addActivity} disabled={saving || !activityForm.note.trim()}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm rounded-lg transition self-end">
             {saving ? '…' : 'Log'}
           </button>
@@ -156,7 +156,7 @@ export default function LeadDetailPage() {
                   {a.outcome && <span className="text-xs text-gray-400">· {a.outcome}</span>}
                   <span className="text-xs text-gray-600">{new Date(a.createdAt).toLocaleDateString()}</span>
                 </div>
-                <p className="text-sm text-gray-300">{a.notes}</p>
+                <p className="text-sm text-gray-300">{a.note}</p>
               </div>
             </div>
           ))}
