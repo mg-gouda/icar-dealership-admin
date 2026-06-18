@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '../../../lib/useApi';
+import { useQuery, apiFetch } from '../../../lib/useApi';
 import StatusBadge from '../../../components/StatusBadge';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 
@@ -26,11 +26,31 @@ export default function VehiclesPage() {
   const router = useRouter();
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
-  const { data: vehiclesRes, loading, error } = useQuery<{ data: Vehicle[]; meta: { total: number } }>(
+  const { data: vehiclesRes, loading, error, reload } = useQuery<{ data: Vehicle[]; meta: { total: number } }>(
     `/vehicles?${new URLSearchParams({ ...(status && { status }), ...(search && { search }), limit: '50' })}`,
     [status, search],
   );
   const vehicles = vehiclesRes?.data ?? [];
+
+  // Bulk import state
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ created: number; errors: { row: number; error: string }[] } | null>(null);
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    setImporting(true); setImportResult(null);
+    try {
+      const res = await apiFetch<{ created: number; errors: { row: number; error: string }[] }>(
+        '/vehicles/bulk-import', { method: 'POST', body: JSON.stringify({ csv: text }) },
+      );
+      setImportResult(res);
+      if ((res as any).created > 0) reload();
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Import failed'); }
+    finally { setImporting(false); if (fileRef.current) fileRef.current.value = ''; }
+  }
 
   return (
     <div className="p-6">
@@ -39,13 +59,28 @@ export default function VehiclesPage() {
           <h1 className="text-xl font-semibold text-white">Vehicles</h1>
           <p className="text-xs text-gray-500 mt-0.5">{vehiclesRes?.meta?.total ?? 0} vehicles</p>
         </div>
-        <Link
-          href="/vehicles/new"
-          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition"
-        >
-          + Add Vehicle
-        </Link>
+        <div className="flex gap-2 items-center">
+          <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleImportFile} />
+          <button onClick={() => fileRef.current?.click()} disabled={importing}
+            className="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white rounded-lg transition">
+            {importing ? 'Importing…' : 'Import CSV'}
+          </button>
+          <Link href="/vehicles/new"
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition">
+            + Add Vehicle
+          </Link>
+        </div>
       </div>
+
+      {importResult && (
+        <div className={`mb-4 p-3 rounded-lg text-xs border ${importResult.errors.length ? 'bg-amber-900/20 border-amber-500/20 text-amber-300' : 'bg-green-900/20 border-green-500/20 text-green-300'}`}>
+          <p className="font-medium mb-1">{importResult.created} vehicle{importResult.created !== 1 ? 's' : ''} imported successfully{importResult.errors.length ? ` · ${importResult.errors.length} row${importResult.errors.length !== 1 ? 's' : ''} failed` : '.'}</p>
+          {importResult.errors.map((e) => (
+            <p key={e.row} className="text-amber-400">Row {e.row}: {e.error}</p>
+          ))}
+          <p className="mt-1 text-gray-500">Expected columns: make, model, year, price, locationId — optional: trim, vin, condition, status, bodyType, color, fuelType, transmission, mileage, description</p>
+        </div>
+      )}
 
       <div className="flex gap-3 mb-5">
         <input
