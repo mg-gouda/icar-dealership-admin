@@ -39,6 +39,17 @@ export default function GlPage() {
 
   // New entry dialog
   const [showNew, setShowNew] = useState(false);
+  const [generatingRecurring, setGeneratingRecurring] = useState(false);
+
+  async function generateRecurring() {
+    setGeneratingRecurring(true);
+    try {
+      const res = await apiFetch<{ generated: number }>('/finance/gl/generate-recurring', { method: 'POST' });
+      alert(`Generated ${(res as any).generated} recurring journal entries.`);
+      reload();
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
+    finally { setGeneratingRecurring(false); }
+  }
   const [form, setForm] = useState({ journalId: '', date: new Date().toISOString().split('T')[0], ref: '', notes: '' });
   const [lines, setLines] = useState<EntryLine[]>([EMPTY_LINE(), EMPTY_LINE()]);
   const [saving, setSaving] = useState(false);
@@ -102,6 +113,10 @@ export default function GlPage() {
           <Link href="/finance/reports" className="px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg border border-white/10 hover:border-white/20 transition">
             Reports
           </Link>
+          <button onClick={generateRecurring} disabled={generatingRecurring}
+            className="px-3 py-1.5 text-xs bg-purple-700 hover:bg-purple-600 disabled:opacity-50 text-white rounded-lg transition">
+            {generatingRecurring ? '…' : 'Generate Recurring'}
+          </button>
           <button onClick={() => setShowNew(true)}
             className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition font-medium">
             + New Entry

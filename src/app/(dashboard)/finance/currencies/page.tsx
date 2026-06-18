@@ -36,11 +36,34 @@ export default function CurrenciesPage() {
   }
 
   const list = Array.isArray(currencies) ? currencies : [];
+  const [revaluing, setRevaluing] = useState(false);
+  const [revalResult, setRevalResult] = useState<{ revaluedCount: number; totalVariance: number } | null>(null);
+
+  async function runRevaluation() {
+    if (!confirm('Run period-end FX revaluation? This will post GL entries for all open foreign-currency balances.')) return;
+    setRevaluing(true); setRevalResult(null);
+    try {
+      const res = await apiFetch<{ revaluedCount: number; totalVariance: number }>('/finance/currencies/revaluate', { method: 'POST' });
+      setRevalResult(res);
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Revaluation failed'); }
+    finally { setRevaluing(false); }
+  }
 
   return (
     <div className="p-6 max-w-3xl">
-      <h1 className="text-xl font-semibold text-white mb-1">Currencies</h1>
-      <p className="text-xs text-gray-500 mb-6">Exchange rates — manual entry</p>
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-xl font-semibold text-white">Currencies</h1>
+        <button onClick={runRevaluation} disabled={revaluing}
+          className="px-3 py-1.5 text-xs bg-purple-700 hover:bg-purple-600 disabled:opacity-50 text-white rounded-lg transition">
+          {revaluing ? 'Running…' : 'Run FX Revaluation'}
+        </button>
+      </div>
+      <p className="text-xs text-gray-500 mb-2">Exchange rates — manual entry</p>
+      {revalResult && (
+        <div className="mb-4 p-3 rounded-lg bg-purple-900/20 border border-purple-500/20 text-xs text-purple-300">
+          Revaluation complete — {revalResult.revaluedCount} lines adjusted, net variance {revalResult.totalVariance.toLocaleString()} EGP
+        </div>
+      )}
 
       {loading && <p className="text-gray-500 text-sm">Loading…</p>}
 

@@ -18,6 +18,21 @@ const REPORTS = [
 const fmt = (n: number | string | object) =>
   Number(n).toLocaleString('en-EG', { maximumFractionDigits: 2 });
 
+function downloadCsv(rows: Record<string, unknown>[], filename: string) {
+  if (!rows.length) return;
+  const headers = Object.keys(rows[0]);
+  const escape = (v: unknown) => {
+    const s = String(v ?? '');
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [headers.join(','), ...rows.map((r) => headers.map((h) => escape(r[h])).join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 export default function ReportsPage() {
   const now = new Date();
   const y = now.getFullYear();
@@ -29,7 +44,29 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // GL drill-down slide-over
+  const [drillAccount, setDrillAccount] = useState<{ id: string; code: string; name: string } | null>(null);
+  const [drillData, setDrillData] = useState<any[]>([]);
+  const [drillLoading, setDrillLoading] = useState(false);
+
   const active = REPORTS.find((r) => r.key === report)!;
+
+  async function drillDown(accountId: string, code: string, name: string) {
+    setDrillAccount({ id: accountId, code, name });
+    setDrillLoading(true);
+    try {
+      const qs = active.needsRange ? `dateFrom=${dateFrom}&dateTo=${dateTo}` : `asOf=${asOf}`;
+      const res = await apiFetch<{ items: any[] }>(`/finance/reports/gl-by-account?accountId=${accountId}&${qs}`);
+      setDrillData(Array.isArray(res) ? res : (res as any).items ?? []);
+    } catch { setDrillData([]); }
+    finally { setDrillLoading(false); }
+  }
+
+  function exportCsv() {
+    if (!data) return;
+    const rows = Array.isArray(data) ? data : Object.values(data).flat();
+    downloadCsv(rows as Record<string, unknown>[], `${report}-${new Date().toISOString().slice(0, 10)}.csv`);
+  }
 
   async function run() {
     setLoading(true);
@@ -91,6 +128,12 @@ export default function ReportsPage() {
           className="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg transition">
           {loading ? 'Running…' : 'Run Report'}
         </button>
+        {data && (
+          <button onClick={exportCsv}
+            className="px-4 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition">
+            Export CSV
+          </button>
+        )}
       </div>
 
       {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
@@ -111,7 +154,8 @@ export default function ReportsPage() {
               </thead>
               <tbody className="divide-y divide-white/5">
                 {data.map((r: any) => (
-                  <tr key={r.accountId} className="hover:bg-white/2">
+                  <tr key={r.accountId} onClick={() => drillDown(r.accountId, r.code, r.name)}
+                    className="hover:bg-white/5 cursor-pointer transition">
                     <td className="px-4 py-2 font-mono text-gray-400 text-xs">{r.code}</td>
                     <td className="px-4 py-2 text-white">{r.name}</td>
                     <td className="px-4 py-2 text-right tabular-nums text-white">{fmt(r.debit)}</td>
@@ -193,6 +237,48 @@ export default function ReportsPage() {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {/* GL Drill-down slide-over */}
+      {drillAccount && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setDrillAccount(null)} />
+          <div className="relative w-[480px] h-full bg-gray-900 border-l border-white/10 flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+              <div>
+                <p className="text-xs text-gray-500 font-mono">{drillAccount.code}</p>
+                <p className="text-sm font-semibold text-white">{drillAccount.name}</p>
+              </div>
+              <button onClick={() => setDrillAccount(null)} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {drillLoading && <p className="p-4 text-gray-500 text-sm">Loading…</p>}
+              {!drillLoading && drillData.length === 0 && <p className="p-4 text-gray-600 text-sm">No GL lines in this period.</p>}
+              {!drillLoading && drillData.length > 0 && (
+                <table className="w-full text-xs">
+                  <thead className="border-b border-white/5 text-gray-500 sticky top-0 bg-gray-900">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-medium">Date</th>
+                      <th className="px-4 py-2 text-left font-medium">Ref</th>
+                      <th className="px-4 py-2 text-right font-medium">Debit</th>
+                      <th className="px-4 py-2 text-right font-medium">Credit</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {drillData.map((l: any) => (
+                      <tr key={l.id} className="hover:bg-white/5">
+                        <td className="px-4 py-1.5 text-gray-400">{new Date(l.journalEntry.date).toLocaleDateString()}</td>
+                        <td className="px-4 py-1.5 text-gray-300 font-mono">{l.journalEntry.ref ?? '—'}</td>
+                        <td className="px-4 py-1.5 text-right tabular-nums text-white">{Number(l.debit) ? fmt(l.debit) : '—'}</td>
+                        <td className="px-4 py-1.5 text-right tabular-nums text-white">{Number(l.credit) ? fmt(l.credit) : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
