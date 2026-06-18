@@ -48,6 +48,7 @@ export default function LoginPage() {
         setStage('totp-verify');
       } else {
         localStorage.setItem('accessToken', data.accessToken);
+        document.cookie = `admin_session=1; path=/; SameSite=Lax; max-age=${7 * 24 * 60 * 60}`;
         router.replace('/');
       }
     } catch (err: any) { setError(err.message ?? 'Login failed'); }
@@ -61,6 +62,7 @@ export default function LoginPage() {
     try {
       const data = await post('/auth/2fa/verify', { token: totpCode }, preToken);
       localStorage.setItem('accessToken', data.accessToken);
+      document.cookie = `admin_session=1; path=/; SameSite=Lax; max-age=${7 * 24 * 60 * 60}`;
       router.replace('/');
     } catch (err: any) { setError(err.message ?? 'Invalid code'); }
     finally { setLoading(false); }
@@ -73,6 +75,7 @@ export default function LoginPage() {
     try {
       const data = await post('/auth/2fa/confirm', { token: totpCode }, preToken);
       localStorage.setItem('accessToken', data.accessToken);
+      document.cookie = `admin_session=1; path=/; SameSite=Lax; max-age=${7 * 24 * 60 * 60}`;
       router.replace('/');
     } catch (err: any) { setError(err.message ?? 'Invalid code'); }
     finally { setLoading(false); }

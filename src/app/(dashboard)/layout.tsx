@@ -27,7 +27,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [router]);
 
   function logout() {
+    // ponytail: fire-and-forget API call to audit logout server-side
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1'}/auth/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {}); // best-effort
+    }
     localStorage.removeItem('accessToken');
+    document.cookie = 'admin_session=; path=/; max-age=0';
     router.replace('/login');
   }
 
