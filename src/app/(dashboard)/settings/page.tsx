@@ -5,6 +5,92 @@ import { useQuery, apiFetch } from '../../../lib/useApi';
 import StatusBadge from '../../../components/StatusBadge';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 
+// ── Location Dialog ───────────────────────────────────────────────────────────
+function LocationDialog({
+  loc,
+  companyId,
+  onClose,
+  onSuccess,
+}: { loc?: Location; companyId?: string; onClose: () => void; onSuccess: () => void }) {
+  const [form, setForm] = useState({
+    name: loc?.name ?? '',
+    city: loc?.city ?? '',
+    address: loc?.address ?? '',
+    phone: loc?.phone ?? '',
+    defaultAdminFee: loc?.defaultAdminFee ? String(loc.defaultAdminFee) : '',
+    defaultInsuranceFee: loc?.defaultInsuranceFee ? String(loc.defaultInsuranceFee) : '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+  const editing = !!loc;
+
+  function set(k: string, v: string) { setForm((p) => ({ ...p, [k]: v })); }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.name) { setErr('Name required.'); return; }
+    setSaving(true); setErr('');
+    const body = {
+      name: form.name,
+      city: form.city || undefined,
+      address: form.address || undefined,
+      phone: form.phone || undefined,
+      defaultAdminFee: form.defaultAdminFee ? Number(form.defaultAdminFee) : undefined,
+      defaultInsuranceFee: form.defaultInsuranceFee ? Number(form.defaultInsuranceFee) : undefined,
+    };
+    try {
+      if (editing) {
+        await apiFetch(`/locations/${loc!.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+      } else {
+        await apiFetch('/locations', { method: 'POST', body: JSON.stringify({ ...body, companyId }) });
+      }
+      onSuccess();
+    } catch (e: any) { setErr(e.message); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md rounded-2xl bg-gray-900 border border-white/10 shadow-2xl">
+        <div className="flex items-center justify-between p-5 border-b border-white/5">
+          <h2 className="text-sm font-semibold text-white">{editing ? 'Edit Location' : 'New Location'}</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-white text-lg leading-none">×</button>
+        </div>
+        <form onSubmit={submit} className="p-5 space-y-3">
+          <Field label="Name *" value={form.name} onChange={(v) => set('name', v)} required />
+          <Field label="City" value={form.city} onChange={(v) => set('city', v)} />
+          <Field label="Address" value={form.address} onChange={(v) => set('address', v)} />
+          <Field label="Phone" value={form.phone} onChange={(v) => set('phone', v)} />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Default Admin Fee (EGP)" type="number" value={form.defaultAdminFee} onChange={(v) => set('defaultAdminFee', v)} />
+            <Field label="Default Insurance Fee (EGP)" type="number" value={form.defaultInsuranceFee} onChange={(v) => set('defaultInsuranceFee', v)} />
+          </div>
+          {err && <p className="text-red-400 text-xs">{err}</p>}
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2 text-sm text-gray-400 border border-white/10 rounded-lg hover:text-white transition">Cancel</button>
+            <button type="submit" disabled={saving}
+              className="flex-1 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition">
+              {saving ? '…' : editing ? 'Save' : 'Create'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, type = 'text', required }: { label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean }) {
+  return (
+    <div>
+      <label className="block text-xs text-gray-500 mb-1">{label}</label>
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} required={required}
+        className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
+    </div>
+  );
+}
+
 interface Location {
   id: string; name: string; city?: string; phone?: string; address?: string;
   defaultAdminFee?: number; defaultInsuranceFee?: number;
@@ -106,6 +192,7 @@ function CreateUserDialog({
 export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>('Locations');
   const [showCreateUser, setShowCreateUser] = useState(false);
+  const [editingLoc, setEditingLoc] = useState<Location | null | 'new'>(null);
 
   const { data: locationsRaw, loading: locLoading, reload: reloadLocations } = useQuery<Location[]>('/locations');
   const { data: usersRaw, loading: usrLoading, reload: reloadUsers } = useQuery<User[]>('/users');
@@ -131,6 +218,13 @@ export default function SettingsPage() {
       {/* Locations */}
       {tab === 'Locations' && (
         <section>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs text-gray-400">{locations.length} location{locations.length !== 1 ? 's' : ''}</p>
+            <button onClick={() => setEditingLoc('new')}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-lg transition">
+              + Add Location
+            </button>
+          </div>
           {locLoading && <p className="text-gray-500 text-sm">Loading…</p>}
           <div className="space-y-3">
             {locations.map((loc) => (
@@ -145,6 +239,8 @@ export default function SettingsPage() {
                   <div className="flex items-center gap-4 text-xs text-gray-500">
                     <span>{loc._count?.users ?? 0} users</span>
                     <span>{loc._count?.vehicles ?? 0} vehicles</span>
+                    <button onClick={() => setEditingLoc(loc)}
+                      className="text-blue-400 hover:text-blue-300 transition font-medium">Edit</button>
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-4 pt-4 border-t border-white/5 text-sm">
@@ -232,6 +328,14 @@ export default function SettingsPage() {
           locations={locations}
           onClose={() => setShowCreateUser(false)}
           onSuccess={() => { setShowCreateUser(false); reloadUsers(); }}
+        />
+      )}
+
+      {editingLoc && (
+        <LocationDialog
+          loc={editingLoc === 'new' ? undefined : editingLoc}
+          onClose={() => setEditingLoc(null)}
+          onSuccess={() => { setEditingLoc(null); reloadLocations(); }}
         />
       )}
     </div>
