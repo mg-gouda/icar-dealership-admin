@@ -24,6 +24,9 @@ const colors: Record<string, string> = {
   PAID: 'bg-green-900/40 text-green-300',
   PARTIAL: 'bg-yellow-900/40 text-yellow-300',
   OVERDUE: 'bg-red-900/40 text-red-300',
+  // Commission
+  ACCRUED: 'bg-blue-900/40 text-blue-300',
+  PAYABLE: 'bg-yellow-900/40 text-yellow-300',
 };
 
 export default function StatusBadge({ status }: { status: string }) {
