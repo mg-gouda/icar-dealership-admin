@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import { apiFetch } from '../../../lib/useApi';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import ExcelJS from 'exceljs';
 
 const fmt = (n: number | string) =>
   Number(n).toLocaleString('en-EG', { maximumFractionDigits: 2 });
@@ -46,6 +49,43 @@ export default function OperationalReportsPage() {
   const [vehicles, setVehicles] = useState<Vehicle[] | null>(null);
   const [leads, setLeads] = useState<Lead[] | null>(null);
   const [appointments, setAppointments] = useState<Appointment[] | null>(null);
+
+  function exportPdf() {
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    let y = 14;
+    doc.setFontSize(12);
+    doc.text(`iCar Dealership — Operational Reports (${dateFrom} → ${dateTo})`, 14, y);
+    y += 8;
+    if (deals?.length) {
+      doc.setFontSize(9); doc.text('Sales Report', 14, y); y += 4;
+      autoTable(doc, { startY: y, head: [['Purchase Method', 'Sale Price', 'Status', 'Date']],
+        body: deals.map((d) => [d.purchaseMethod, Number(d.salePrice).toLocaleString(), d.status, new Date(d.createdAt).toLocaleDateString()]),
+        styles: { fontSize: 7 }, headStyles: { fillColor: [30, 41, 59], textColor: 255 } });
+      y = (doc as any).lastAutoTable?.finalY + 6;
+    }
+    doc.save(`operational-reports-${dateFrom}.pdf`);
+  }
+
+  async function exportXlsx() {
+    const wb = new ExcelJS.Workbook();
+    if (deals?.length) {
+      const ws = wb.addWorksheet('Sales');
+      ws.addRow(['Method', 'Sale Price', 'Status', 'Date']).font = { bold: true };
+      deals.forEach((d) => ws.addRow([d.purchaseMethod, Number(d.salePrice), d.status, new Date(d.createdAt).toLocaleDateString()]));
+      ws.getColumn(2).numFmt = '#,##0.00';
+    }
+    if (leads?.length) {
+      const ws = wb.addWorksheet('Leads');
+      ws.addRow(['Name', 'Status', 'Source', 'Created']).font = { bold: true };
+      leads.forEach((l) => ws.addRow([(l as any).name, (l as any).status, (l as any).source, new Date((l as any).createdAt).toLocaleDateString()]));
+    }
+    const buf = await wb.xlsx.writeBuffer();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    a.download = `operational-reports-${dateFrom}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
 
   async function run() {
     setLoading(true);
@@ -147,6 +187,18 @@ export default function OperationalReportsPage() {
           className="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg transition">
           {loading ? 'Loading...' : 'Run Reports'}
         </button>
+        {deals !== null && (
+          <>
+            <button onClick={exportPdf}
+              className="px-4 py-1.5 text-xs bg-rose-700 hover:bg-rose-600 text-white rounded-lg transition">
+              PDF
+            </button>
+            <button onClick={exportXlsx}
+              className="px-4 py-1.5 text-xs bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg transition">
+              Excel
+            </button>
+          </>
+        )}
       </div>
 
       {deals !== null && (
