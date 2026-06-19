@@ -45,7 +45,7 @@ export default function AssetDetailPage() {
         body: JSON.stringify({ journalId }),
       });
       reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
     finally { setPosting(null); }
   }
 
@@ -65,7 +65,7 @@ export default function AssetDetailPage() {
         });
       }
       reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
     finally { setPostAll(false); }
   }
 

@@ -45,7 +45,7 @@ function LocationDialog({
         await apiFetch('/locations', { method: 'POST', body: JSON.stringify({ ...body, companyId }) });
       }
       onSuccess();
-    } catch (e: any) { setErr(e.message); }
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setSaving(false); }
   }
 
@@ -145,7 +145,7 @@ function CreateUserDialog({
         }),
       });
       onSuccess();
-    } catch (e: any) { setErr(e.message); }
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setSaving(false); }
   }
 

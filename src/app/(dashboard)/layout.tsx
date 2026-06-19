@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import NotificationBell from '@/components/NotificationBell';
 
 const navItems = [
   { href: '/', label: 'Dashboard' },
@@ -75,7 +76,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top bar */}
+        <header className="flex items-center justify-end gap-2 px-4 py-2 border-b border-white/5 bg-gray-900/50">
+          <NotificationBell />
+          <button
+            onClick={logout}
+            className="px-3 py-1.5 text-xs text-gray-500 hover:text-white rounded-lg hover:bg-white/5 transition"
+          >
+            Sign out
+          </button>
+        </header>
+        <main className="flex-1 overflow-y-auto">{children}</main>
+      </div>
     </div>
   );
 }

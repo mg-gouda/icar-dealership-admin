@@ -80,8 +80,8 @@ export default function NewVehiclePage() {
         body: JSON.stringify(body),
       });
       router.push(`/vehicles/${v.id}`);
-    } catch (e: any) {
-      setErr(e.message);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }

@@ -71,7 +71,7 @@ export default function PurchaseOrdersPage() {
       setShowCreate(false);
       setForm({ partnerId: '', locationId: '', expectedDate: '', lines: [{ ...BLANK_LINE }] });
       reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
     finally { setSaving(false); }
   }
 

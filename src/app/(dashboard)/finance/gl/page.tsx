@@ -95,7 +95,7 @@ export default function GlPage() {
       setForm({ journalId: '', date: new Date().toISOString().split('T')[0], ref: '', notes: '' });
       setLines([EMPTY_LINE(), EMPTY_LINE()]);
       reload();
-    } catch (err: any) { setSaveErr(err.message); }
+    } catch (err: unknown) { setSaveErr(err instanceof Error ? err.message : String(err)); }
     finally { setSaving(false); }
   }
 

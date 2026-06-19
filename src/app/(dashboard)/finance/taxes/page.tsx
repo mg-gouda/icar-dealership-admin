@@ -62,7 +62,7 @@ export default function TaxesPage() {
         }),
       });
       setShowTax(false); reload();
-    } catch (e: any) { setErr(e.message); }
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setSaving(false); }
   }
 
@@ -72,7 +72,7 @@ export default function TaxesPage() {
     try {
       await apiFetch('/finance/taxes/groups', { method: 'POST', body: JSON.stringify({ name: groupForm.name }) });
       setShowGroup(false); reloadGroups();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
     finally { setSaving(false); }
   }
 

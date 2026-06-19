@@ -62,8 +62,8 @@ export default function NewLeadPage() {
         }),
       });
       router.push(`/crm/${lead.id}`);
-    } catch (e: any) {
-      setErr(e.message);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }

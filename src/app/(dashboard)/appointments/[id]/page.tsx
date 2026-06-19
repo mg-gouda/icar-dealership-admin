@@ -28,7 +28,7 @@ export default function AppointmentDetailPage() {
     try {
       await apiFetch(`/appointments/${id}/${path}`, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined });
       reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
     finally { setActing(false); }
   }
 
@@ -43,7 +43,7 @@ export default function AppointmentDetailPage() {
       });
       setShowReschedule(false);
       reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
     finally { setActing(false); }
   }
 

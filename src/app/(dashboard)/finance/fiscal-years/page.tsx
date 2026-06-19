@@ -27,7 +27,7 @@ export default function FiscalYearsPage() {
         body: JSON.stringify({ name: form.name, startDate: new Date(form.startDate).toISOString(), endDate: new Date(form.endDate).toISOString() }),
       });
       setShowCreate(false); reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
     finally { setSaving(false); }
   }
 
@@ -36,7 +36,7 @@ export default function FiscalYearsPage() {
     try {
       await apiFetch(`/finance/fiscal-years/${id}/periods/generate`, { method: 'POST' });
       reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
     finally { setGenerating(null); }
   }
 
@@ -48,7 +48,7 @@ export default function FiscalYearsPage() {
         body: JSON.stringify({ lockDate: new Date().toISOString() }),
       });
       reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
   }
 
   async function unlock(id: string) {
@@ -56,7 +56,7 @@ export default function FiscalYearsPage() {
     try {
       await apiFetch(`/finance/fiscal-years/${id}/unlock`, { method: 'PATCH' });
       reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
   }
 
   return (

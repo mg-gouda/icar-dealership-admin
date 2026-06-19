@@ -63,7 +63,7 @@ export default function PaymentsPage() {
       setShowNew(false);
       setForm({ type: 'INBOUND', partnerId: '', journalId: '', amount: '', date: new Date().toISOString().split('T')[0], method: 'BANK_TRANSFER', memo: '' });
       router.push(`/finance/payments/${pmt.id}`);
-    } catch (err: any) { setSaveErr(err.message); }
+    } catch (err: unknown) { setSaveErr(err instanceof Error ? err.message : String(err)); }
     finally { setSaving(false); }
   }
 

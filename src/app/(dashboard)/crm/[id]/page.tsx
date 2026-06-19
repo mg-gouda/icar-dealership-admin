@@ -60,7 +60,7 @@ export default function LeadDetailPage() {
         // No customer/vehicle on lead — go to new deal form
         router.push(`/deals/new?leadId=${id}`);
       }
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
     finally { setConverting(false); }
   }
 

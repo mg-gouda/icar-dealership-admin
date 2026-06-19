@@ -55,7 +55,7 @@ export default function PartnersPage() {
       setShowCreate(false);
       setForm({ name: '', type: 'CUSTOMER', email: '', phone: '', taxId: '', address: '', city: '' });
       reload();
-    } catch (e: any) { setErr(e.message); }
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setSaving(false); }
   }
 

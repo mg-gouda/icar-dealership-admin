@@ -24,7 +24,7 @@ export default function CurrenciesPage() {
         body: JSON.stringify({ rate: parseFloat(rate), date: new Date(date).toISOString() }),
       });
       setAdding(null); setRate(''); reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
     finally { setSaving(false); }
   }
 
@@ -32,7 +32,7 @@ export default function CurrenciesPage() {
     try {
       await apiFetch(`/finance/currencies/${id}/toggle-active`, { method: 'PATCH' });
       reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
   }
 
   const list = Array.isArray(currencies) ? currencies : [];

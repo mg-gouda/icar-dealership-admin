@@ -74,8 +74,8 @@ export default function VehicleDetailPage() {
       });
       await reload();
       setEditing(false);
-    } catch (e: any) {
-      setSaveErr(e.message);
+    } catch (e: unknown) {
+      setSaveErr(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
@@ -99,7 +99,7 @@ export default function VehicleDetailPage() {
       await apiFetch(`/vehicles/${id}/images`, { method: 'POST', body: JSON.stringify({ url: addImgUrl, order: images.length }) });
       setAddImgUrl('');
       await reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
     finally { setAddingImg(false); }
   }
 

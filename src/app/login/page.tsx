@@ -51,7 +51,7 @@ export default function LoginPage() {
         document.cookie = `admin_session=1; path=/; SameSite=Lax; max-age=${7 * 24 * 60 * 60}`;
         router.replace('/');
       }
-    } catch (err: any) { setError(err.message ?? 'Login failed'); }
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Login failed'); }
     finally { setLoading(false); }
   }
 
@@ -64,7 +64,7 @@ export default function LoginPage() {
       localStorage.setItem('accessToken', data.accessToken);
       document.cookie = `admin_session=1; path=/; SameSite=Lax; max-age=${7 * 24 * 60 * 60}`;
       router.replace('/');
-    } catch (err: any) { setError(err.message ?? 'Invalid code'); }
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Invalid code'); }
     finally { setLoading(false); }
   }
 
@@ -77,7 +77,7 @@ export default function LoginPage() {
       localStorage.setItem('accessToken', data.accessToken);
       document.cookie = `admin_session=1; path=/; SameSite=Lax; max-age=${7 * 24 * 60 * 60}`;
       router.replace('/');
-    } catch (err: any) { setError(err.message ?? 'Invalid code'); }
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Invalid code'); }
     finally { setLoading(false); }
   }
 

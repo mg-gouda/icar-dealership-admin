@@ -46,8 +46,8 @@ export default function GlDetailPage() {
     try {
       await apiFetch(`/finance/gl/entries/${id}/post`, { method: 'PATCH' });
       await reload();
-    } catch (e: any) {
-      setActionErr(e.message);
+    } catch (e: unknown) {
+      setActionErr(e instanceof Error ? e.message : String(e));
     } finally {
       setPosting(false);
     }
@@ -60,8 +60,8 @@ export default function GlDetailPage() {
     try {
       await apiFetch(`/finance/gl/entries/${id}/reverse`, { method: 'POST' });
       await reload();
-    } catch (e: any) {
-      setActionErr(e.message);
+    } catch (e: unknown) {
+      setActionErr(e instanceof Error ? e.message : String(e));
     } finally {
       setReversing(false);
     }

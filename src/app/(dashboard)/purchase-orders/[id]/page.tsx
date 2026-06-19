@@ -31,7 +31,7 @@ export default function PODetailPage() {
   async function changeStatus(status: string) {
     setActing(true);
     try { await apiFetch(`/purchase-orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }); reload(); }
-    catch (e: any) { alert(e.message); }
+    catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
     finally { setActing(false); }
   }
 
@@ -45,7 +45,7 @@ export default function PODetailPage() {
       if (!lines.length) throw new Error('Enter at least one quantity');
       await apiFetch(`/purchase-orders/${id}/receive`, { method: 'POST', body: JSON.stringify({ lines }) });
       setShowReceive(false); setReceiveQty({}); reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
     finally { setActing(false); }
   }
 

@@ -58,7 +58,7 @@ export default function AccountsPage() {
       setShowCreate(false);
       setForm({ code: '', name: '', type: 'Asset', normalBalance: 'DEBIT', parentId: '' });
       reload();
-    } catch (e: any) { setErr(e.message); }
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setSaving(false); }
   }
 
@@ -68,7 +68,7 @@ export default function AccountsPage() {
       const action = account.isActive ? 'deactivate' : 'activate';
       await apiFetch(`/finance/accounts/${account.id}/${action}`, { method: 'PATCH' });
       reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
     finally { setToggling(null); }
   }
 
