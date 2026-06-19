@@ -71,6 +71,21 @@ export default function FinancePage() {
         <p className="text-xs text-gray-500 mt-0.5">Accounting & reporting</p>
       </div>
 
+      {/* Quick actions */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        {[
+          { label: '+ New Invoice', href: '/finance/invoices?action=new' },
+          { label: '+ Register Payment', href: '/finance/payments?action=new' },
+          { label: '+ New Journal Entry', href: '/finance/gl?action=new' },
+          { label: '+ New Vendor Bill', href: '/finance/invoices?type=VENDOR_BILL&action=new' },
+        ].map((a) => (
+          <Link key={a.href} href={a.href}
+            className="px-4 py-2 text-xs font-medium bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 hover:border-blue-500/40 text-blue-400 rounded-lg transition">
+            {a.label}
+          </Link>
+        ))}
+      </div>
+
       {/* KPI widgets */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
         {KPIs.map((k) => (
