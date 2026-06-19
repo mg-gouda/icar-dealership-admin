@@ -101,36 +101,75 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-black relative overflow-hidden">
-      {/* Abstract dark blobs */}
-      <div className="absolute inset-0" style={{ filter: 'blur(80px)', opacity: 0.4 }} aria-hidden>
-        <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-blue-700 rounded-full" />
-        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-violet-800 rounded-full" />
-        <div className="absolute top-1/2 right-1/3 w-48 h-48 bg-indigo-900 rounded-full" />
+    <main className="min-h-screen flex items-center justify-center relative overflow-hidden"
+      style={{ background: 'oklch(0.12 0.04 255)' }}>
+      {/* Abstract blurred blobs — 10% blur as per design spec */}
+      <div className="absolute inset-0 pointer-events-none" aria-hidden style={{ filter: 'blur(90px)', opacity: 0.35 }}>
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full"
+          style={{ background: 'oklch(0.42 0.22 265)' }} />
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full"
+          style={{ background: 'oklch(0.38 0.18 295)' }} />
+        <div className="absolute top-1/2 left-2/3 w-64 h-64 rounded-full"
+          style={{ background: 'oklch(0.3 0.14 240)' }} />
       </div>
-      <div className="absolute inset-0" style={{ backdropFilter: 'blur(10px)' }} aria-hidden />
+      <div className="absolute inset-0 pointer-events-none" style={{ backdropFilter: 'blur(10px)' }} aria-hidden />
 
-      <div className="relative z-10 w-full max-w-xs px-4">
-        <div className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl px-6 py-6">
+      <div className="relative z-10 w-full max-w-[320px] px-4">
+        {/* Brand mark above card */}
+        <div className="text-center mb-5">
+          <span className="text-3xl" aria-hidden>🚗</span>
+          <p className="text-sm font-semibold text-white mt-1.5 tracking-tight">DealerMS</p>
+          <p className="text-[11px] mt-0.5" style={{ color: 'oklch(1 0 0 / 0.4)' }}>Staff Management Portal</p>
+        </div>
+
+        <div className="rounded-xl shadow-2xl px-5 py-5"
+          style={{ background: 'oklch(1 0 0 / 0.06)', border: '1px solid oklch(1 0 0 / 0.1)', backdropFilter: 'blur(20px)' }}>
 
           {/* Stage: credentials */}
           {stage === 'credentials' && (
             <>
-              <div className="mb-5 text-center">
-                <p className="text-base font-semibold text-white tracking-tight">iCar Dealership</p>
-                <p className="text-xs text-white/40 mt-0.5">Admin Portal</p>
+              <div className="mb-4 text-center">
+                <p className="text-[0.9375rem] font-semibold text-white">Welcome Back</p>
+                <p className="text-[11px] mt-0.5" style={{ color: 'oklch(1 0 0 / 0.45)' }}>Sign in to your account to continue</p>
               </div>
-              <form onSubmit={handleCredentials} className="space-y-3">
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                  required autoComplete="email" placeholder="Email"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder-white/25 focus:outline-none focus:border-white/30 transition" />
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                  required autoComplete="current-password" placeholder="Password"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder-white/25 focus:outline-none focus:border-white/30 transition" />
-                {error && <p className="text-xs text-red-400 text-center">{error}</p>}
+              <form onSubmit={handleCredentials} className="space-y-2.5">
+                <div>
+                  <label className="block text-[11px] font-medium mb-1" style={{ color: 'oklch(1 0 0 / 0.55)' }}>Email Address</label>
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                    required autoComplete="email" placeholder="your-name@dealership.com"
+                    className="w-full rounded-lg px-3 py-2 text-xs text-white focus:outline-none transition"
+                    style={{ background: 'oklch(1 0 0 / 0.07)', border: '1px solid oklch(1 0 0 / 0.12)', color: 'white' }}
+                    onFocus={e => (e.target.style.borderColor = 'oklch(1 0 0 / 0.3)')}
+                    onBlur={e => (e.target.style.borderColor = 'oklch(1 0 0 / 0.12)')}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium mb-1" style={{ color: 'oklch(1 0 0 / 0.55)' }}>Password</label>
+                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                    required autoComplete="current-password" placeholder="••••••••"
+                    className="w-full rounded-lg px-3 py-2 text-xs text-white focus:outline-none transition"
+                    style={{ background: 'oklch(1 0 0 / 0.07)', border: '1px solid oklch(1 0 0 / 0.12)' }}
+                    onFocus={e => (e.target.style.borderColor = 'oklch(1 0 0 / 0.3)')}
+                    onBlur={e => (e.target.style.borderColor = 'oklch(1 0 0 / 0.12)')}
+                  />
+                </div>
+                <div className="flex items-center justify-between pt-0.5">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox" className="w-3 h-3 rounded" style={{ accentColor: 'oklch(0.65 0.2 265)' }} />
+                    <span className="text-[11px]" style={{ color: 'oklch(1 0 0 / 0.45)' }}>Remember me</span>
+                  </label>
+                  <button type="button" className="text-[11px] transition"
+                    style={{ color: 'oklch(0.72 0.18 265)' }}>
+                    Forgot password?
+                  </button>
+                </div>
+                {error && <p className="text-[11px] text-red-400 text-center">{error}</p>}
                 <button type="submit" disabled={loading}
-                  className="w-full rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-white text-xs font-medium py-2 transition disabled:opacity-50">
-                  {loading ? 'Signing in…' : 'Sign In'}
+                  className="w-full rounded-lg text-white text-xs font-semibold py-2.5 transition disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  style={{ background: 'oklch(0.52 0.22 265)' }}
+                  onMouseOver={e => !loading && (e.currentTarget.style.background = 'oklch(0.46 0.21 265)')}
+                  onMouseOut={e => (e.currentTarget.style.background = 'oklch(0.52 0.22 265)')}>
+                  {loading ? 'Signing in…' : <>Sign In <span aria-hidden>→</span></>}
                 </button>
               </form>
             </>
@@ -139,22 +178,45 @@ export default function LoginPage() {
           {/* Stage: TOTP verify (already enrolled) */}
           {stage === 'totp-verify' && (
             <>
-              <div className="mb-5 text-center">
-                <p className="text-base font-semibold text-white">Two-Factor Auth</p>
-                <p className="text-xs text-white/40 mt-0.5">Enter the 6-digit code from your authenticator app</p>
+              <div className="mb-4 text-center">
+                <span className="text-2xl block mb-2" aria-hidden>🔐</span>
+                <p className="text-[0.9375rem] font-semibold text-white">Two-Factor Authentication</p>
+                <p className="text-[11px] mt-1" style={{ color: 'oklch(1 0 0 / 0.45)' }}>
+                  Enter the 6-digit code from your authenticator app to complete login
+                </p>
               </div>
               <form onSubmit={handleTotpVerify} className="space-y-3">
-                <input type="text" inputMode="numeric" pattern="\d{6}" maxLength={6}
-                  value={totpCode} onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
-                  required placeholder="000000" autoFocus
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white text-center tracking-[0.5em] placeholder-white/25 focus:outline-none focus:border-white/30 transition" />
-                {error && <p className="text-xs text-red-400 text-center">{error}</p>}
-                <button type="submit" disabled={loading}
-                  className="w-full rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-white text-xs font-medium py-2 transition disabled:opacity-50">
-                  {loading ? 'Verifying…' : 'Verify'}
+                {/* 6-box OTP display — input overlays boxes so clicking anywhere focuses it */}
+                <div className="relative flex gap-1.5 justify-center">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="w-9 h-10 rounded-lg flex items-center justify-center text-base font-bold text-white"
+                      style={{ background: 'oklch(1 0 0 / 0.1)', border: `1px solid ${totpCode[i] ? 'oklch(0.65 0.2 265)' : 'oklch(1 0 0 / 0.15)'}` }}>
+                      {totpCode[i] ?? ''}
+                    </div>
+                  ))}
+                  <input type="text" inputMode="numeric" pattern="\d{6}" maxLength={6}
+                    value={totpCode} onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
+                    required autoFocus aria-label="6-digit code"
+                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'text', width: '100%', height: '100%' }} />
+                </div>
+                {error && <p className="text-[11px] text-red-400 text-center">{error}</p>}
+                <button type="submit" disabled={loading || totpCode.length < 6}
+                  className="w-full rounded-lg text-white text-xs font-semibold py-2.5 transition disabled:opacity-50"
+                  style={{ background: 'oklch(0.52 0.22 265)' }}>
+                  {loading ? 'Verifying…' : 'Verify Code'}
                 </button>
+                <p className="text-center text-[11px]" style={{ color: 'oklch(1 0 0 / 0.35)' }}>
+                  Didn't receive a code?{' '}
+                  <button type="button" className="underline" style={{ color: 'oklch(0.72 0.18 265)' }}>Resend</button>
+                </p>
+                <p className="text-center text-[10px] rounded-md px-2 py-1.5"
+                  style={{ background: 'oklch(0.68 0.16 72 / 0.12)', color: 'oklch(0.85 0.1 72)' }}>
+                  ⚠️ Required for Finance, Admin &amp; Manager roles
+                </p>
                 <button type="button" onClick={() => { setStage('credentials'); setError(''); setTotpCode(''); }}
-                  className="w-full text-xs text-white/30 hover:text-white/60 transition">← Back to login</button>
+                  className="w-full text-[11px] transition" style={{ color: 'oklch(1 0 0 / 0.3)' }}>
+                  ← Back to login
+                </button>
               </form>
             </>
           )}
@@ -163,21 +225,27 @@ export default function LoginPage() {
           {stage === 'totp-setup' && (
             <>
               <div className="mb-4 text-center">
-                <p className="text-sm font-semibold text-white">Set Up Authenticator</p>
-                <p className="text-xs text-white/40 mt-1">Your role requires 2FA. Scan the QR code with Google Authenticator, Authy, or any TOTP app.</p>
+                <span className="text-2xl block mb-2" aria-hidden>🔑</span>
+                <p className="text-[0.9375rem] font-semibold text-white">Set Up Authenticator</p>
+                <p className="text-[11px] mt-1" style={{ color: 'oklch(1 0 0 / 0.4)' }}>
+                  Your role requires 2FA. Add this key to Google Authenticator or Authy.
+                </p>
               </div>
-              {/* QR-less: show URI as copyable secret + link */}
-              <div className="mb-3 rounded-lg border border-white/10 bg-white/5 p-3 text-center">
-                <p className="text-xs text-white/40 mb-1">Secret key (manual entry)</p>
+              <div className="mb-3 rounded-lg p-3 text-center"
+                style={{ background: 'oklch(1 0 0 / 0.07)', border: '1px solid oklch(1 0 0 / 0.12)' }}>
+                <p className="text-[10px] mb-1" style={{ color: 'oklch(1 0 0 / 0.4)' }}>Secret key (manual entry)</p>
                 <p className="text-sm font-mono text-white tracking-wider break-all select-all">{setupSecret}</p>
               </div>
               {setupUri && (
-                <a href={setupUri} className="block text-center text-xs text-blue-400 hover:text-blue-300 mb-3 truncate transition" title={setupUri}>
+                <a href={setupUri} title={setupUri}
+                  className="block text-center text-[11px] mb-3 truncate transition"
+                  style={{ color: 'oklch(0.72 0.18 265)' }}>
                   Open in authenticator app →
                 </a>
               )}
               <button onClick={() => { setTotpCode(''); setStage('totp-confirm'); }}
-                className="w-full rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-white text-xs font-medium py-2 transition">
+                className="w-full rounded-lg text-white text-xs font-semibold py-2.5 transition"
+                style={{ background: 'oklch(0.52 0.22 265)' }}>
                 I've added the key →
               </button>
             </>
@@ -186,26 +254,45 @@ export default function LoginPage() {
           {/* Stage: confirm first code to finalize enrollment */}
           {stage === 'totp-confirm' && (
             <>
-              <div className="mb-5 text-center">
-                <p className="text-sm font-semibold text-white">Confirm Setup</p>
-                <p className="text-xs text-white/40 mt-1">Enter the 6-digit code from your app to activate 2FA</p>
+              <div className="mb-4 text-center">
+                <p className="text-[0.9375rem] font-semibold text-white">Confirm Setup</p>
+                <p className="text-[11px] mt-1" style={{ color: 'oklch(1 0 0 / 0.4)' }}>
+                  Enter the 6-digit code from your app to activate 2FA
+                </p>
               </div>
               <form onSubmit={handleTotpConfirm} className="space-y-3">
-                <input type="text" inputMode="numeric" pattern="\d{6}" maxLength={6}
-                  value={totpCode} onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
-                  required placeholder="000000" autoFocus
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white text-center tracking-[0.5em] placeholder-white/25 focus:outline-none focus:border-white/30 transition" />
-                {error && <p className="text-xs text-red-400 text-center">{error}</p>}
-                <button type="submit" disabled={loading}
-                  className="w-full rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-white text-xs font-medium py-2 transition disabled:opacity-50">
+                <div className="relative flex gap-1.5 justify-center">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="w-9 h-10 rounded-lg flex items-center justify-center text-base font-bold text-white"
+                      style={{ background: 'oklch(1 0 0 / 0.1)', border: `1px solid ${totpCode[i] ? 'oklch(0.65 0.2 265)' : 'oklch(1 0 0 / 0.15)'}` }}>
+                      {totpCode[i] ?? ''}
+                    </div>
+                  ))}
+                  <input type="text" inputMode="numeric" pattern="\d{6}" maxLength={6}
+                    value={totpCode} onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
+                    required autoFocus aria-label="6-digit code"
+                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'text', width: '100%', height: '100%' }} />
+                </div>
+                {error && <p className="text-[11px] text-red-400 text-center">{error}</p>}
+                <button type="submit" disabled={loading || totpCode.length < 6}
+                  className="w-full rounded-lg text-white text-xs font-semibold py-2.5 transition disabled:opacity-50"
+                  style={{ background: 'oklch(0.52 0.22 265)' }}>
                   {loading ? 'Activating…' : 'Activate 2FA & Sign In'}
                 </button>
                 <button type="button" onClick={() => { setStage('totp-setup'); setError(''); }}
-                  className="w-full text-xs text-white/30 hover:text-white/60 transition">← Back</button>
+                  className="w-full text-[11px] transition" style={{ color: 'oklch(1 0 0 / 0.3)' }}>
+                  ← Back
+                </button>
               </form>
             </>
           )}
         </div>
+
+        {/* Security notice below card */}
+        <p className="text-center text-[10px] mt-4" style={{ color: 'oklch(1 0 0 / 0.3)' }}>
+          🔒 This portal is for authorized staff only.<br />
+          Unauthorized access is strictly prohibited.
+        </p>
       </div>
     </main>
   );
