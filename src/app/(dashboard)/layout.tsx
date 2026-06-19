@@ -40,6 +40,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
     localStorage.removeItem('accessToken');
     document.cookie = 'admin_session=; path=/; max-age=0';
+    document.cookie = 'admin_role=; path=/; max-age=0';
     router.replace('/login');
   }
 
@@ -65,14 +66,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </Link>
           ))}
         </nav>
-        <div className="p-3 border-t border-white/5">
-          <button
-            onClick={logout}
-            className="w-full text-left px-3 py-2 text-sm text-gray-500 hover:text-white rounded-lg hover:bg-white/5 transition"
-          >
-            Sign out
-          </button>
-        </div>
       </aside>
 
       {/* Main content */}

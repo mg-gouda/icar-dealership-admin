@@ -3,19 +3,34 @@ import type { NextRequest } from 'next/server';
 
 const PUBLIC_PATHS = ['/login', '/auth'];
 
+// ponytail: role gating via lightweight admin_role cookie (set at login alongside admin_session)
+const FINANCE_PATHS = ['/finance'];
+const ADMIN_PATHS = ['/settings', '/users', '/audit-log'];
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
   if (isPublic) return NextResponse.next();
 
-  // ponytail: localStorage inaccessible in middleware — use lightweight session cookie
   const sessionFlag = request.cookies.get('admin_session')?.value;
 
   if (!sessionFlag) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  const role = request.cookies.get('admin_role')?.value ?? '';
+
+  const requiresFinance = FINANCE_PATHS.some((p) => pathname.startsWith(p));
+  const requiresAdmin = ADMIN_PATHS.some((p) => pathname.startsWith(p));
+
+  if (requiresFinance && !['FINANCE', 'ADMIN', 'SUPER_ADMIN'].includes(role)) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+  if (requiresAdmin && !['ADMIN', 'SUPER_ADMIN'].includes(role)) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
   return NextResponse.next();

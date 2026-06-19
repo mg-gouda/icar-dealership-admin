@@ -7,6 +7,14 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
 
 type Stage = 'credentials' | 'totp-verify' | 'totp-setup' | 'totp-confirm';
 
+// ponytail: set both session + role cookies together at each auth completion point
+function setSessionCookies(accessToken: string, role: string) {
+  const maxAge = 8 * 3600;
+  document.cookie = `admin_session=${accessToken}; path=/; max-age=${maxAge}`;
+  document.cookie = `admin_role=${role}; path=/; max-age=${maxAge}`;
+}
+
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -48,7 +56,7 @@ export default function LoginPage() {
         setStage('totp-verify');
       } else {
         localStorage.setItem('accessToken', data.accessToken);
-        document.cookie = `admin_session=1; path=/; SameSite=Lax; max-age=${7 * 24 * 60 * 60}`;
+        setSessionCookies(data.accessToken, data.user.role);
         router.replace('/');
       }
     } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Login failed'); }
@@ -62,7 +70,7 @@ export default function LoginPage() {
     try {
       const data = await post('/auth/2fa/verify', { token: totpCode }, preToken);
       localStorage.setItem('accessToken', data.accessToken);
-      document.cookie = `admin_session=1; path=/; SameSite=Lax; max-age=${7 * 24 * 60 * 60}`;
+      setSessionCookies(data.accessToken, data.user.role);
       router.replace('/');
     } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Invalid code'); }
     finally { setLoading(false); }
@@ -75,7 +83,7 @@ export default function LoginPage() {
     try {
       const data = await post('/auth/2fa/confirm', { token: totpCode }, preToken);
       localStorage.setItem('accessToken', data.accessToken);
-      document.cookie = `admin_session=1; path=/; SameSite=Lax; max-age=${7 * 24 * 60 * 60}`;
+      setSessionCookies(data.accessToken, data.user.role);
       router.replace('/');
     } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Invalid code'); }
     finally { setLoading(false); }
