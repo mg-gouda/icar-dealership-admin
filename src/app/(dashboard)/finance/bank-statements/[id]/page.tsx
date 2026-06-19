@@ -174,6 +174,7 @@ export default function BankStatementDetailPage() {
   const [formErr, setFormErr] = useState('');
   const [matchingLine, setMatchingLine] = useState<StatementLine | null>(null);
   const [csvBanner, setCsvBanner] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
+  const [ofxBanner, setOfxBanner] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
   const [suggestLineId, setSuggestLineId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [suggestLoading, setSuggestLoading] = useState(false);
@@ -220,6 +221,28 @@ export default function BankStatementDetailPage() {
         reload();
       } catch (err: unknown) {
         setCsvBanner({ type: 'err', msg: err instanceof Error ? err.message : 'Import failed' });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+
+  function handleOfxFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const ofx = ev.target?.result as string;
+      try {
+        const res = await apiFetch<{ imported: number; errors: { row: number; error: string }[] }>(
+          `/finance/bank-statements/${id}/import-ofx`,
+          { method: 'POST', body: JSON.stringify({ ofx }) },
+        );
+        const errMsg = res.errors.length ? ` (${res.errors.length} errors)` : '';
+        setOfxBanner({ type: res.errors.length ? 'err' : 'ok', msg: `Imported ${res.imported} OFX lines${errMsg}` });
+        reload();
+      } catch (err: unknown) {
+        setOfxBanner({ type: 'err', msg: err instanceof Error ? err.message : 'OFX import failed' });
       }
     };
     reader.readAsText(file);
@@ -285,7 +308,10 @@ export default function BankStatementDetailPage() {
             Import CSV
             <input type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
           </label>
-          <span className="text-[10px] text-gray-600">date,description,debit,credit,balance</span>
+          <label className="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded-lg cursor-pointer transition">
+            Import OFX
+            <input type="file" accept=".ofx,.qfx" className="hidden" onChange={handleOfxFile} />
+          </label>
         </div>
       </div>
 
@@ -293,6 +319,13 @@ export default function BankStatementDetailPage() {
         <div className={`mb-4 p-3 rounded-lg text-xs ${csvBanner.type === 'ok' ? 'bg-green-900/20 border border-green-500/20 text-green-300' : 'bg-red-900/20 border border-red-500/20 text-red-300'}`}>
           {csvBanner.msg}
           <button onClick={() => setCsvBanner(null)} className="ml-3 underline">dismiss</button>
+        </div>
+      )}
+
+      {ofxBanner && (
+        <div className={`mb-4 p-3 rounded-lg text-xs ${ofxBanner.type === 'ok' ? 'bg-green-900/20 border border-green-500/20 text-green-300' : 'bg-red-900/20 border border-red-500/20 text-red-300'}`}>
+          {ofxBanner.msg}
+          <button onClick={() => setOfxBanner(null)} className="ml-3 underline">dismiss</button>
         </div>
       )}
 

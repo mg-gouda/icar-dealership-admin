@@ -10,6 +10,9 @@ interface Invoice {
   partner?: { name: string };
 }
 
+interface TrialBalance { accountCode: string; accountName: string; debit: number; credit: number; balance: number; }
+interface CommissionSummary { status: string; count: number; total: number; }
+
 const MODULES = [
   { label: 'Journal Entries', href: '/finance/gl', desc: 'Post & review GL' },
   { label: 'Invoices', href: '/finance/invoices', desc: 'Customer invoices & bills' },
@@ -29,14 +32,57 @@ const MODULES = [
 ];
 
 export default function FinancePage() {
+  const now = new Date();
+  const y = now.getFullYear(), m = String(now.getMonth() + 1).padStart(2, '0');
+  const dateFrom = `${y}-${m}-01`;
+  const dateTo = `${y}-${m}-${String(new Date(y, now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
+
   const { data, loading } = useQuery<Invoice[]>('/finance/invoices?type=CUSTOMER_INVOICE&limit=5');
+  const { data: draftInvoices } = useQuery<{ total: number }>('/finance/invoices?status=DRAFT&limit=1');
+  const { data: overdueInvoices } = useQuery<{ total: number }>(`/finance/invoices?status=POSTED&dueBefore=${dateFrom}&limit=1`);
+  const { data: commSummary } = useQuery<CommissionSummary[]>('/commissions/summary');
+  const { data: tb } = useQuery<{ lines: TrialBalance[] }>(`/finance/reports/trial-balance?dateFrom=${dateFrom}&dateTo=${dateTo}`);
+
   const invoices = Array.isArray(data) ? data : [];
+
+  // Derive KPIs from trial balance lines
+  const tbLines = tb?.lines ?? [];
+  const arBalance = tbLines.find((l) => l.accountCode === '1300')?.balance ?? 0;
+  const apBalance = tbLines.find((l) => l.accountCode === '2100')?.balance ?? 0;
+  const cashBalance = tbLines.find((l) => l.accountCode === '1100')?.balance ?? 0;
+  const revenueBalance = tbLines.find((l) => l.accountCode === '4100')?.balance ?? 0;
+
+  const commMap = Object.fromEntries((commSummary ?? []).map((s) => [s.status, s]));
+  const payableCommissions = commMap['PAYABLE']?.total ?? 0;
+
+  const KPIs = [
+    { label: 'Cash & Bank', value: cashBalance, color: 'text-green-400', note: 'Account 1100' },
+    { label: 'Accounts Receivable', value: arBalance, color: 'text-blue-400', note: 'Account 1300' },
+    { label: 'Accounts Payable', value: apBalance, color: 'text-red-400', note: 'Account 2100' },
+    { label: 'MTD Revenue', value: revenueBalance, color: 'text-emerald-400', note: `${m}/${y}` },
+    { label: 'Commissions Payable', value: payableCommissions, color: 'text-amber-400', note: `${commMap['PAYABLE']?.count ?? 0} reps` },
+    { label: 'Draft Invoices', value: draftInvoices?.total ?? 0, color: 'text-gray-300', note: 'Pending review', isCount: true },
+  ];
 
   return (
     <div className="p-6">
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-white">Finance</h1>
         <p className="text-xs text-gray-500 mt-0.5">Accounting & reporting</p>
+      </div>
+
+      {/* KPI widgets */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+        {KPIs.map((k) => (
+          <div key={k.label} className="rounded-xl border border-white/5 bg-gray-900 p-4">
+            <p className="text-xs text-gray-500 mb-1">{k.label}</p>
+            <p className={`text-xl font-semibold tabular-nums ${k.color}`}>
+              {k.isCount ? k.value : Number(k.value).toLocaleString()}
+              {!k.isCount && <span className="text-xs text-gray-500 ml-1">EGP</span>}
+            </p>
+            <p className="text-xs text-gray-600 mt-0.5">{k.note}</p>
+          </div>
+        ))}
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-8">
