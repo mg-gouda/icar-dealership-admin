@@ -172,6 +172,16 @@ export default function DealDetailPage() {
     ? (commForm.baseAmount * commForm.splitPercentage / 100).toLocaleString('en-EG')
     : null;
 
+  async function autoResolvePlan(roleInDeal: string) {
+    try {
+      const qs = new URLSearchParams({ applicableRole: roleInDeal });
+      if ((deal as any)?.locationId) qs.set('locationId', (deal as any).locationId);
+      if ((deal as any)?.vehicle?.bodyType) qs.set('vehicleCategory', (deal as any).vehicle.bodyType);
+      const resolved = await apiFetch<{ id: string } | null>(`/commission-plans/resolve?${qs}`);
+      if (resolved?.id) setCommForm((prev) => ({ ...prev, commissionPlanId: resolved.id }));
+    } catch { /* non-critical */ }
+  }
+
   async function addCommission(e: React.FormEvent) {
     e.preventDefault();
     setAddingComm(true);
@@ -427,7 +437,7 @@ export default function DealDetailPage() {
                   <SearchableCombobox
                     options={ROLE_OPTS}
                     value={commForm.roleInDeal}
-                    onChange={(v) => setCommForm({ ...commForm, roleInDeal: v })}
+                    onChange={(v) => { setCommForm((p) => ({ ...p, roleInDeal: v })); autoResolvePlan(v); }}
                     placeholder="Role…"
                   />
                 </div>
