@@ -5,6 +5,8 @@ import { useState } from 'react';
 import { apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 import ExcelJS from 'exceljs';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 type ReportType = 'trial-balance' | 'income-statement' | 'balance-sheet' | 'aged-receivables' | 'aged-payables' | 'cash-flow' | 'tax-report';
 
@@ -34,6 +36,27 @@ function downloadCsv(rows: Record<string, unknown>[], filename: string) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+function downloadPdf(rows: Record<string, unknown>[], title: string, filename: string) {
+  if (!rows.length) return;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  doc.setFontSize(12);
+  doc.text(`iCar Dealership — ${title}`, 14, 14);
+  doc.setFontSize(8);
+  doc.setTextColor(150);
+  doc.text(`Generated: ${new Date().toLocaleString('en-EG')}`, 14, 20);
+
+  const headers = Object.keys(rows[0]);
+  autoTable(doc, {
+    startY: 25,
+    head: [headers],
+    body: rows.map((r) => headers.map((h) => String(r[h] ?? ''))),
+    styles: { fontSize: 7 },
+    headStyles: { fillColor: [30, 41, 59], textColor: 255 },
+    alternateRowStyles: { fillColor: [245, 247, 250] },
+  });
+  doc.save(filename);
 }
 
 async function downloadXlsx(rows: Record<string, unknown>[], sheetName: string, filename: string) {
@@ -108,6 +131,11 @@ export default function ReportsPage() {
     downloadXlsx(flatRows(), label, `${report}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
+  function exportPdf() {
+    const label = REPORTS.find((r) => r.key === report)?.label ?? report;
+    downloadPdf(flatRows(), label, `${report}-${new Date().toISOString().slice(0, 10)}.pdf`);
+  }
+
   async function run() {
     setLoading(true);
     setError('');
@@ -177,6 +205,10 @@ export default function ReportsPage() {
             <button onClick={exportXlsx}
               className="px-4 py-1.5 text-xs bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg transition">
               Excel
+            </button>
+            <button onClick={exportPdf}
+              className="px-4 py-1.5 text-xs bg-rose-700 hover:bg-rose-600 text-white rounded-lg transition">
+              PDF
             </button>
           </>
         )}
