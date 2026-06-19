@@ -109,7 +109,7 @@ const ROLES = [
   { value: 'ADMIN', label: 'Admin' },
 ];
 
-const TABS = ['Locations', 'Users', 'Company Profile', 'System'] as const;
+const TABS = ['Locations', 'Users', 'Company Profile', 'Email Templates', 'Integrations', 'System'] as const;
 type Tab = typeof TABS[number];
 
 // ── Create User Dialog ────────────────────────────────────────────────────────
@@ -381,6 +381,67 @@ export default function SettingsPage() {
 
       {/* Company Profile */}
       {tab === 'Company Profile' && <CompanyProfileTab />}
+
+      {/* Email Templates */}
+      {tab === 'Email Templates' && (
+        <section className="space-y-4">
+          <p className="text-xs text-gray-500">Configure the email templates sent by the system. Templates support variables in {'{'}{'{'} double_braces {'}'}{'}'}.</p>
+          {[
+            { key: 'password_reset', label: 'Password Reset', vars: '{{name}}, {{reset_url}}', desc: 'Sent when a user requests a password reset.' },
+            { key: 'deal_finalized', label: 'Deal Finalized', vars: '{{customer_name}}, {{vehicle}}, {{deal_ref}}', desc: 'Sent to customer when a deal is finalized.' },
+            { key: 'appointment_reminder', label: 'Appointment Reminder', vars: '{{name}}, {{date}}, {{time}}, {{location}}', desc: 'Sent 24h before a scheduled appointment.' },
+            { key: 'invoice_issued', label: 'Invoice Issued', vars: '{{customer_name}}, {{invoice_ref}}, {{amount}}, {{due_date}}', desc: 'Sent when a POSTED invoice is issued.' },
+          ].map((t) => (
+            <div key={t.key} className="rounded-xl border border-white/5 bg-gray-900 p-5">
+              <div className="flex items-start justify-between mb-2">
+                <div>
+                  <p className="text-sm font-medium text-white">{t.label}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{t.desc}</p>
+                </div>
+                <span className="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded px-2 py-0.5">Active</span>
+              </div>
+              <p className="text-xs text-gray-600 font-mono mt-2">Variables: {t.vars}</p>
+              <p className="text-xs text-amber-500/70 mt-3">Template editing UI coming soon — templates are currently managed via environment variables (SMTP_*) and code.</p>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* Integrations */}
+      {tab === 'Integrations' && (
+        <section className="space-y-4">
+          <p className="text-xs text-gray-500">Third-party service integrations. Configure via environment variables in your deployment.</p>
+          {[
+            {
+              name: 'SMTP Email', status: Boolean(typeof window === 'undefined' ? false : true), env: 'SMTP_HOST, SMTP_USER, SMTP_PASS, SMTP_PORT',
+              desc: 'Outbound email for password resets, deal notifications, and appointment reminders.',
+            },
+            {
+              name: 'VIN Decoder', status: false, env: 'VIN_DECODER_API_KEY',
+              desc: 'Auto-populate vehicle specs from VIN. Supports NHTSA + paid providers.',
+            },
+            {
+              name: 'Egypt Banks API', status: false, env: 'BANK_API_ENDPOINT, BANK_API_KEY',
+              desc: 'Live bank financing rates and approval status webhooks.',
+            },
+            {
+              name: 'DocuSign', status: false, env: 'DOCUSIGN_CLIENT_ID, DOCUSIGN_CLIENT_SECRET',
+              desc: 'E-signature for deal agreements and financing contracts.',
+            },
+          ].map((intg) => (
+            <div key={intg.name} className="rounded-xl border border-white/5 bg-gray-900 p-5">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium text-white">{intg.name}</p>
+                <span className={`text-xs px-2 py-0.5 rounded border ${intg.status ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-gray-800 text-gray-500 border-white/10'}`}>
+                  {intg.status ? 'Configured' : 'Not configured'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mb-2">{intg.desc}</p>
+              <p className="text-xs text-gray-700 font-mono">Env vars: {intg.env}</p>
+            </div>
+          ))}
+        </section>
+      )}
 
       {/* System */}
       {tab === 'System' && (
