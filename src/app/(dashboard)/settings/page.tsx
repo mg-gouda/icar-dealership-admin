@@ -109,7 +109,7 @@ const ROLES = [
   { value: 'ADMIN', label: 'Admin' },
 ];
 
-const TABS = ['Locations', 'Users', 'System'] as const;
+const TABS = ['Locations', 'Users', 'Company Profile', 'System'] as const;
 type Tab = typeof TABS[number];
 
 // ── Create User Dialog ────────────────────────────────────────────────────────
@@ -185,6 +185,81 @@ function CreateUserDialog({
         </form>
       </div>
     </div>
+  );
+}
+
+// ── Company Profile Tab ───────────────────────────────────────────────────────
+function CompanyProfileTab() {
+  const { data: company, loading, reload } = useQuery<any>('/locations/company/profile');
+  const [form, setForm] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  if (!form && company) setForm(company);
+  if (loading) return <p className="text-gray-500 text-sm">Loading…</p>;
+  if (!form) return <p className="text-gray-500 text-sm">No company data.</p>;
+
+  function set(k: string, v: string) { setForm((p: any) => ({ ...p, [k]: v })); }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true); setErr(''); setSaved(false);
+    try {
+      await apiFetch('/locations/company/profile', { method: 'PATCH', body: JSON.stringify({
+        name: form.name,
+        taxId: form.taxId || undefined,
+        address: form.address || undefined,
+        adminFeeBoundsPercent: Number(form.adminFeeBoundsPercent) || 20,
+        insuranceFeeBoundsPercent: Number(form.insuranceFeeBoundsPercent) || 20,
+      })});
+      setSaved(true);
+      reload();
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-4 max-w-lg">
+      <div className="rounded-xl border border-white/5 bg-gray-900 p-5 space-y-4">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Company Info</p>
+        {[
+          { k: 'name', label: 'Company Name' },
+          { k: 'taxId', label: 'Tax ID' },
+          { k: 'address', label: 'Address' },
+        ].map(({ k, label }) => (
+          <div key={k}>
+            <label className="block text-xs text-gray-500 mb-1">{label}</label>
+            <input value={form[k] ?? ''} onChange={(e) => set(k, e.target.value)}
+              className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
+          </div>
+        ))}
+      </div>
+      <div className="rounded-xl border border-white/5 bg-gray-900 p-5 space-y-4">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Fee Bounds (% deviation allowed for SALES_REP/MANAGER)</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Admin Fee Bounds (%)</label>
+            <input type="number" min="0" max="100" value={form.adminFeeBoundsPercent ?? 20}
+              onChange={(e) => set('adminFeeBoundsPercent', e.target.value)}
+              className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Insurance Fee Bounds (%)</label>
+            <input type="number" min="0" max="100" value={form.insuranceFeeBoundsPercent ?? 20}
+              onChange={(e) => set('insuranceFeeBoundsPercent', e.target.value)}
+              className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
+          </div>
+        </div>
+        <p className="text-xs text-gray-600">Example: 20% means a SALES_REP can set admin fee at 80%–120% of the location default.</p>
+      </div>
+      {err && <p className="text-red-400 text-xs">{err}</p>}
+      {saved && <p className="text-green-400 text-xs">Saved successfully.</p>}
+      <button type="submit" disabled={saving}
+        className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition">
+        {saving ? 'Saving…' : 'Save Changes'}
+      </button>
+    </form>
   );
 }
 
@@ -303,6 +378,9 @@ export default function SettingsPage() {
           </div>
         </section>
       )}
+
+      {/* Company Profile */}
+      {tab === 'Company Profile' && <CompanyProfileTab />}
 
       {/* System */}
       {tab === 'System' && (
