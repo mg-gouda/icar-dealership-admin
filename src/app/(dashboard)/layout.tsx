@@ -13,6 +13,8 @@ const navItems = [
   { href: '/purchase-orders', label: 'Purchase Orders' },
   { href: '/partners', label: 'Partners' },
   { href: '/finance', label: 'Finance' },
+  { href: '/reports', label: 'Reports' },
+  { href: '/audit-log', label: 'Audit Log' },
   { href: '/settings', label: 'Settings' },
 ];
 

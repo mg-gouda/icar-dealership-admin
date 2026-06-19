@@ -37,8 +37,8 @@ export function useQuery<T>(path: string | null, deps: unknown[] = []) {
     try {
       const d = await apiFetch<T>(path);
       setData(d);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Request failed');
     } finally {
       setLoading(false);
     }

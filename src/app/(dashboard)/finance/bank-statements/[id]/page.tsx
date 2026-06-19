@@ -173,8 +173,58 @@ export default function BankStatementDetailPage() {
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
   const [matchingLine, setMatchingLine] = useState<StatementLine | null>(null);
+  const [csvBanner, setCsvBanner] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
+  const [suggestLineId, setSuggestLineId] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+
+  async function fetchSuggestions(lineId: string) {
+    if (suggestLineId === lineId) { setSuggestLineId(null); return; }
+    setSuggestLineId(lineId);
+    setSuggestLoading(true);
+    try {
+      const res = await apiFetch<any[]>(`/finance/reconciliation/suggest?bankStatementLineId=${lineId}`);
+      setSuggestions(res);
+    } catch { setSuggestions([]); }
+    finally { setSuggestLoading(false); }
+  }
+
+  async function reconcileSuggestion(bslId: string, jelId: string, amount: number) {
+    try {
+      await apiFetch('/finance/reconciliation', {
+        method: 'POST',
+        body: JSON.stringify({ pairs: [{ bankStatementLineId: bslId, journalEntryLineId: jelId, amount }] }),
+      });
+      setSuggestLineId(null);
+      reload();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Reconciliation failed');
+    }
+  }
 
   function set(k: string, v: string) { setForm((p) => ({ ...p, [k]: v })); }
+
+  function handleCsvFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const csv = ev.target?.result as string;
+      try {
+        const res = await apiFetch<{ imported: number; errors: { row: number; error: string }[] }>(
+          `/finance/bank-statements/${id}/import-csv`,
+          { method: 'POST', body: JSON.stringify({ csv }) },
+        );
+        const errMsg = res.errors.length ? ` (${res.errors.length} errors)` : '';
+        setCsvBanner({ type: res.errors.length ? 'err' : 'ok', msg: `Imported ${res.imported} lines${errMsg}` });
+        reload();
+      } catch (err: unknown) {
+        setCsvBanner({ type: 'err', msg: err instanceof Error ? err.message : 'Import failed' });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
 
   async function addLine(e: React.FormEvent) {
     e.preventDefault();
@@ -230,7 +280,21 @@ export default function BankStatementDetailPage() {
             <p className="text-gray-400 text-sm mt-1">{statement.bankAccount.bank}</p>
           )}
         </div>
+        <div className="flex items-center gap-2">
+          <label className="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded-lg cursor-pointer transition">
+            Import CSV
+            <input type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
+          </label>
+          <span className="text-[10px] text-gray-600">date,description,debit,credit,balance</span>
+        </div>
       </div>
+
+      {csvBanner && (
+        <div className={`mb-4 p-3 rounded-lg text-xs ${csvBanner.type === 'ok' ? 'bg-green-900/20 border border-green-500/20 text-green-300' : 'bg-red-900/20 border border-red-500/20 text-red-300'}`}>
+          {csvBanner.msg}
+          <button onClick={() => setCsvBanner(null)} className="ml-3 underline">dismiss</button>
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
@@ -332,11 +396,40 @@ export default function BankStatementDetailPage() {
                 </td>
                 <td className="px-5 py-2.5 text-center">
                   {!l.isReconciled && (
-                    <button
-                      onClick={() => setMatchingLine(l)}
-                      className="text-xs px-2 py-0.5 rounded border border-blue-500/30 text-blue-400 hover:text-blue-300 hover:border-blue-400 transition">
-                      Match
-                    </button>
+                    <div className="relative inline-flex gap-1">
+                      <button
+                        onClick={() => setMatchingLine(l)}
+                        className="text-xs px-2 py-0.5 rounded border border-blue-500/30 text-blue-400 hover:text-blue-300 hover:border-blue-400 transition">
+                        Match
+                      </button>
+                      <button
+                        onClick={() => fetchSuggestions(l.id)}
+                        className="text-xs px-2 py-0.5 rounded border border-amber-500/30 text-amber-400 hover:text-amber-300 hover:border-amber-400 transition">
+                        Suggest
+                      </button>
+                      {suggestLineId === l.id && (
+                        <div className="absolute right-0 top-7 z-30 w-72 bg-gray-800 border border-white/10 rounded-lg shadow-xl overflow-hidden">
+                          {suggestLoading && <p className="p-3 text-gray-500 text-xs">Loading...</p>}
+                          {!suggestLoading && suggestions.length === 0 && (
+                            <p className="p-3 text-gray-600 text-xs">No matches found.</p>
+                          )}
+                          {!suggestLoading && suggestions.map((s: any) => (
+                            <button
+                              key={s.id}
+                              onClick={() => reconcileSuggestion(l.id, s.id, Math.abs(Number(l.amount)))}
+                              className="w-full text-left px-3 py-2 hover:bg-white/5 border-b border-white/5 last:border-0 transition">
+                              <p className="text-xs text-white">{s.account?.code} - {s.account?.name}</p>
+                              <p className="text-[10px] text-gray-500">
+                                {s.journalEntry?.date ? new Date(s.journalEntry.date).toLocaleDateString('en-EG') : ''}
+                                {s.journalEntry?.ref ? ` | ${s.journalEntry.ref}` : ''}
+                                {' | '}
+                                {Number(s.debit) > 0 ? `DR ${fmt(s.debit)}` : `CR ${fmt(s.credit)}`}
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </td>
               </tr>

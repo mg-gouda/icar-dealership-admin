@@ -40,7 +40,7 @@ export default function ReconciliationPage() {
       });
       setSelected(new Set());
       reload();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Reconciliation failed'); }
     finally { setSaving(false); }
   }
 

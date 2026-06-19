@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 
-type ReportType = 'trial-balance' | 'income-statement' | 'balance-sheet' | 'aged-receivables' | 'aged-payables';
+type ReportType = 'trial-balance' | 'income-statement' | 'balance-sheet' | 'aged-receivables' | 'aged-payables' | 'cash-flow' | 'tax-report';
 
 const REPORTS = [
   { key: 'trial-balance' as const, label: 'Trial Balance', needsRange: true },
@@ -13,6 +13,8 @@ const REPORTS = [
   { key: 'balance-sheet' as const, label: 'Balance Sheet', needsRange: false },
   { key: 'aged-receivables' as const, label: 'Aged Receivables', needsRange: false },
   { key: 'aged-payables' as const, label: 'Aged Payables', needsRange: false },
+  { key: 'cash-flow' as const, label: 'Cash Flow', needsRange: true },
+  { key: 'tax-report' as const, label: 'Tax Report', needsRange: true },
 ];
 
 const fmt = (n: number | string | object) =>
@@ -77,8 +79,8 @@ export default function ReportsPage() {
         : `asOf=${asOf}`;
       const result = await apiFetch<any>(`/finance/reports/${report}?${qs}`);
       setData(result);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Report failed');
     } finally {
       setLoading(false);
     }
@@ -234,6 +236,76 @@ export default function ReportsPage() {
                     <td className="px-4 py-2 text-right tabular-nums text-white font-medium">{fmt(r.total)}</td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* Cash Flow */}
+          {report === 'cash-flow' && (
+            <div className="p-4">
+              <table className="w-full text-sm">
+                <tbody className="divide-y divide-white/5">
+                  <tr className="hover:bg-white/5">
+                    <td className="px-4 py-3 text-gray-300">Net Profit</td>
+                    <td className={`px-4 py-3 text-right tabular-nums font-medium ${Number(data.netProfit) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {fmt(data.netProfit)}
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-white/5">
+                    <td className="px-4 py-3 text-gray-300">+ Depreciation</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-white">{fmt(data.depreciation)}</td>
+                  </tr>
+                  <tr className="hover:bg-white/5">
+                    <td className="px-4 py-3 text-gray-300">AR Change</td>
+                    <td className={`px-4 py-3 text-right tabular-nums ${Number(data.arChange) <= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {fmt(data.arChange)}
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-white/5">
+                    <td className="px-4 py-3 text-gray-300">AP Change</td>
+                    <td className={`px-4 py-3 text-right tabular-nums ${Number(data.apChange) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {fmt(data.apChange)}
+                    </td>
+                  </tr>
+                  <tr className="border-t-2 border-white/20 bg-white/[0.02]">
+                    <td className="px-4 py-3 text-white font-semibold">Operating Cash Flow</td>
+                    <td className={`px-4 py-3 text-right tabular-nums font-bold ${Number(data.operatingCashFlow) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {fmt(data.operatingCashFlow)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="text-xs text-gray-600 mt-3 px-4">{data.note}</p>
+            </div>
+          )}
+
+          {/* Tax Report */}
+          {report === 'tax-report' && (
+            <table className="w-full text-sm">
+              <thead className="border-b border-white/5 text-gray-400 text-xs">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium">Tax Group</th>
+                  <th className="px-4 py-3 text-right font-medium">Rate</th>
+                  <th className="px-4 py-3 text-right font-medium">Collected</th>
+                  <th className="px-4 py-3 text-right font-medium">Paid</th>
+                  <th className="px-4 py-3 text-right font-medium">Net Payable</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {Array.isArray(data) && data.map((r: any) => (
+                  <tr key={r.taxGroupId} className="hover:bg-white/5">
+                    <td className="px-4 py-2 text-white">{r.taxGroupName}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-gray-300">{fmt(r.rate)}%</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-green-400">{fmt(r.taxCollected)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-red-400">{fmt(r.taxPaid)}</td>
+                    <td className={`px-4 py-2 text-right tabular-nums font-medium ${Number(r.netPayable) >= 0 ? 'text-amber-400' : 'text-green-400'}`}>
+                      {fmt(r.netPayable)}
+                    </td>
+                  </tr>
+                ))}
+                {(!Array.isArray(data) || data.length === 0) && (
+                  <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-600">No tax data found.</td></tr>
+                )}
               </tbody>
             </table>
           )}
