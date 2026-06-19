@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import StatusBadge from '../../../../components/StatusBadge';
@@ -287,6 +287,41 @@ export default function DealDetailPage() {
   async function updateDoc(docId: string, updates: object) {
     await apiFetch(`/deals/${id}/finance-application/documents/${docId}`, { method: 'PATCH', body: JSON.stringify(updates) }).catch((e) => alert(e instanceof Error ? e.message : 'Error'));
     reload();
+  }
+
+  const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
+  const docFileRef = useRef<HTMLInputElement>(null);
+  const [pendingDocId, setPendingDocId] = useState<string | null>(null);
+
+  function triggerDocUpload(docId: string) {
+    setPendingDocId(docId);
+    docFileRef.current?.click();
+  }
+
+  async function handleDocFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !pendingDocId) return;
+    setUploadingDocId(pendingDocId);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+      const tok = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : '';
+      const raw = await fetch(`${base}/upload/file`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tok ?? ''}` },
+        body: fd,
+      });
+      if (!raw.ok) throw new Error((await raw.json().catch(() => ({}))).message ?? 'Upload failed');
+      const res: { url: string } = await raw.json();
+      await updateDoc(pendingDocId, { fileUrl: res.url, status: 'UPLOADED' });
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setUploadingDocId(null);
+      setPendingDocId(null);
+      if (docFileRef.current) docFileRef.current.value = '';
+    }
   }
 
   async function recordApproval(e: React.FormEvent) {
@@ -639,17 +674,23 @@ export default function DealDetailPage() {
               {/* Documents */}
               <div className="mb-3">
                 <p className="text-xs text-gray-500 mb-2 font-medium">Documents</p>
+                <input ref={docFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden"
+                  onChange={handleDocFileChange} />
                 <div className="space-y-1.5">
                   {fa.requiredDocuments.map((doc) => (
                     <div key={doc.id} className="flex items-center gap-2 text-xs">
                       <span className="text-gray-300 flex-1">{doc.documentType.replace(/_/g, ' ')}</span>
-                      <div className="w-32">
+                      <div className="w-28">
                         <SearchableCombobox options={DOC_STATUS_OPTS} value={doc.status}
                           onChange={(s) => updateDoc(doc.id, { status: s })} placeholder="Status" />
                       </div>
                       {doc.fileUrl
-                        ? <a href={doc.fileUrl} target="_blank" className="text-blue-400 hover:text-blue-300">View</a>
-                        : <span className="text-gray-600">No file</span>}
+                        ? <a href={doc.fileUrl} target="_blank" rel="noopener" className="text-blue-400 hover:text-blue-300 whitespace-nowrap">View ↗</a>
+                        : null}
+                      <button onClick={() => triggerDocUpload(doc.id)} disabled={uploadingDocId === doc.id}
+                        className="px-2 py-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white rounded transition whitespace-nowrap">
+                        {uploadingDocId === doc.id ? '…' : doc.fileUrl ? 'Replace' : 'Upload'}
+                      </button>
                     </div>
                   ))}
                 </div>
