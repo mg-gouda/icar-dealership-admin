@@ -75,12 +75,24 @@ export default function InvoicesPage() {
       setForm({ type: 'CUSTOMER_INVOICE', journalId: '', partnerId: '', date: new Date().toISOString().split('T')[0], dueDate: '' });
       setLines([EMPTY_LINE()]);
       router.push(`/finance/invoices/${inv.id}`);
-    } catch (err: any) { setSaveErr(err.message); }
+    } catch (err: unknown) { setSaveErr(err instanceof Error ? err.message : 'Error'); }
     finally { setSaving(false); }
   }
 
+  const draftCount = invoices.filter((i) => i.status === 'DRAFT').length;
+
   return (
     <div className="p-6">
+      {draftCount > 0 && (
+        <div className="mb-4 flex items-center justify-between rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3">
+          <p className="text-sm text-amber-300 font-medium">
+            {draftCount} invoice{draftCount !== 1 ? 's' : ''} pending review
+          </p>
+          <button onClick={() => {}} className="text-xs text-amber-400 hover:text-amber-300 underline">
+            Filter to Draft
+          </button>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-white">Invoices</h1>
