@@ -49,6 +49,7 @@ export default function OperationalReportsPage() {
   const [vehicles, setVehicles] = useState<Vehicle[] | null>(null);
   const [leads, setLeads] = useState<Lead[] | null>(null);
   const [appointments, setAppointments] = useState<Appointment[] | null>(null);
+  const [commReport, setCommReport] = useState<any[] | null>(null);
 
   function exportPdf() {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -90,16 +91,18 @@ export default function OperationalReportsPage() {
   async function run() {
     setLoading(true);
     try {
-      const [d, v, l, a] = await Promise.all([
+      const [d, v, l, a, cr] = await Promise.all([
         apiFetch<{ items: Deal[] } | Deal[]>(`/deals?status=FINALIZED&dateFrom=${dateFrom}&dateTo=${dateTo}&limit=200`),
         apiFetch<{ items: Vehicle[] } | Vehicle[]>(`/vehicles?status=AVAILABLE&limit=200`),
         apiFetch<{ items: Lead[] } | Lead[]>(`/leads?limit=200`),
         apiFetch<{ items: Appointment[] } | Appointment[]>(`/appointments?limit=200`),
+        apiFetch<any[]>(`/commissions/report?dateFrom=${dateFrom}&dateTo=${dateTo}`),
       ]);
       setDeals(Array.isArray(d) ? d : (d as any).items ?? []);
       setVehicles(Array.isArray(v) ? v : (v as any).items ?? []);
       setLeads(Array.isArray(l) ? l : (l as any).items ?? []);
       setAppointments(Array.isArray(a) ? a : (a as any).items ?? []);
+      setCommReport(Array.isArray(cr) ? cr : []);
     } catch {
       // ponytail: silent — individual sections show empty
     } finally {
@@ -322,6 +325,50 @@ export default function OperationalReportsPage() {
               ))}
             </div>
           </div>
+        {/* Commission Report */}
+        {commReport && commReport.length > 0 && (
+          <div className="rounded-xl border border-white/5 bg-gray-900 overflow-hidden">
+            <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
+              <p className="text-sm font-medium text-white">Commission Report</p>
+              <p className="text-xs text-gray-500">{commReport.length} rep(s)</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-white/[0.02] text-gray-400">
+                  <tr>
+                    <th className="text-left px-5 py-2">Sales Rep</th>
+                    <th className="text-left px-4 py-2">Role</th>
+                    <th className="text-right px-4 py-2">Accrued</th>
+                    <th className="text-right px-4 py-2">Payable</th>
+                    <th className="text-right px-4 py-2">Paid</th>
+                    <th className="text-right px-5 py-2">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {commReport.map((r) => (
+                    <tr key={r.user?.id ?? r} className="hover:bg-white/2">
+                      <td className="px-5 py-2 text-white">{r.user?.name ?? '—'}</td>
+                      <td className="px-4 py-2 text-gray-400">{r.user?.role?.replace(/_/g, ' ') ?? '—'}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-gray-300">{fmt(r.ACCRUED ?? 0)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-amber-400">{fmt(r.PAYABLE ?? 0)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-green-400">{fmt(r.PAID ?? 0)}</td>
+                      <td className="px-5 py-2 text-right tabular-nums text-white font-medium">{fmt(r.total ?? 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t border-white/10 bg-white/[0.01]">
+                  <tr>
+                    <td colSpan={2} className="px-5 py-2 text-xs text-gray-500">Total</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-gray-300 text-xs">{fmt(commReport.reduce((s, r) => s + (r.ACCRUED ?? 0), 0))}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-amber-400 text-xs">{fmt(commReport.reduce((s, r) => s + (r.PAYABLE ?? 0), 0))}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-green-400 text-xs">{fmt(commReport.reduce((s, r) => s + (r.PAID ?? 0), 0))}</td>
+                    <td className="px-5 py-2 text-right tabular-nums text-white font-semibold text-xs">{fmt(commReport.reduce((s, r) => s + (r.total ?? 0), 0))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
         </div>
       )}
     </div>
