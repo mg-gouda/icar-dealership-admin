@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../../lib/useApi';
 import StatusBadge from '../../../../../components/StatusBadge';
 import SearchableCombobox from '../../../../../components/ui/SearchableCombobox';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface InvoiceLine {
   id: string;
@@ -398,6 +400,56 @@ export default function InvoiceDetailPage() {
   const isPosted = invoice.status === 'POSTED';
   const canPay = isPosted && invoice.amountResidual > 0;
 
+  function printPdf() {
+    if (!invoice) return;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const currency = (n: number) => n.toLocaleString('en-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 2 });
+
+    doc.setFontSize(16);
+    doc.text('iCar Dealership', 14, 18);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(invoice.type.replace(/_/g, ' '), 14, 25);
+    doc.setTextColor(0);
+    doc.setFontSize(9);
+    doc.text(`Ref: ${invoice.journalEntry?.ref ?? invoice.deal?.ref ?? invoice.id.slice(0, 8)}`, 14, 32);
+    doc.text(`Date: ${new Date(invoice.date).toLocaleDateString('en-EG')}`, 14, 38);
+    if (invoice.dueDate) doc.text(`Due: ${new Date(invoice.dueDate).toLocaleDateString('en-EG')}`, 14, 44);
+    if (invoice.partner) {
+      doc.text(`Partner: ${invoice.partner.name}`, 100, 32);
+    }
+    doc.text(`Status: ${invoice.status}`, 100, 38);
+
+    autoTable(doc, {
+      startY: 52,
+      head: [['Description', 'Qty', 'Unit Price', 'Subtotal']],
+      body: (invoice.lines ?? []).map((l: any) => [
+        l.description ?? '',
+        String(l.quantity),
+        currency(Number(l.unitPrice)),
+        currency(Number(l.subtotal)),
+      ]),
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [30, 41, 59], textColor: 255 },
+      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
+    });
+
+    const finalY = (doc as any).lastAutoTable?.finalY ?? 100;
+    doc.setFontSize(9);
+    doc.text(`Subtotal: ${currency(Number(invoice.amountUntaxed))}`, 140, finalY + 8);
+    doc.text(`Tax: ${currency(Number(invoice.amountTax))}`, 140, finalY + 14);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Total: ${currency(Number(invoice.amountTotal))}`, 140, finalY + 22);
+    if (invoice.amountResidual != null) {
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Amount Due: ${currency(Number(invoice.amountResidual))}`, 140, finalY + 30);
+    }
+
+    doc.save(`invoice-${invoice.deal?.ref ?? invoice.id.slice(0, 8)}.pdf`);
+  }
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
@@ -432,6 +484,10 @@ export default function InvoiceDetailPage() {
               Register Payment
             </button>
           )}
+          <button onClick={printPdf}
+            className="px-4 py-2 bg-white/5 hover:bg-rose-500/10 border border-white/10 hover:border-rose-500/30 text-gray-400 hover:text-rose-400 text-sm rounded-lg transition">
+            Print PDF
+          </button>
           {(isDraft || isPosted) && (
             <button onClick={cancel} disabled={cancelling}
               className="px-4 py-2 bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/30 text-gray-400 hover:text-red-400 text-sm rounded-lg transition">
