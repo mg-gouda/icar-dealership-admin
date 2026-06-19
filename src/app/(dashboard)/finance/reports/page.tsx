@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import ExcelJS from 'exceljs';
 
 type ReportType = 'trial-balance' | 'income-statement' | 'balance-sheet' | 'aged-receivables' | 'aged-payables' | 'cash-flow' | 'tax-report';
 
@@ -30,6 +31,34 @@ function downloadCsv(rows: Record<string, unknown>[], filename: string) {
   const csv = [headers.join(','), ...rows.map((r) => headers.map((h) => escape(r[h])).join(','))].join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function downloadXlsx(rows: Record<string, unknown>[], sheetName: string, filename: string) {
+  if (!rows.length) return;
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'iCar Dealership';
+  wb.created = new Date();
+  const ws = wb.addWorksheet(sheetName);
+
+  const headers = Object.keys(rows[0]);
+  ws.addRow(headers);
+  ws.getRow(1).font = { bold: true };
+  ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+  ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+  rows.forEach((r) => ws.addRow(headers.map((h) => {
+    const v = r[h];
+    return (typeof v === 'string' && !isNaN(Number(v)) && v !== '') ? Number(v) : v;
+  })));
+
+  headers.forEach((_, i) => { ws.getColumn(i + 1).width = 18; });
+
+  const buf = await wb.xlsx.writeBuffer();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
   a.download = filename;
   a.click();
   URL.revokeObjectURL(a.href);
@@ -64,10 +93,19 @@ export default function ReportsPage() {
     finally { setDrillLoading(false); }
   }
 
+  function flatRows(): Record<string, unknown>[] {
+    if (!data) return [];
+    if (Array.isArray(data)) return data;
+    return (Object.values(data) as unknown[]).flatMap((v) => Array.isArray(v) ? v : []);
+  }
+
   function exportCsv() {
-    if (!data) return;
-    const rows = Array.isArray(data) ? data : Object.values(data).flat();
-    downloadCsv(rows as Record<string, unknown>[], `${report}-${new Date().toISOString().slice(0, 10)}.csv`);
+    downloadCsv(flatRows(), `${report}-${new Date().toISOString().slice(0, 10)}.csv`);
+  }
+
+  function exportXlsx() {
+    const label = REPORTS.find((r) => r.key === report)?.label ?? report;
+    downloadXlsx(flatRows(), label, `${report}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   async function run() {
@@ -131,10 +169,16 @@ export default function ReportsPage() {
           {loading ? 'Running…' : 'Run Report'}
         </button>
         {data && (
-          <button onClick={exportCsv}
-            className="px-4 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition">
-            Export CSV
-          </button>
+          <>
+            <button onClick={exportCsv}
+              className="px-4 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition">
+              CSV
+            </button>
+            <button onClick={exportXlsx}
+              className="px-4 py-1.5 text-xs bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg transition">
+              Excel
+            </button>
+          </>
         )}
       </div>
 
