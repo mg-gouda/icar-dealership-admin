@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
+import { canViewField, canWriteField } from '../../../../lib/fieldPermissions';
 import StatusBadge from '../../../../components/StatusBadge';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 
@@ -298,21 +299,30 @@ export default function VehicleDetailPage() {
                   <input type="number" value={form.price ?? ''} onChange={(e) => set('price', Number(e.target.value))}
                     className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
                 </div>
+                {canViewField('Vehicle', 'cost') && (
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Cost (EGP)</label>
                   <input type="number" value={form.cost ?? ''} onChange={(e) => set('cost', Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
+                    disabled={!canWriteField('Vehicle', 'cost')}
+                    className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" />
                 </div>
+                )}
+                {canViewField('Vehicle', 'adminFeeOverride') && (
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Admin Fee Override (EGP)</label>
                   <input type="number" value={form.adminFeeOverride ?? ''} onChange={(e) => set('adminFeeOverride', Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
+                    disabled={!canWriteField('Vehicle', 'adminFeeOverride')}
+                    className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" />
                 </div>
+                )}
+                {canViewField('Vehicle', 'insuranceFeeOverride') && (
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Insurance Override (EGP)</label>
                   <input type="number" value={form.insuranceFeeOverride ?? ''} onChange={(e) => set('insuranceFeeOverride', Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
+                    disabled={!canWriteField('Vehicle', 'insuranceFeeOverride')}
+                    className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" />
                 </div>
+                )}
               </div>
             ) : (
               <div className="space-y-3 text-sm">
@@ -320,13 +330,13 @@ export default function VehicleDetailPage() {
                   <span className="text-gray-400">Price</span>
                   <span className="text-white font-bold text-lg">{fmt(v.price)}</span>
                 </div>
-                {v.cost != null && (
+                {v.cost != null && canViewField('Vehicle', 'cost') && (
                   <div className="flex justify-between py-2 border-b border-white/5">
                     <span className="text-gray-400">Cost</span>
                     <span className="text-white">{fmt(v.cost)}</span>
                   </div>
                 )}
-                {v.cost != null && (
+                {v.cost != null && canViewField('Vehicle', 'cost') && (
                   <div className="flex justify-between py-2 border-b border-white/5">
                     <span className="text-gray-400">Gross Margin</span>
                     <span className="text-green-400">

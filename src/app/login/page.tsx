@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { cacheFieldPermissions } from '../../lib/fieldPermissions';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
 
@@ -12,6 +13,13 @@ function setSessionCookies(accessToken: string, role: string) {
   const maxAge = 8 * 3600;
   document.cookie = `admin_session=${accessToken}; path=/; max-age=${maxAge}`;
   document.cookie = `admin_role=${role}; path=/; max-age=${maxAge}`;
+}
+
+async function fetchAndCacheFieldPerms(token: string) {
+  try {
+    const r = await fetch(`${API}/auth/me/field-permissions`, { headers: { Authorization: `Bearer ${token}` } });
+    if (r.ok) cacheFieldPermissions(await r.json());
+  } catch { /* non-critical */ }
 }
 
 
@@ -57,6 +65,7 @@ export default function LoginPage() {
       } else {
         localStorage.setItem('accessToken', data.accessToken);
         setSessionCookies(data.accessToken, data.user.role);
+        await fetchAndCacheFieldPerms(data.accessToken);
         router.replace('/');
       }
     } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Login failed'); }
@@ -71,6 +80,7 @@ export default function LoginPage() {
       const data = await post('/auth/2fa/verify', { token: totpCode }, preToken);
       localStorage.setItem('accessToken', data.accessToken);
       setSessionCookies(data.accessToken, data.user.role);
+      await fetchAndCacheFieldPerms(data.accessToken);
       router.replace('/');
     } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Invalid code'); }
     finally { setLoading(false); }
@@ -84,6 +94,7 @@ export default function LoginPage() {
       const data = await post('/auth/2fa/confirm', { token: totpCode }, preToken);
       localStorage.setItem('accessToken', data.accessToken);
       setSessionCookies(data.accessToken, data.user.role);
+      await fetchAndCacheFieldPerms(data.accessToken);
       router.replace('/');
     } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Invalid code'); }
     finally { setLoading(false); }
