@@ -10,6 +10,11 @@ interface Invoice {
   partner?: { name: string };
 }
 
+interface OverdueLine {
+  id: string; dueDate: string; totalDue: number; sequence: number;
+  installmentPlan: { deal: { id: string; customer?: { name: string } } };
+}
+
 interface TrialBalance { accountCode: string; accountName: string; debit: number; credit: number; balance: number; }
 interface CommissionSummary { status: string; count: number; total: number; }
 
@@ -42,6 +47,7 @@ export default function FinancePage() {
   const { data: overdueInvoices } = useQuery<{ total: number }>(`/finance/invoices?status=POSTED&dueBefore=${dateFrom}&limit=1`);
   const { data: commSummary } = useQuery<CommissionSummary[]>('/commissions/summary');
   const { data: tb } = useQuery<{ lines: TrialBalance[] }>(`/finance/reports/trial-balance?dateFrom=${dateFrom}&dateTo=${dateTo}`);
+  const { data: overdueLines } = useQuery<OverdueLine[]>('/deals/installments/overdue?limit=10');
 
   const invoices = Array.isArray(data) ? data : [];
 
@@ -109,6 +115,28 @@ export default function FinancePage() {
           </Link>
         ))}
       </div>
+
+      {/* Overdue installments to-do */}
+      {(overdueLines?.length ?? 0) > 0 && (
+        <div className="rounded-xl border border-red-500/20 bg-red-950/20 p-4 mb-4">
+          <p className="text-sm font-medium text-red-400 mb-3">Overdue Installments ({overdueLines!.length})</p>
+          <table className="w-full text-xs">
+            <thead className="text-gray-400 border-b border-white/5">
+              <tr><th className="text-left pb-2">Customer</th><th className="text-left pb-2">Deal</th><th className="text-right pb-2">Due Date</th><th className="text-right pb-2">Amount</th></tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {overdueLines!.map((l) => (
+                <tr key={l.id}>
+                  <td className="py-1.5 text-gray-300">{l.installmentPlan.deal.customer?.name ?? '—'}</td>
+                  <td className="py-1.5"><Link href={`/deals/${l.installmentPlan.deal.id}`} className="text-blue-400 hover:text-blue-300">#{l.installmentPlan.deal.id.slice(0, 8)}</Link></td>
+                  <td className="py-1.5 text-right text-red-400">{new Date(l.dueDate).toLocaleDateString('en-EG')}</td>
+                  <td className="py-1.5 text-right tabular-nums text-white">{Number(l.totalDue).toLocaleString()} EGP</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="rounded-xl border border-white/5 bg-gray-900 p-4">
         <div className="flex items-center justify-between mb-4">

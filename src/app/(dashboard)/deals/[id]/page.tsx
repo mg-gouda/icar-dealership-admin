@@ -622,22 +622,31 @@ export default function DealDetailPage() {
               <tr><th className="text-left pb-2">#</th><th className="text-left pb-2">Due</th><th className="text-right pb-2">Amount</th><th className="text-left pb-2 pl-3">Status</th><th className="pb-2" /></tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {deal.installmentPlan.installments.slice(0, 6).map((l) => (
-                <tr key={l.id}>
-                  <td className="py-1.5 text-gray-400">{l.sequence}</td>
-                  <td className="py-1.5 text-gray-300">{new Date(l.dueDate).toLocaleDateString('en-EG')}</td>
-                  <td className="py-1.5 text-right text-white tabular-nums">{Number(l.amount).toLocaleString()} EGP</td>
-                  <td className="py-1.5 pl-3"><StatusBadge status={l.status} /></td>
-                  <td className="py-1.5 pl-2">
-                    {l.status === 'PENDING' && deal.status === 'FINALIZED' && (
-                      <button onClick={() => collectInstallment(l.id)} disabled={collectingLine === l.id}
-                        className="px-2 py-0.5 text-xs text-green-400 border border-green-400/30 hover:bg-green-400/10 rounded disabled:opacity-40 transition">
-                        {collectingLine === l.id ? '…' : 'Collect'}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {deal.installmentPlan.installments.slice(0, 6).map((l) => {
+                const isOverdue = l.status === 'OVERDUE';
+                return (
+                  <tr key={l.id} className={isOverdue ? 'bg-red-950/30' : ''}>
+                    <td className="py-1.5 text-gray-400">{l.sequence}</td>
+                    <td className={`py-1.5 ${isOverdue ? 'text-red-400 font-medium' : 'text-gray-300'}`}>{new Date(l.dueDate).toLocaleDateString('en-EG')}</td>
+                    <td className="py-1.5 text-right text-white tabular-nums">{Number(l.amount).toLocaleString()} EGP</td>
+                    <td className="py-1.5 pl-3"><StatusBadge status={l.status} /></td>
+                    <td className="py-1.5 pl-2 flex gap-1">
+                      {(l.status === 'PENDING' || isOverdue) && deal.status === 'FINALIZED' && (
+                        <button onClick={() => collectInstallment(l.id)} disabled={collectingLine === l.id}
+                          className="px-2 py-0.5 text-xs text-green-400 border border-green-400/30 hover:bg-green-400/10 rounded disabled:opacity-40 transition">
+                          {collectingLine === l.id ? '…' : 'Collect'}
+                        </button>
+                      )}
+                      {isOverdue && (
+                        <button onClick={async () => { await apiFetch(`/deals/${id}/installment-plan/lines/${l.id}/remind`, { method: 'POST' }).catch(() => {}); }}
+                          className="px-2 py-0.5 text-xs text-orange-400 border border-orange-400/30 hover:bg-orange-400/10 rounded transition">
+                          Remind
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
               {deal.installmentPlan.installments.length > 6 && (
                 <tr><td colSpan={4} className="py-2 text-center text-gray-600 text-xs">+{deal.installmentPlan.installments.length - 6} more…</td></tr>
               )}
