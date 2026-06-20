@@ -26,11 +26,12 @@ export function middleware(request: NextRequest) {
   const requiresFinance = FINANCE_PATHS.some((p) => pathname.startsWith(p));
   const requiresAdmin = ADMIN_PATHS.some((p) => pathname.startsWith(p));
 
-  if (requiresFinance && !['FINANCE', 'ADMIN', 'SUPER_ADMIN'].includes(role)) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+  // MANAGER has read-only finance/settings visibility; API enforces write restrictions
+  if (requiresFinance && !['MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN'].includes(role)) {
+    return NextResponse.redirect(new URL('/', request.url));
   }
-  if (requiresAdmin && !['ADMIN', 'SUPER_ADMIN'].includes(role)) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+  if (requiresAdmin && !['MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(role)) {
+    return NextResponse.redirect(new URL('/', request.url));
   }
 
   return NextResponse.next();

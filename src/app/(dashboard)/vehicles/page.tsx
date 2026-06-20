@@ -90,7 +90,7 @@ export default function VehiclesPage() {
   });
 
   const { data: res, loading, error, reload } = useQuery<{
-    data: Vehicle[];
+    items: Vehicle[];
     total: number;
     page: number;
     limit: number;
@@ -102,7 +102,7 @@ export default function VehiclesPage() {
     label: l.name,
   }));
 
-  const vehicles = res?.data ?? [];
+  const vehicles = res?.items ?? [];
   const total = res?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const showingFrom = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;

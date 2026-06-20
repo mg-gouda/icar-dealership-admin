@@ -257,6 +257,10 @@ export default function LoginPage() {
                 style={{ background: 'oklch(0.52 0.22 265)' }}>
                 I've added the key →
               </button>
+              <button type="button" onClick={() => { setStage('credentials'); setError(''); setTotpCode(''); }}
+                className="w-full text-[11px] transition mt-2" style={{ color: 'oklch(1 0 0 / 0.3)' }}>
+                ← Cancel
+              </button>
             </>
           )}
 
