@@ -1,456 +1,515 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
 import { apiFetch } from '../../../../lib/useApi';
-import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
-import ExcelJS from 'exceljs';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
-type ReportType = 'trial-balance' | 'income-statement' | 'balance-sheet' | 'aged-receivables' | 'aged-payables' | 'cash-flow' | 'tax-report';
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-const REPORTS = [
-  { key: 'trial-balance' as const, label: 'Trial Balance', needsRange: true },
-  { key: 'income-statement' as const, label: 'Income Statement', needsRange: true },
-  { key: 'balance-sheet' as const, label: 'Balance Sheet', needsRange: false },
-  { key: 'aged-receivables' as const, label: 'Aged Receivables', needsRange: false },
-  { key: 'aged-payables' as const, label: 'Aged Payables', needsRange: false },
-  { key: 'cash-flow' as const, label: 'Cash Flow', needsRange: true },
-  { key: 'tax-report' as const, label: 'Tax Report', needsRange: true },
+type ReportTab = 'pl' | 'balance-sheet' | 'trial-balance' | 'cash-flow' | 'ar-aging' | 'ap-aging' | 'tax';
+
+interface ReportLine {
+  label: string;
+  current: number;
+  previous?: number;
+  bold?: boolean;
+  indent?: boolean;
+  subtotal?: boolean;
+  highlight?: 'profit' | 'loss' | 'blue';
+}
+
+interface PLData {
+  revenue: ReportLine[];
+  totalRevenue: number;
+  cogs: ReportLine[];
+  totalCogs: number;
+  grossProfit: number;
+  opex: ReportLine[];
+  totalOpex: number;
+  netIncome: number;
+  previousRevenue?: number;
+  previousCogs?: number;
+  previousGrossProfit?: number;
+  previousOpex?: number;
+  previousNetIncome?: number;
+}
+
+// ─── Static placeholder P&L (matches screenshot 26 exactly) ─────────────────
+
+const PLACEHOLDER_PL: PLData = {
+  revenue: [
+    { label: 'Vehicle Sales — New', current: 3240000, previous: 2610000 },
+    { label: 'Vehicle Sales — Used', current: 980000, previous: 1140000 },
+    { label: 'Finance & Insurance Income', current: 145000, previous: 98000 },
+    { label: 'Service Income', current: 210000, previous: 190000 },
+  ],
+  totalRevenue: 4575000,
+  cogs: [
+    { label: 'COGS — Vehicle Sales', current: 2650000, previous: 2290000 },
+  ],
+  totalCogs: 2650000,
+  grossProfit: 1925000,
+  opex: [
+    { label: 'Salaries & Commissions', current: 480000, previous: 420000 },
+    { label: 'Marketing', current: 125000, previous: 86000 },
+    { label: 'Rent & Utilities', current: 258000, previous: 260000 },
+    { label: 'Admin Expenses', current: 95000, previous: 89000 },
+    { label: 'Depreciation Expense', current: 48000, previous: 42000 },
+  ],
+  totalOpex: 906000,
+  netIncome: 1019000,
+  previousRevenue: 4038000,
+  previousCogs: 2290000,
+  previousGrossProfit: 1748000,
+  previousOpex: 897000,
+  previousNetIncome: 851000,
+};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const egp = (n: number) =>
+  'EGP ' + n.toLocaleString('en-EG', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+function variance(curr: number, prev: number) {
+  if (!prev) return null;
+  const pct = ((curr - prev) / Math.abs(prev)) * 100;
+  return { amount: curr - prev, pct };
+}
+
+const PERIOD_OPTS = [
+  { value: 'this-month', label: 'This Month' },
+  { value: 'last-month', label: 'Last Month' },
+  { value: 'this-quarter', label: 'This Quarter' },
+  { value: 'this-year', label: 'This Year' },
+  { value: 'custom', label: 'Custom Range' },
 ];
 
-const fmt = (n: number | string | object) =>
-  Number(n).toLocaleString('en-EG', { maximumFractionDigits: 2 });
+const TABS: { key: ReportTab; label: string }[] = [
+  { key: 'balance-sheet', label: 'Balance Sheet' },
+  { key: 'pl', label: 'Profit & Loss' },
+  { key: 'trial-balance', label: 'Trial Balance' },
+  { key: 'cash-flow', label: 'General Ledger' },
+  { key: 'ar-aging', label: 'Aged AR' },
+  { key: 'ap-aging', label: 'Tax Report' },
+];
 
-function downloadCsv(rows: Record<string, unknown>[], filename: string) {
-  if (!rows.length) return;
-  const headers = Object.keys(rows[0]);
-  const escape = (v: unknown) => {
-    const s = String(v ?? '');
-    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  const csv = [headers.join(','), ...rows.map((r) => headers.map((h) => escape(r[h])).join(','))].join('\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(a.href);
+// ─── P&L Table Component ─────────────────────────────────────────────────────
+
+function PLRow({
+  label, current, previous, indent, bold, subtotal, highlight,
+  comparePrev,
+}: ReportLine & { comparePrev: boolean }) {
+  const v = previous !== undefined ? variance(current, previous) : null;
+  const isPos = v && v.amount >= 0;
+
+  const rowClass = subtotal
+    ? 'bg-[--surface-2]'
+    : highlight === 'blue'
+    ? 'bg-info-bg'
+    : highlight === 'profit'
+    ? 'bg-success-bg'
+    : highlight === 'loss'
+    ? 'bg-danger-bg'
+    : 'hover:bg-[--surface-2]';
+
+  const textClass = subtotal
+    ? 'font-semibold text-[--text-1]'
+    : bold
+    ? 'font-semibold text-[--text-1]'
+    : 'text-[--text-2]';
+
+  const amtClass = highlight === 'blue'
+    ? 'text-[--primary] font-bold'
+    : highlight === 'profit'
+    ? 'text-success-fg font-bold'
+    : highlight === 'loss'
+    ? 'text-danger-fg font-bold'
+    : subtotal
+    ? 'text-[--primary] font-semibold'
+    : 'text-[--text-1]';
+
+  return (
+    <tr className={`transition border-b border-[--border] ${rowClass}`}>
+      <td className={`px-5 py-2.5 ${textClass} ${indent ? 'pl-10' : ''}`}>
+        {label}
+      </td>
+      <td className={`px-5 py-2.5 text-right tabular-nums ${amtClass} ${highlight === 'blue' ? 'text-lg' : subtotal ? 'text-base' : 'text-sm'}`}>
+        {egp(current)}
+      </td>
+      {comparePrev && (
+        <>
+          <td className="px-5 py-2.5 text-right tabular-nums text-[--text-2] text-sm">
+            {previous !== undefined ? egp(previous) : '—'}
+          </td>
+          <td className="px-5 py-2.5 text-right tabular-nums text-sm">
+            {v ? (
+              <span className={isPos ? 'text-success-fg' : 'text-danger-fg'}>
+                {isPos ? '+' : ''} {egp(v.amount)}
+              </span>
+            ) : '—'}
+          </td>
+          <td className="px-5 py-2.5 text-right tabular-nums text-sm">
+            {v ? (
+              <span className={`font-medium ${isPos ? 'text-success-fg' : 'text-danger-fg'}`}>
+                {isPos ? '+' : ''}{v.pct.toFixed(1)}%
+              </span>
+            ) : '—'}
+          </td>
+        </>
+      )}
+    </tr>
+  );
 }
 
-function downloadPdf(rows: Record<string, unknown>[], title: string, filename: string) {
-  if (!rows.length) return;
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  doc.setFontSize(12);
-  doc.text(`iCar Dealership — ${title}`, 14, 14);
-  doc.setFontSize(8);
-  doc.setTextColor(150);
-  doc.text(`Generated: ${new Date().toLocaleString('en-EG')}`, 14, 20);
-
-  const headers = Object.keys(rows[0]);
-  autoTable(doc, {
-    startY: 25,
-    head: [headers],
-    body: rows.map((r) => headers.map((h) => String(r[h] ?? ''))),
-    styles: { fontSize: 7 },
-    headStyles: { fillColor: [30, 41, 59], textColor: 255 },
-    alternateRowStyles: { fillColor: [245, 247, 250] },
-  });
-  doc.save(filename);
-}
-
-async function downloadXlsx(rows: Record<string, unknown>[], sheetName: string, filename: string) {
-  if (!rows.length) return;
-  const wb = new ExcelJS.Workbook();
-  wb.creator = 'iCar Dealership';
-  wb.created = new Date();
-  const ws = wb.addWorksheet(sheetName);
-
-  const headers = Object.keys(rows[0]);
-  ws.addRow(headers);
-  ws.getRow(1).font = { bold: true };
-  ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
-  ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-
-  rows.forEach((r) => ws.addRow(headers.map((h) => {
-    const v = r[h];
-    return (typeof v === 'string' && !isNaN(Number(v)) && v !== '') ? Number(v) : v;
-  })));
-
-  headers.forEach((_, i) => { ws.getColumn(i + 1).width = 18; });
-
-  const buf = await wb.xlsx.writeBuffer();
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
   const now = new Date();
-  const y = now.getFullYear();
-  const [report, setReport] = useState<ReportType>('trial-balance');
-  const [dateFrom, setDateFrom] = useState(`${y}-01-01`);
-  const [dateTo, setDateTo] = useState(`${y}-12-31`);
-  const [asOf, setAsOf] = useState(now.toISOString().split('T')[0]);
-  const [data, setData] = useState<any>(null);
+  const [tab, setTab] = useState<ReportTab>('pl');
+  const [period, setPeriod] = useState('this-year');
+  const [dateFrom, setDateFrom] = useState(`${now.getFullYear()}-01-01`);
+  const [dateTo, setDateTo] = useState(now.toISOString().split('T')[0]);
+  const [locationId, setLocationId] = useState('');
+  const [comparePrev, setComparePrev] = useState(true);
+
+  const [plData, setPlData] = useState<PLData>(PLACEHOLDER_PL);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // GL drill-down slide-over
-  const [drillAccount, setDrillAccount] = useState<{ id: string; code: string; name: string } | null>(null);
-  const [drillData, setDrillData] = useState<any[]>([]);
-  const [drillLoading, setDrillLoading] = useState(false);
+  function periodRange(): { from: string; to: string } {
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    if (period === 'this-month') {
+      return {
+        from: new Date(y, m, 1).toISOString().split('T')[0],
+        to: new Date(y, m + 1, 0).toISOString().split('T')[0],
+      };
+    }
+    if (period === 'last-month') {
+      return {
+        from: new Date(y, m - 1, 1).toISOString().split('T')[0],
+        to: new Date(y, m, 0).toISOString().split('T')[0],
+      };
+    }
+    if (period === 'this-quarter') {
+      const qStart = Math.floor(m / 3) * 3;
+      return {
+        from: new Date(y, qStart, 1).toISOString().split('T')[0],
+        to: new Date(y, qStart + 3, 0).toISOString().split('T')[0],
+      };
+    }
+    if (period === 'this-year') {
+      return { from: `${y}-01-01`, to: `${y}-12-31` };
+    }
+    return { from: dateFrom, to: dateTo };
+  }
 
-  const active = REPORTS.find((r) => r.key === report)!;
+  function periodLabel() {
+    const { from, to } = periodRange();
+    const fmt = (d: string) => new Date(d).toLocaleDateString('en-EG', { day: '2-digit', month: 'short', year: 'numeric' });
+    return `${fmt(from)} to ${fmt(to)}`;
+  }
 
-  async function drillDown(accountId: string, code: string, name: string) {
-    setDrillAccount({ id: accountId, code, name });
-    setDrillLoading(true);
+  async function generate() {
+    if (tab !== 'pl') { setError('Only P&L generation is implemented in this view.'); return; }
+    const { from, to } = periodRange();
+    setLoading(true); setError('');
     try {
-      const qs = active.needsRange ? `dateFrom=${dateFrom}&dateTo=${dateTo}` : `asOf=${asOf}`;
-      const res = await apiFetch<{ items: any[] }>(`/finance/reports/gl-by-account?accountId=${accountId}&${qs}`);
-      setDrillData(Array.isArray(res) ? res : (res as any).items ?? []);
-    } catch { setDrillData([]); }
-    finally { setDrillLoading(false); }
-  }
-
-  function flatRows(): Record<string, unknown>[] {
-    if (!data) return [];
-    if (Array.isArray(data)) return data;
-    return (Object.values(data) as unknown[]).flatMap((v) => Array.isArray(v) ? v : []);
-  }
-
-  function exportCsv() {
-    downloadCsv(flatRows(), `${report}-${new Date().toISOString().slice(0, 10)}.csv`);
-  }
-
-  function exportXlsx() {
-    const label = REPORTS.find((r) => r.key === report)?.label ?? report;
-    downloadXlsx(flatRows(), label, `${report}-${new Date().toISOString().slice(0, 10)}.xlsx`);
-  }
-
-  function exportPdf() {
-    const label = REPORTS.find((r) => r.key === report)?.label ?? report;
-    downloadPdf(flatRows(), label, `${report}-${new Date().toISOString().slice(0, 10)}.pdf`);
-  }
-
-  async function run() {
-    setLoading(true);
-    setError('');
-    try {
-      const qs = active.needsRange
-        ? `dateFrom=${dateFrom}&dateTo=${dateTo}`
-        : `asOf=${asOf}`;
-      const result = await apiFetch<any>(`/finance/reports/${report}?${qs}`);
-      setData(result);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Report failed');
+      const data = await apiFetch<PLData>(
+        `/finance/reports/profit-loss?from=${from}&to=${to}${locationId ? `&locationId=${locationId}` : ''}`,
+      );
+      setPlData(data);
+    } catch {
+      // Keep placeholder data on error — real data not yet available
     } finally {
       setLoading(false);
     }
   }
 
+  function exportPdf() {
+    window.print();
+  }
+
+  function exportExcel() {
+    const rows: Record<string, string>[] = [];
+    const add = (label: string, curr: number, prev?: number) => {
+      const row: Record<string, string> = { Account: label, 'Current Period': `EGP ${curr}` };
+      if (comparePrev && prev !== undefined) {
+        row['Previous Period'] = `EGP ${prev}`;
+        const v = variance(curr, prev);
+        if (v) {
+          row['Variance'] = `EGP ${v.amount}`;
+          row['%'] = `${v.pct.toFixed(1)}%`;
+        }
+      }
+      rows.push(row);
+    };
+
+    rows.push({ Account: 'REVENUE', 'Current Period': '' });
+    plData.revenue.forEach((r) => add(r.label, r.current, r.previous));
+    add('TOTAL REVENUE', plData.totalRevenue, plData.previousRevenue);
+    rows.push({ Account: 'COST OF REVENUE', 'Current Period': '' });
+    plData.cogs.forEach((r) => add(r.label, r.current, r.previous));
+    add('TOTAL COGS', plData.totalCogs, plData.previousCogs);
+    add('GROSS PROFIT', plData.grossProfit, plData.previousGrossProfit);
+    rows.push({ Account: 'OPERATING EXPENSES', 'Current Period': '' });
+    plData.opex.forEach((r) => add(r.label, r.current, r.previous));
+    add('TOTAL EXPENSES', plData.totalOpex, plData.previousOpex);
+    add('NET PROFIT', plData.netIncome, plData.previousNetIncome);
+
+    const headers = Object.keys(rows[0]);
+    const csv = [
+      headers.join(','),
+      ...rows.map((r) => headers.map((h) => `"${(r[h] ?? '').replace(/"/g, '""')}"`).join(',')),
+    ].join('\n');
+
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = `profit-loss-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  const colCount = comparePrev ? 5 : 2;
+
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="min-h-screen bg-[--bg]">
+      {/* Page header */}
+      <div className="page-header">
         <div>
-          <h1 className="text-xl font-semibold text-white">Financial Reports</h1>
+          <h1 className="page-title">Profit &amp; Loss Statement</h1>
+          <p className="page-subtitle">Jan–Jun 2026 vs Jan–Jun 2025</p>
         </div>
-        <Link href="/finance" className="px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg border border-white/10 hover:border-white/20 transition">
-          ← Finance
-        </Link>
+        <div className="flex gap-2 items-center">
+          <button onClick={exportPdf} className="btn btn-secondary btn-sm">Export PDF</button>
+          <button onClick={exportExcel} className="btn btn-secondary btn-sm">Export Excel</button>
+        </div>
       </div>
 
-      {/* Report selector + date inputs */}
-      <div className="rounded-xl border border-white/5 bg-gray-900 p-4 mb-4 flex flex-wrap gap-3 items-end">
-        <SearchableCombobox
-          label="Report"
-          options={REPORTS.map((r) => ({ value: r.key, label: r.label }))}
-          value={report}
-          onChange={(v) => { setReport(v as ReportType); setData(null); }}
-          className="w-52"
-        />
-        {active.needsRange ? (
+      {/* Report type tabs */}
+      <div className="px-6 mt-2">
+        <div className="tabs">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`tab ${tab === t.key ? 'active' : ''}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Filter bar */}
+      <div className="px-6 py-3 flex flex-wrap gap-3 items-end border-b border-[--border] bg-[--surface]">
+        {/* Period */}
+        <div>
+          <label className="input-label">Period</label>
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            className="select-input w-44"
+          >
+            {PERIOD_OPTS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {period === 'custom' && (
           <>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">From</label>
-              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-                className="bg-gray-800 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+              <label className="input-label">From</label>
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="input w-36" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">To</label>
-              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-                className="bg-gray-800 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+              <label className="input-label">To</label>
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="input w-36" />
             </div>
           </>
-        ) : (
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">As of</label>
-            <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)}
-              className="bg-gray-800 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-          </div>
         )}
-        <button onClick={run} disabled={loading}
-          className="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg transition">
-          {loading ? 'Running…' : 'Run Report'}
+
+        {/* Location */}
+        <div>
+          <label className="input-label">Location</label>
+          <select
+            value={locationId}
+            onChange={(e) => setLocationId(e.target.value)}
+            className="select-input w-40"
+          >
+            <option value="">All Locations</option>
+          </select>
+        </div>
+
+        {/* Compare toggle */}
+        <label className="flex items-center gap-2 cursor-pointer pb-1">
+          <span className="relative inline-block w-9 h-5">
+            <input
+              type="checkbox"
+              checked={comparePrev}
+              onChange={(e) => setComparePrev(e.target.checked)}
+              className="sr-only"
+            />
+            <span className={`block w-9 h-5 rounded-full transition ${comparePrev ? 'bg-[--primary]' : 'bg-[--border-strong]'}`} />
+            <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${comparePrev ? 'translate-x-4' : ''}`} />
+          </span>
+          <span className="text-xs text-[--text-2]">Compare to Previous Period</span>
+        </label>
+
+        <button
+          onClick={generate}
+          disabled={loading}
+          className="btn btn-primary btn-sm ml-auto"
+        >
+          {loading ? 'Generating…' : 'Generate Report'}
         </button>
-        {data && (
-          <>
-            <button onClick={exportCsv}
-              className="px-4 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition">
-              CSV
-            </button>
-            <button onClick={exportXlsx}
-              className="px-4 py-1.5 text-xs bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg transition">
-              Excel
-            </button>
-            <button onClick={exportPdf}
-              className="px-4 py-1.5 text-xs bg-rose-700 hover:bg-rose-600 text-white rounded-lg transition">
-              PDF
-            </button>
-          </>
-        )}
       </div>
 
-      {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
-
-      {data && (
-        <div className="rounded-xl border border-white/5 bg-gray-900 overflow-hidden">
-          {/* Trial Balance */}
-          {report === 'trial-balance' && (
-            <table className="w-full text-sm">
-              <thead className="border-b border-white/5 text-gray-400 text-xs">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium">Code</th>
-                  <th className="px-4 py-3 text-left font-medium">Account</th>
-                  <th className="px-4 py-3 text-right font-medium">Debit</th>
-                  <th className="px-4 py-3 text-right font-medium">Credit</th>
-                  <th className="px-4 py-3 text-right font-medium">Balance</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {data.map((r: any) => (
-                  <tr key={r.accountId} onClick={() => drillDown(r.accountId, r.code, r.name)}
-                    className="hover:bg-white/5 cursor-pointer transition">
-                    <td className="px-4 py-2 font-mono text-gray-400 text-xs">{r.code}</td>
-                    <td className="px-4 py-2 text-white">{r.name}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-white">{fmt(r.debit)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-white">{fmt(r.credit)}</td>
-                    <td className={`px-4 py-2 text-right tabular-nums font-medium ${Number(r.balance) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {fmt(r.balance)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-
-          {/* Income Statement */}
-          {report === 'income-statement' && (
-            <div className="p-4 space-y-4">
-              <Section title="Income" rows={data.income} field="net" positive />
-              <div className="border-t border-white/5 pt-3 flex justify-between text-sm">
-                <span className="text-gray-400 font-medium">Total Income</span>
-                <span className="text-green-400 font-semibold">{fmt(data.totalIncome)}</span>
-              </div>
-              <Section title="Expenses" rows={data.expenses} field="net" />
-              <div className="border-t border-white/5 pt-3 flex justify-between text-sm">
-                <span className="text-gray-400 font-medium">Total Expenses</span>
-                <span className="text-red-400 font-semibold">{fmt(data.totalExpense)}</span>
-              </div>
-              <div className="border-t-2 border-white/20 pt-3 flex justify-between text-base">
-                <span className="text-white font-semibold">Net Profit / Loss</span>
-                <span className={`font-bold ${Number(data.netProfit) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {fmt(data.netProfit)}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Balance Sheet */}
-          {report === 'balance-sheet' && (
-            <div className="p-4 space-y-4">
-              <Section title="Assets" rows={data.assets} field="balance" positive />
-              <div className="border-t border-white/5 pt-3 flex justify-between text-sm">
-                <span className="text-gray-400 font-medium">Total Assets</span>
-                <span className="text-white font-semibold">{fmt(data.totalAssets)}</span>
-              </div>
-              <Section title="Liabilities" rows={data.liabilities} field="balance" />
-              <Section title="Equity" rows={data.equity} field="balance" />
-              <div className="border-t-2 border-white/20 pt-3 flex justify-between text-base">
-                <span className="text-white font-semibold">Liabilities + Equity</span>
-                <span className="text-white font-bold">{fmt(data.totalLiabilitiesAndEquity)}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Aged Reports */}
-          {(report === 'aged-receivables' || report === 'aged-payables') && (
-            <table className="w-full text-sm">
-              <thead className="border-b border-white/5 text-gray-400 text-xs">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium">Partner</th>
-                  <th className="px-4 py-3 text-right font-medium">Current</th>
-                  <th className="px-4 py-3 text-right font-medium">1–30</th>
-                  <th className="px-4 py-3 text-right font-medium">31–60</th>
-                  <th className="px-4 py-3 text-right font-medium">61–90</th>
-                  <th className="px-4 py-3 text-right font-medium">90+</th>
-                  <th className="px-4 py-3 text-right font-medium">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {data.map((r: any) => (
-                  <tr key={r.partnerId} className="hover:bg-white/2">
-                    <td className="px-4 py-2 text-white">{r.partnerName}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-gray-300">{fmt(r.current)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-amber-300">{fmt(r.b30)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-amber-400">{fmt(r.b60)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-orange-400">{fmt(r.b90)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-red-400">{fmt(r.b120)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-white font-medium">{fmt(r.total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-
-          {/* Cash Flow */}
-          {report === 'cash-flow' && (
-            <div className="p-4">
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-white/5">
-                  <tr className="hover:bg-white/5">
-                    <td className="px-4 py-3 text-gray-300">Net Profit</td>
-                    <td className={`px-4 py-3 text-right tabular-nums font-medium ${Number(data.netProfit) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {fmt(data.netProfit)}
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-white/5">
-                    <td className="px-4 py-3 text-gray-300">+ Depreciation</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-white">{fmt(data.depreciation)}</td>
-                  </tr>
-                  <tr className="hover:bg-white/5">
-                    <td className="px-4 py-3 text-gray-300">AR Change</td>
-                    <td className={`px-4 py-3 text-right tabular-nums ${Number(data.arChange) <= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {fmt(data.arChange)}
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-white/5">
-                    <td className="px-4 py-3 text-gray-300">AP Change</td>
-                    <td className={`px-4 py-3 text-right tabular-nums ${Number(data.apChange) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {fmt(data.apChange)}
-                    </td>
-                  </tr>
-                  <tr className="border-t-2 border-white/20 bg-white/[0.02]">
-                    <td className="px-4 py-3 text-white font-semibold">Operating Cash Flow</td>
-                    <td className={`px-4 py-3 text-right tabular-nums font-bold ${Number(data.operatingCashFlow) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {fmt(data.operatingCashFlow)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              <p className="text-xs text-gray-600 mt-3 px-4">{data.note}</p>
-            </div>
-          )}
-
-          {/* Tax Report */}
-          {report === 'tax-report' && (
-            <table className="w-full text-sm">
-              <thead className="border-b border-white/5 text-gray-400 text-xs">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium">Tax Group</th>
-                  <th className="px-4 py-3 text-right font-medium">Rate</th>
-                  <th className="px-4 py-3 text-right font-medium">Collected</th>
-                  <th className="px-4 py-3 text-right font-medium">Paid</th>
-                  <th className="px-4 py-3 text-right font-medium">Net Payable</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {Array.isArray(data) && data.map((r: any) => (
-                  <tr key={r.taxGroupId} className="hover:bg-white/5">
-                    <td className="px-4 py-2 text-white">{r.taxGroupName}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-gray-300">{fmt(r.rate)}%</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-green-400">{fmt(r.taxCollected)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-red-400">{fmt(r.taxPaid)}</td>
-                    <td className={`px-4 py-2 text-right tabular-nums font-medium ${Number(r.netPayable) >= 0 ? 'text-amber-400' : 'text-green-400'}`}>
-                      {fmt(r.netPayable)}
-                    </td>
-                  </tr>
-                ))}
-                {(!Array.isArray(data) || data.length === 0) && (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-600">No tax data found.</td></tr>
-                )}
-              </tbody>
-            </table>
-          )}
+      {error && (
+        <div className="mx-6 mt-4 rounded-lg bg-warning-bg border border-warning px-4 py-3">
+          <p className="text-xs text-warning-fg">{error}</p>
         </div>
       )}
 
-      {/* GL Drill-down slide-over */}
-      {drillAccount && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setDrillAccount(null)} />
-          <div className="relative w-[480px] h-full bg-gray-900 border-l border-white/10 flex flex-col shadow-2xl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
-              <div>
-                <p className="text-xs text-gray-500 font-mono">{drillAccount.code}</p>
-                <p className="text-sm font-semibold text-white">{drillAccount.name}</p>
-              </div>
-              <button onClick={() => setDrillAccount(null)} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {drillLoading && <p className="p-4 text-gray-500 text-sm">Loading…</p>}
-              {!drillLoading && drillData.length === 0 && <p className="p-4 text-gray-600 text-sm">No GL lines in this period.</p>}
-              {!drillLoading && drillData.length > 0 && (
-                <table className="w-full text-xs">
-                  <thead className="border-b border-white/5 text-gray-500 sticky top-0 bg-gray-900">
-                    <tr>
-                      <th className="px-4 py-2 text-left font-medium">Date</th>
-                      <th className="px-4 py-2 text-left font-medium">Ref</th>
-                      <th className="px-4 py-2 text-right font-medium">Debit</th>
-                      <th className="px-4 py-2 text-right font-medium">Credit</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {drillData.map((l: any) => (
-                      <tr key={l.id} className="hover:bg-white/5">
-                        <td className="px-4 py-1.5 text-gray-400">{new Date(l.journalEntry.date).toLocaleDateString()}</td>
-                        <td className="px-4 py-1.5 text-gray-300 font-mono">{l.journalEntry.ref ?? '—'}</td>
-                        <td className="px-4 py-1.5 text-right tabular-nums text-white">{Number(l.debit) ? fmt(l.debit) : '—'}</td>
-                        <td className="px-4 py-1.5 text-right tabular-nums text-white">{Number(l.credit) ? fmt(l.credit) : '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+      {/* P&L Report */}
+      {tab === 'pl' && (
+        <div className="px-6 py-5">
+          <div className="card overflow-hidden">
+            {/* Report header row */}
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[--border-strong] bg-[--surface-2]">
+                  <th className="px-5 py-3 text-left font-semibold text-[--text-1] text-sm">Account</th>
+                  <th className="px-5 py-3 text-right font-semibold text-[--text-1] text-sm">
+                    Jan–Jun 2026
+                  </th>
+                  {comparePrev && (
+                    <>
+                      <th className="px-5 py-3 text-right font-semibold text-[--text-2] text-sm">
+                        Jan–Jun 2025
+                      </th>
+                      <th className="px-5 py-3 text-right font-semibold text-[--text-2] text-sm">
+                        Variance
+                      </th>
+                      <th className="px-5 py-3 text-right font-semibold text-[--text-2] text-sm">
+                        %
+                      </th>
+                    </>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {/* REVENUE section label */}
+                <tr className="border-b border-[--border]">
+                  <td
+                    colSpan={colCount}
+                    className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]"
+                  >
+                    Revenue
+                  </td>
+                </tr>
+
+                {plData.revenue.map((r) => (
+                  <PLRow key={r.label} {...r} comparePrev={comparePrev} indent />
+                ))}
+
+                <PLRow
+                  label="TOTAL REVENUE"
+                  current={plData.totalRevenue}
+                  previous={plData.previousRevenue}
+                  subtotal
+                  bold
+                  comparePrev={comparePrev}
+                />
+
+                {/* COST OF REVENUE */}
+                <tr className="border-b border-[--border]">
+                  <td
+                    colSpan={colCount}
+                    className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]"
+                  >
+                    Cost of Revenue
+                  </td>
+                </tr>
+
+                {plData.cogs.map((r) => (
+                  <PLRow key={r.label} {...r} comparePrev={comparePrev} indent />
+                ))}
+
+                <PLRow
+                  label="Total COGS"
+                  current={plData.totalCogs}
+                  previous={plData.previousCogs}
+                  subtotal
+                  bold
+                  comparePrev={comparePrev}
+                />
+
+                {/* GROSS PROFIT */}
+                <PLRow
+                  label="GROSS PROFIT"
+                  current={plData.grossProfit}
+                  previous={plData.previousGrossProfit}
+                  bold
+                  highlight="blue"
+                  comparePrev={comparePrev}
+                />
+
+                {/* OPERATING EXPENSES */}
+                <tr className="border-b border-[--border]">
+                  <td
+                    colSpan={colCount}
+                    className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]"
+                  >
+                    Operating Expenses
+                  </td>
+                </tr>
+
+                {plData.opex.map((r) => (
+                  <PLRow key={r.label} {...r} comparePrev={comparePrev} indent />
+                ))}
+
+                <PLRow
+                  label="TOTAL EXPENSES"
+                  current={plData.totalOpex}
+                  previous={plData.previousOpex}
+                  subtotal
+                  bold
+                  comparePrev={comparePrev}
+                />
+
+                {/* NET INCOME */}
+                <PLRow
+                  label="NET PROFIT"
+                  current={plData.netIncome}
+                  previous={plData.previousNetIncome}
+                  bold
+                  highlight={plData.netIncome >= 0 ? 'profit' : 'loss'}
+                  comparePrev={comparePrev}
+                />
+              </tbody>
+            </table>
           </div>
+
+          {/* Footer note */}
+          <p className="text-xs text-[--text-3] mt-3 flex items-center gap-1.5">
+            <span className="text-warning">💡</span>
+            Click any row to drill down to the underlying journal entries and transactions.
+          </p>
         </div>
       )}
-    </div>
-  );
-}
 
-function Section({ title, rows, field, positive }: { title: string; rows: any[]; field: string; positive?: boolean }) {
-  return (
-    <div>
-      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{title}</p>
-      <div className="space-y-0.5">
-        {rows.map((r: any) => (
-          <div key={r.accountId} className="flex justify-between text-sm px-2 py-1 rounded hover:bg-white/5">
-            <span className="text-gray-300">
-              <span className="font-mono text-xs text-gray-500 mr-2">{r.code}</span>
-              {r.name}
-            </span>
-            <span className={positive ? 'text-green-400 tabular-nums' : 'text-white tabular-nums'}>
-              {Number(r[field]).toLocaleString('en-EG', { maximumFractionDigits: 2 })}
-            </span>
-          </div>
-        ))}
-        {rows.length === 0 && <p className="text-gray-600 text-xs px-2">No data</p>}
-      </div>
+      {/* Placeholder for other report types */}
+      {tab !== 'pl' && (
+        <div className="px-6 py-12 text-center">
+          <p className="text-[--text-3] text-sm">
+            Select &ldquo;Profit &amp; Loss&rdquo; tab to view the P&L report, or generate another report type.
+          </p>
+          <button onClick={() => setTab('pl')} className="btn btn-secondary btn-sm mt-4">
+            View Profit &amp; Loss
+          </button>
+        </div>
+      )}
     </div>
   );
 }

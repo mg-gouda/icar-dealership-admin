@@ -1,234 +1,217 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '../../../lib/useApi';
-import StatusBadge from '../../../components/StatusBadge';
-import SearchableCombobox from '../../../components/ui/SearchableCombobox';
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+const token = () => (typeof window !== 'undefined' ? localStorage.getItem('accessToken') ?? '' : '');
+const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
+const fmt = (n: number) => 'EGP ' + n.toLocaleString('en-EG', { maximumFractionDigits: 0 });
 
 interface Deal {
-  id: string; status: string; purchaseMethod: string; salePrice: number;
-  adminFee?: number; insuranceFee?: number; createdAt: string;
-  vehicle?: { make: string; model: string; year: number; price: number };
-  customer?: { name: string; phone?: string };
+  id: string; dealNumber?: string;
+  customer: { name: string };
+  vehicle: { make: string; model: string; year: number };
   salesRep?: { name: string };
-  location?: { name: string };
+  salePrice: number; adminFee?: number; insuranceFee?: number;
+  paymentMethod: string; purchaseMethod?: string;
+  status: string; createdAt: string;
 }
 
-const STATUS_OPTIONS = [
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'PENDING_FINANCE', label: 'Pending Finance' },
-  { value: 'APPROVED', label: 'Approved' },
-  { value: 'FINALIZED', label: 'Finalized' },
-  { value: 'CANCELLED', label: 'Cancelled' },
+const STATUS_TABS = [
+  { key: '',                label: 'All Deals' },
+  { key: 'DRAFT',          label: 'Draft' },
+  { key: 'PENDING_FINANCE',label: 'Pending Finance' },
+  { key: 'APPROVED',       label: 'Approved' },
+  { key: 'FINALIZED',      label: 'Finalized' },
+  { key: 'CANCELLED',      label: 'Cancelled' },
 ];
 
-const METHOD_OPTIONS = [
-  { value: 'CASH', label: 'Cash' },
-  { value: 'DEALERSHIP_INSTALLMENT', label: 'Dealership Installment' },
-  { value: 'BANK_FINANCING', label: 'Bank Financing' },
-];
-
-const KANBAN_COLUMNS: { status: string; label: string; color: string; bg: string; border: string }[] = [
-  { status: 'DRAFT',           label: 'Draft',           color: 'text-gray-400',   bg: 'bg-gray-500/10',   border: 'border-gray-500/30' },
-  { status: 'PENDING_FINANCE', label: 'Pending Finance', color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30' },
-  { status: 'APPROVED',        label: 'Approved',        color: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/30' },
-  { status: 'FINALIZED',       label: 'Finalized',       color: 'text-green-400',  bg: 'bg-green-500/10',  border: 'border-green-500/30' },
-  { status: 'CANCELLED',       label: 'Cancelled',       color: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/30' },
-];
-
-const METHOD_COLOR: Record<string, string> = {
-  CASH: 'bg-green-500/20 text-green-300',
-  DEALERSHIP_INSTALLMENT: 'bg-blue-500/20 text-blue-300',
-  BANK_FINANCING: 'bg-purple-500/20 text-purple-300',
-};
-
-function MethodBadge({ method }: { method: string }) {
-  const label = method === 'DEALERSHIP_INSTALLMENT' ? 'Installment'
-    : method === 'BANK_FINANCING' ? 'Bank' : 'Cash';
-  return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${METHOD_COLOR[method] ?? 'bg-gray-500/20 text-gray-400'}`}>
-      {label}
-    </span>
-  );
+function statusBadgeClass(s: string): string {
+  const map: Record<string, string> = {
+    DRAFT: 'badge-neutral', PENDING_FINANCE: 'badge-warning',
+    APPROVED: 'badge-success', FINALIZED: 'badge-success',
+    CANCELLED: 'badge-danger',
+  };
+  return map[s] ?? 'badge-neutral';
 }
 
-function DealCard({ deal }: { deal: Deal }) {
-  const router = useRouter();
-  const total = deal.salePrice + (deal.adminFee ?? 0) + (deal.insuranceFee ?? 0);
-  return (
-    <div
-      onClick={() => router.push(`/deals/${deal.id}`)}
-      className="bg-gray-900 border border-white/5 rounded-lg p-3 cursor-pointer hover:border-white/20 hover:bg-gray-800/80 transition space-y-2"
-    >
-      <p className="text-sm font-medium text-white leading-tight">{deal.customer?.name ?? '—'}</p>
-      {deal.vehicle && (
-        <p className="text-[11px] text-gray-400">
-          {deal.vehicle.year} {deal.vehicle.make} {deal.vehicle.model}
-        </p>
-      )}
-      <div className="flex items-center justify-between gap-1">
-        <MethodBadge method={deal.purchaseMethod} />
-        <span className="text-xs font-semibold text-white tabular-nums">
-          {total.toLocaleString('en-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 0 })}
-        </span>
-      </div>
-      {deal.salesRep && (
-        <p className="text-[11px] text-gray-500">{deal.salesRep.name}</p>
-      )}
-      <p className="text-[10px] text-gray-600">
-        {new Date(deal.createdAt).toLocaleDateString('en-EG', { day: 'numeric', month: 'short', year: 'numeric' })}
-      </p>
-    </div>
-  );
+function methodBadgeClass(m: string): string {
+  const map: Record<string, string> = {
+    BANK_FINANCING: 'badge-info', CASH: 'badge-success',
+    DEALERSHIP_INSTALLMENT: 'badge-purple',
+  };
+  return map[m] ?? 'badge-neutral';
 }
+
+function methodLabel(m: string): string {
+  const map: Record<string, string> = {
+    BANK_FINANCING: 'Bank Financing', CASH: 'Cash', DEALERSHIP_INSTALLMENT: 'Installment',
+  };
+  return map[m] ?? m.replace(/_/g, ' ');
+}
+
+const AVATAR_COLORS = ['var(--primary)', 'var(--success)', 'var(--warning)', 'var(--purple)', 'var(--orange)', 'var(--danger)'];
+function avatarColor(name: string) { const c = name.charCodeAt(0) + (name.charCodeAt(1) || 0); return AVATAR_COLORS[c % AVATAR_COLORS.length]; }
+function initials(name: string) { return name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase(); }
 
 export default function DealsPage() {
-  const [status, setStatus] = useState('');
-  const [method, setMethod] = useState('');
-  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState('');
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [counts, setCounts] = useState<Record<string, number>>({});
 
-  const { data: deals, loading, error } = useQuery<Deal[]>(
-    `/deals?${new URLSearchParams({ ...(status && { status }), ...(method && { purchaseMethod: method }), limit: '200' })}`,
-    [status, method],
-  );
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams({ limit: '200' });
+      if (activeTab) qs.set('status', activeTab);
+      const res = await fetch(`${API}/deals?${qs}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error('Failed');
+      const json = await res.json();
+      setDeals(Array.isArray(json) ? json : (json.data ?? []));
+    } catch { setDeals([]); }
+    finally { setLoading(false); }
+  }, [activeTab]);
 
-  const total = (d: Deal) => d.salePrice + (d.adminFee ?? 0) + (d.insuranceFee ?? 0);
+  // Load all to get counts
+  const loadCounts = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/deals?limit=500`, { headers: authHeaders() });
+      if (!res.ok) return;
+      const json = await res.json();
+      const all: Deal[] = Array.isArray(json) ? json : (json.data ?? []);
+      const c: Record<string, number> = {};
+      all.forEach((d) => { c[d.status] = (c[d.status] ?? 0) + 1; });
+      setCounts(c);
+    } catch { /* non-critical */ }
+  }, []);
 
-  // Group by status for kanban (uses all deals, ignores status filter)
-  const { data: allDeals } = useQuery<Deal[]>(`/deals?limit=200`, []);
-  const byStatus = KANBAN_COLUMNS.reduce<Record<string, Deal[]>>((acc, col) => {
-    acc[col.status] = (allDeals ?? []).filter((d) => d.status === col.status);
-    return acc;
-  }, {});
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadCounts(); }, [loadCounts]);
+
+  const totalValue = deals.reduce((s, d) => s + Number(d.salePrice ?? 0), 0);
+  const thisMonth = new Date().toLocaleString('en-EG', { month: 'long', year: 'numeric' });
+
+  function dealNumber(d: Deal): string {
+    if (d.dealNumber) return `#${d.dealNumber}`;
+    return `#${d.id.slice(-4).toUpperCase()}`;
+  }
+
+  const method = (d: Deal) => d.paymentMethod ?? d.purchaseMethod ?? '';
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div>
+      {/* Page header */}
+      <div className="page-header">
         <div>
-          <h1 className="text-xl font-semibold text-white">Deals</h1>
-          <p className="text-xs text-gray-500 mt-0.5">Sales pipeline</p>
+          <h1 className="page-title">Deals Pipeline</h1>
+          <p className="page-subtitle">
+            {Object.values(counts).reduce((a, b) => a + b, 0)} deals this month · {fmt(totalValue)} total value
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          {/* View toggle */}
-          <div className="flex rounded-lg border border-white/10 overflow-hidden">
-            <button
-              onClick={() => setViewMode('table')}
-              className={`px-3 py-1.5 text-xs font-medium transition ${viewMode === 'table' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-              Table
-            </button>
-            <button
-              onClick={() => setViewMode('kanban')}
-              className={`px-3 py-1.5 text-xs font-medium transition ${viewMode === 'kanban' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-              Kanban
-            </button>
-          </div>
-          <Link href="/deals/new" className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition">
-            + New Deal
-          </Link>
+        <Link href="/deals/new" className="btn btn-primary">+ New Deal</Link>
+      </div>
+
+      {/* Filter tabs */}
+      <div style={{ padding: '0 1.5rem' }}>
+        <div className="tabs" style={{ marginTop: '1rem' }}>
+          {STATUS_TABS.map((t) => {
+            const count = t.key ? (counts[t.key] ?? 0) : Object.values(counts).reduce((a, b) => a + b, 0);
+            return (
+              <button
+                key={t.key}
+                className={`tab ${activeTab === t.key ? 'active' : ''}`}
+                onClick={() => setActiveTab(t.key)}
+              >
+                {t.label}{count > 0 ? ` (${count})` : ''}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {viewMode === 'table' && (
-        <>
-          <div className="flex gap-3 mb-5">
-            <SearchableCombobox
-              options={STATUS_OPTIONS}
-              value={status}
-              onChange={setStatus}
-              placeholder="All Statuses"
-              clearable
-              clearLabel="All Statuses"
-              className="w-44"
-            />
-            <SearchableCombobox
-              options={METHOD_OPTIONS}
-              value={method}
-              onChange={setMethod}
-              placeholder="All Methods"
-              clearable
-              clearLabel="All Methods"
-              className="w-52"
-            />
-          </div>
-
-          {loading && <p className="text-gray-500 text-sm">Loading…</p>}
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-
-          {!loading && !error && (
-            <div className="rounded-xl border border-white/5 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-900 text-gray-400 text-xs">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-medium">Customer</th>
-                    <th className="text-left px-4 py-3 font-medium">Vehicle</th>
-                    <th className="text-left px-4 py-3 font-medium">Method</th>
-                    <th className="text-left px-4 py-3 font-medium">Sales Rep</th>
-                    <th className="text-right px-4 py-3 font-medium">Total</th>
-                    <th className="text-left px-4 py-3 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {(deals ?? []).map((d) => (
-                    <tr key={d.id}
-                      onClick={() => router.push(`/deals/${d.id}`)}
-                      className="hover:bg-white/5 transition cursor-pointer">
-                      <td className="px-4 py-3 text-white font-medium">
-                        {d.customer?.name ?? '—'}
-                        {d.customer?.phone && <div className="text-xs text-gray-500">{d.customer.phone}</div>}
+      {/* Table */}
+      <div className="page-body">
+        {loading ? (
+          <p style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>Loading…</p>
+        ) : (
+          <div className="card" style={{ overflow: 'hidden' }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Deal #</th>
+                  <th>Customer</th>
+                  <th>Vehicle</th>
+                  <th>Sales Rep</th>
+                  <th style={{ textAlign: 'right' }}>Sale Price</th>
+                  <th>Payment Method</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deals.map((d) => {
+                  const custName = d.customer?.name ?? '—';
+                  const m = method(d);
+                  return (
+                    <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => router.push(`/deals/${d.id}`)}>
+                      <td>
+                        <span style={{ color: 'var(--primary)', fontWeight: 500 }}>{dealNumber(d)}</span>
                       </td>
-                      <td className="px-4 py-3 text-gray-300">
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span className="avatar" style={{ width: '1.75rem', height: '1.75rem', background: avatarColor(custName), color: '#fff', fontSize: '0.625rem', flexShrink: 0 }}>
+                            {initials(custName)}
+                          </span>
+                          <span style={{ fontWeight: 500 }}>{custName}</span>
+                        </div>
+                      </td>
+                      <td style={{ color: 'var(--text-2)' }}>
                         {d.vehicle ? `${d.vehicle.year} ${d.vehicle.make} ${d.vehicle.model}` : '—'}
                       </td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">{d.purchaseMethod?.replace(/_/g, ' ')}</td>
-                      <td className="px-4 py-3 text-gray-400">{d.salesRep?.name ?? '—'}</td>
-                      <td className="px-4 py-3 text-right text-white">
-                        {total(d).toLocaleString('en-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 0 })}
+                      <td style={{ color: 'var(--text-2)' }}>{d.salesRep?.name ?? '—'}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--primary)' }}>
+                        {fmt(Number(d.salePrice ?? 0))}
                       </td>
-                      <td className="px-4 py-3"><StatusBadge status={d.status} /></td>
+                      <td>
+                        {m ? <span className={`badge ${methodBadgeClass(m)}`}>{methodLabel(m)}</span> : '—'}
+                      </td>
+                      <td>
+                        <span className={`badge ${statusBadgeClass(d.status)}`}>
+                          {d.status.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td style={{ color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
+                        {new Date(d.createdAt).toLocaleDateString('en-EG', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </td>
+                      <td>
+                        <Link
+                          href={`/deals/${d.id}`}
+                          style={{ color: 'var(--primary)', fontWeight: 500, fontSize: '0.75rem', textDecoration: 'none' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Open →
+                        </Link>
+                      </td>
                     </tr>
-                  ))}
-                  {deals?.length === 0 && (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500 text-sm">No deals found.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      )}
-
-      {viewMode === 'kanban' && (
-        <>
-          {loading && <p className="text-gray-500 text-sm">Loading…</p>}
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-          {!loading && !error && (
-            <div className="flex gap-3 overflow-x-auto pb-4" style={{ minHeight: '60vh' }}>
-              {KANBAN_COLUMNS.map((col) => {
-                const cards = byStatus[col.status] ?? [];
-                return (
-                  <div key={col.status} className={`flex-shrink-0 w-64 rounded-xl border ${col.border} ${col.bg} flex flex-col`}>
-                    <div className={`flex items-center justify-between px-3 py-2.5 border-b ${col.border}`}>
-                      <span className={`text-xs font-semibold uppercase tracking-wide ${col.color}`}>{col.label}</span>
-                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${col.bg} ${col.color}`}>{cards.length}</span>
-                    </div>
-                    <div className="flex flex-col gap-2 p-2 overflow-y-auto flex-1">
-                      {cards.map((deal) => <DealCard key={deal.id} deal={deal} />)}
-                      {cards.length === 0 && (
-                        <p className="text-xs text-gray-600 text-center mt-4">No deals</p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
+                  );
+                })}
+                {deals.length === 0 && (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-3)' }}>
+                      No deals found{activeTab ? ` in "${activeTab.replace(/_/g, ' ')}"` : ''}.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

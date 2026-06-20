@@ -159,7 +159,16 @@ export default function LoginPage() {
                     <span className="text-[11px]" style={{ color: 'oklch(1 0 0 / 0.45)' }}>Remember me</span>
                   </label>
                   <button type="button" className="text-[11px] transition"
-                    style={{ color: 'oklch(0.72 0.18 265)' }}>
+                    style={{ color: 'oklch(0.72 0.18 265)' }}
+                    onClick={async () => {
+                      if (!email) { setError('Enter your email first.'); return; }
+                      setLoading(true); setError('');
+                      try {
+                        await post('/auth/forgot-password', { email });
+                        setError('If that email exists, a reset link was sent.');
+                      } catch { setError('Could not send reset link. Try again.'); }
+                      finally { setLoading(false); }
+                    }}>
                     Forgot password?
                   </button>
                 </div>
@@ -206,8 +215,8 @@ export default function LoginPage() {
                   {loading ? 'Verifying…' : 'Verify Code'}
                 </button>
                 <p className="text-center text-[11px]" style={{ color: 'oklch(1 0 0 / 0.35)' }}>
-                  Didn't receive a code?{' '}
-                  <button type="button" className="underline" style={{ color: 'oklch(0.72 0.18 265)' }}>Resend</button>
+                  Lost access to your authenticator?{' '}
+                  <span style={{ color: 'oklch(0.72 0.18 265)' }}>Contact your admin.</span>
                 </p>
                 <p className="text-center text-[10px] rounded-md px-2 py-1.5"
                   style={{ background: 'oklch(0.68 0.16 72 / 0.12)', color: 'oklch(0.85 0.1 72)' }}>

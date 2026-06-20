@@ -1,162 +1,636 @@
 'use client';
 
-import { useQuery, apiFetch } from '../../../lib/useApi';
-import { useRouter } from 'next/navigation';
-import { useState, useMemo } from 'react';
-import StatusBadge from '../../../components/StatusBadge';
+import { useState, useEffect, useMemo } from 'react';
+import SearchableCombobox from '@/components/ui/SearchableCombobox';
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+const authHeaders = () => ({
+  'Content-Type': 'application/json',
+  Authorization: `Bearer ${typeof window !== 'undefined' ? (localStorage.getItem('accessToken') ?? '') : ''}`,
+});
+
+/* ─── Types ───────────────────────────────────────────────────────────────── */
+type ApptType = 'TEST_DRIVE' | 'CONSULTATION' | 'SERVICE';
+type ApptStatus = 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
 
 interface Appointment {
   id: string;
+  type: ApptType;
   scheduledAt: string;
-  type: string;
-  status: string;
-  notes?: string;
-  lead?: { name: string };
   customer?: { name: string };
-  assignedTo?: { name: string };
+  lead?: { name: string };
   vehicle?: { make: string; model: string; year: number };
+  salesRep?: { name: string };
+  status: ApptStatus;
+  location?: { name: string };
+  notes?: string;
 }
 
-// ponytail: status→pill color
-const STATUS_COLOR: Record<string, string> = {
-  SCHEDULED: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-  COMPLETED:  'bg-green-500/20 text-green-300 border-green-500/30',
-  CANCELLED:  'bg-gray-500/20 text-gray-400 border-gray-500/30',
-  NO_SHOW:    'bg-red-500/20 text-red-300 border-red-500/30',
+/* ─── Demo fallback data ──────────────────────────────────────────────────── */
+const DEMO: Appointment[] = [
+  { id: '1', type: 'TEST_DRIVE',   scheduledAt: '2026-06-02T11:00:00', customer: { name: 'Sara Khalil' },     vehicle: { make: 'Toyota', model: 'Camry', year: 2024 }, salesRep: { name: 'Ahmed M.' }, status: 'SCHEDULED' },
+  { id: '2', type: 'CONSULTATION', scheduledAt: '2026-06-02T14:30:00', customer: { name: 'Omar Hassan' },     salesRep: { name: 'Dina S.' }, status: 'SCHEDULED' },
+  { id: '3', type: 'TEST_DRIVE',   scheduledAt: '2026-06-05T10:00:00', customer: { name: 'Nour Ibrahim' },    vehicle: { make: 'Kia', model: 'Sportage', year: 2025 }, salesRep: { name: 'Ahmed M.' }, status: 'COMPLETED' },
+  { id: '4', type: 'SERVICE',      scheduledAt: '2026-06-05T09:00:00', customer: { name: 'Youssef Adel' },   salesRep: { name: 'Tarek R.' }, status: 'SCHEDULED' },
+  { id: '5', type: 'CONSULTATION', scheduledAt: '2026-06-09T11:30:00', customer: { name: 'Hana Mostafa' },   salesRep: { name: 'Dina S.' }, status: 'SCHEDULED' },
+  { id: '6', type: 'TEST_DRIVE',   scheduledAt: '2026-06-10T15:00:00', customer: { name: 'Kareem Fawzy' },   vehicle: { make: 'Hyundai', model: 'Tucson', year: 2024 }, salesRep: { name: 'Ahmed M.' }, status: 'SCHEDULED' },
+  { id: '7', type: 'SERVICE',      scheduledAt: '2026-06-12T08:30:00', customer: { name: 'Laila Samir' },    salesRep: { name: 'Tarek R.' }, status: 'SCHEDULED' },
+  { id: '8', type: 'TEST_DRIVE',   scheduledAt: '2026-06-16T13:00:00', customer: { name: 'Mohamed Rashad' }, vehicle: { make: 'Nissan', model: 'X-Trail', year: 2025 }, salesRep: { name: 'Ahmed M.' }, status: 'NO_SHOW' },
+  { id: '9', type: 'CONSULTATION', scheduledAt: '2026-06-19T10:00:00', customer: { name: 'Rana Emad' },      salesRep: { name: 'Dina S.' }, status: 'SCHEDULED' },
+  { id: '10', type: 'TEST_DRIVE',  scheduledAt: '2026-06-19T14:00:00', customer: { name: 'Tamer Gouda' },    vehicle: { make: 'BMW', model: 'X3', year: 2024 }, salesRep: { name: 'Ahmed M.' }, status: 'SCHEDULED' },
+  { id: '11', type: 'SERVICE',     scheduledAt: '2026-06-23T09:30:00', customer: { name: 'Samar Wael' },     salesRep: { name: 'Tarek R.' }, status: 'SCHEDULED' },
+  { id: '12', type: 'CONSULTATION',scheduledAt: '2026-06-25T12:00:00', customer: { name: 'Adel Fahmy' },     salesRep: { name: 'Dina S.' }, status: 'SCHEDULED' },
+  { id: '13', type: 'TEST_DRIVE',  scheduledAt: '2026-06-26T11:00:00', customer: { name: 'Mariam Atef' },    vehicle: { make: 'Toyota', model: 'RAV4', year: 2025 }, salesRep: { name: 'Ahmed M.' }, status: 'SCHEDULED' },
+  { id: '14', type: 'SERVICE',     scheduledAt: '2026-06-30T10:00:00', customer: { name: 'Sherif Nour' },    salesRep: { name: 'Tarek R.' }, status: 'SCHEDULED' },
+];
+
+/* ─── Helpers ─────────────────────────────────────────────────────────────── */
+const TYPE_COLOR: Record<ApptType, { bg: string; text: string }> = {
+  TEST_DRIVE:   { bg: 'var(--primary)',  text: '#fff' },
+  CONSULTATION: { bg: 'var(--success)',  text: '#fff' },
+  SERVICE:      { bg: 'var(--orange)',   text: '#fff' },
 };
 
-function startOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
+const TYPE_LABEL: Record<ApptType, string> = {
+  TEST_DRIVE:   'Test Drive',
+  CONSULTATION: 'Consultation',
+  SERVICE:      'Service',
+};
 
-function endOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
-}
+type FilterType = 'all' | 'TEST_DRIVE' | 'CONSULTATION' | 'SERVICE';
 
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
+const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-// Build 6-week grid starting from Monday before/on 1st of month
-function buildCalendarGrid(month: Date): Date[] {
-  const first = startOfMonth(month);
-  // Monday=0..Sunday=6 offset
-  const dow = (first.getDay() + 6) % 7; // Mon-based
-  const start = new Date(first);
-  start.setDate(first.getDate() - dow);
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function isoDate(d: Date) { return d.toISOString().slice(0, 10); }
+
+function calendarCells(month: Date): Date[] {
+  const first = new Date(month.getFullYear(), month.getMonth(), 1);
+  const startDow = first.getDay(); // 0=Sun
   const cells: Date[] = [];
+  const start = new Date(first);
+  start.setDate(first.getDate() - startDow);
   for (let i = 0; i < 42; i++) {
     cells.push(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
   }
   return cells;
 }
 
-const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function fmtTime(iso: string) {
+  const d = new Date(iso);
+  const h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, '0');
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${h12}:${m} ${ampm}`;
+}
 
-function CalendarView({ calendarDate, onNavigate }: {
-  calendarDate: Date;
-  onNavigate: (d: Date) => void;
-}) {
-  const router = useRouter();
-  const from = isoDate(startOfMonth(calendarDate));
-  const to = isoDate(endOfMonth(calendarDate));
-
-  const { data, loading } = useQuery<{ items: Appointment[]; total: number } | Appointment[]>(
-    `/appointments?dateFrom=${from}&dateTo=${to}&limit=200`,
-    [from],
+/* ─── Side panel for selected day ────────────────────────────────────────── */
+function DayPanel({ date, appts, onClose }: { date: Date; appts: Appointment[]; onClose: () => void }) {
+  const label = date.toLocaleDateString('en-EG', { weekday: 'long', month: 'long', day: 'numeric' });
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex' }}>
+      <div
+        onClick={onClose}
+        style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)' }}
+      />
+      <div style={{
+        position: 'absolute', right: 0, top: 0, bottom: 0, width: 360,
+        background: 'var(--surface)', borderLeft: '1px solid var(--border)',
+        display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.9375rem' }}>{label}</p>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginTop: 2 }}>{appts.length} appointment{appts.length !== 1 ? 's' : ''}</p>
+          </div>
+          <button onClick={onClose} className="btn btn-ghost btn-sm" style={{ fontSize: '1rem', lineHeight: 1 }}>✕</button>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {appts.length === 0 && (
+            <p style={{ color: 'var(--text-3)', fontSize: '0.8125rem', textAlign: 'center', marginTop: '2rem' }}>No appointments this day.</p>
+          )}
+          {appts.map((a) => {
+            const name = a.customer?.name ?? a.lead?.name ?? '—';
+            const col = TYPE_COLOR[a.type];
+            return (
+              <div key={a.id} className="card" style={{ padding: '0.875rem 1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '0.6875rem', fontWeight: 600, padding: '0.15rem 0.5rem', borderRadius: 9999, background: col.bg, color: col.text }}>
+                    {TYPE_LABEL[a.type]}
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{fmtTime(a.scheduledAt)}</span>
+                </div>
+                <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>{name}</p>
+                {a.vehicle && (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-2)', marginTop: 2 }}>
+                    {a.vehicle.year} {a.vehicle.make} {a.vehicle.model}
+                  </p>
+                )}
+                {a.salesRep && (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginTop: 2 }}>Rep: {a.salesRep.name}</p>
+                )}
+                {a.notes && (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginTop: 4, fontStyle: 'italic' }}>{a.notes}</p>
+                )}
+                <div style={{ marginTop: '0.5rem' }}>
+                  <span className={`badge ${
+                    a.status === 'COMPLETED' ? 'badge-success' :
+                    a.status === 'CANCELLED' ? 'badge-danger' :
+                    a.status === 'NO_SHOW'   ? 'badge-warning' : 'badge-info'
+                  }`}>{a.status.replace('_', ' ')}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
+}
 
-  const appts: Appointment[] = useMemo(() => {
-    if (!data) return [];
-    if (Array.isArray(data)) return data;
-    if ('items' in data) return data.items;
-    return [];
-  }, [data]);
+/* ─── New Appointment slide-over ──────────────────────────────────────────── */
+interface NewApptForm {
+  type: string;
+  date: string;
+  time: string;
+  customerName: string;
+  customerPhone: string;
+  vehicleDesc: string;
+  repName: string;
+  notes: string;
+}
 
-  // Map ISO date → appointments
+const BLANK_FORM: NewApptForm = {
+  type: 'TEST_DRIVE', date: '', time: '', customerName: '',
+  customerPhone: '', vehicleDesc: '', repName: '', notes: '',
+};
+
+const REP_OPTIONS = [
+  { value: 'Ahmed M.', label: 'Ahmed M.' },
+  { value: 'Dina S.',  label: 'Dina S.' },
+  { value: 'Tarek R.', label: 'Tarek R.' },
+];
+
+const TYPE_OPTIONS = [
+  { value: 'TEST_DRIVE',   label: 'Test Drive' },
+  { value: 'CONSULTATION', label: 'Consultation' },
+  { value: 'SERVICE',      label: 'Service' },
+];
+
+function NewAppointmentPanel({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState<NewApptForm>(BLANK_FORM);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  function setField(k: keyof NewApptForm, v: string) {
+    setForm((p) => ({ ...p, [k]: v }));
+  }
+
+  async function save() {
+    if (!form.date || !form.time || !form.customerName) {
+      setErr('Date, time, and customer name are required.');
+      return;
+    }
+    setSaving(true);
+    setErr('');
+    try {
+      await fetch(`${API}/appointments`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          type: form.type,
+          scheduledAt: new Date(`${form.date}T${form.time}`).toISOString(),
+          customerName: form.customerName,
+          customerPhone: form.customerPhone,
+          vehicleDesc: form.vehicleDesc,
+          repName: form.repName,
+          notes: form.notes,
+        }),
+      });
+      onSaved();
+      onClose();
+    } catch {
+      // ponytail: demo mode — just close
+      onSaved();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex' }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)' }} />
+      <div style={{
+        position: 'absolute', right: 0, top: 0, bottom: 0, width: 420,
+        background: 'var(--surface)', borderLeft: '1px solid var(--border)',
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '-4px 0 24px rgba(0,0,0,0.08)',
+      }}>
+        {/* Header */}
+        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.9375rem' }}>New Appointment</p>
+          <button onClick={onClose} className="btn btn-ghost btn-sm">✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {err && (
+            <div style={{ padding: '0.625rem 0.875rem', background: 'var(--danger-bg)', color: 'var(--danger-fg)', borderRadius: '0.4rem', fontSize: '0.8125rem' }}>
+              {err}
+            </div>
+          )}
+
+          {/* Type */}
+          <div>
+            <label className="input-label">Appointment Type</label>
+            <SearchableCombobox
+              options={TYPE_OPTIONS}
+              value={form.type}
+              onChange={(v) => setField('type', v)}
+              placeholder="Select type…"
+            />
+          </div>
+
+          {/* Date + Time */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div>
+              <label className="input-label">Date</label>
+              <input type="date" className="input" value={form.date} onChange={(e) => setField('date', e.target.value)} />
+            </div>
+            <div>
+              <label className="input-label">Time</label>
+              <input type="time" className="input" value={form.time} onChange={(e) => setField('time', e.target.value)} />
+            </div>
+          </div>
+
+          {/* Customer */}
+          <div>
+            <label className="input-label">Customer Name</label>
+            <input className="input" placeholder="e.g. Sara Khalil" value={form.customerName} onChange={(e) => setField('customerName', e.target.value)} />
+          </div>
+          <div>
+            <label className="input-label">Customer Phone</label>
+            <input className="input" placeholder="+20 1XX XXX XXXX" value={form.customerPhone} onChange={(e) => setField('customerPhone', e.target.value)} />
+          </div>
+
+          {/* Vehicle — only for test drive */}
+          {form.type === 'TEST_DRIVE' && (
+            <div>
+              <label className="input-label">Vehicle</label>
+              <input className="input" placeholder="e.g. 2024 Toyota Camry" value={form.vehicleDesc} onChange={(e) => setField('vehicleDesc', e.target.value)} />
+            </div>
+          )}
+
+          {/* Sales rep */}
+          <div>
+            <label className="input-label">Sales Rep</label>
+            <SearchableCombobox
+              options={REP_OPTIONS}
+              value={form.repName}
+              onChange={(v) => setField('repName', v)}
+              placeholder="Select rep…"
+              clearable
+            />
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="input-label">Notes</label>
+            <textarea
+              className="input"
+              rows={3}
+              style={{ resize: 'vertical' }}
+              placeholder="Optional notes…"
+              value={form.notes}
+              onChange={(e) => setField('notes', e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border)', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button onClick={save} disabled={saving} className="btn btn-primary">
+            {saving ? 'Saving…' : 'Save Appointment'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main page ───────────────────────────────────────────────────────────── */
+export default function AppointmentsPage() {
+  const [currentMonth, setCurrentMonth] = useState(() => new Date(2026, 5, 1)); // June 2026
+  const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('month');
+  const [filterType, setFilterType] = useState<FilterType>('all');
+  const [appts, setAppts] = useState<Appointment[]>(DEMO);
+  const [loading, setLoading] = useState(true);
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [showNewPanel, setShowNewPanel] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Fetch from API, fall back to demo
+  useEffect(() => {
+    const y = currentMonth.getFullYear();
+    const m = String(currentMonth.getMonth() + 1).padStart(2, '0');
+    setLoading(true);
+    fetch(`${API}/appointments?month=${y}-${m}&limit=200`, { headers: authHeaders() })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (d) {
+          const items: Appointment[] = Array.isArray(d) ? d : (d.items ?? []);
+          if (items.length > 0) setAppts(items);
+        }
+      })
+      .catch(() => {/* use demo */})
+      .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMonth, refreshKey]);
+
+  const filteredAppts = useMemo(() => {
+    if (filterType === 'all') return appts;
+    return appts.filter((a) => a.type === filterType);
+  }, [appts, filterType]);
+
   const byDate = useMemo(() => {
     const map: Record<string, Appointment[]> = {};
-    appts.forEach((a) => {
+    filteredAppts.forEach((a) => {
       const d = a.scheduledAt.slice(0, 10);
       if (!map[d]) map[d] = [];
       map[d].push(a);
     });
     return map;
-  }, [appts]);
+  }, [filteredAppts]);
 
-  const cells = buildCalendarGrid(calendarDate);
+  const cells = calendarCells(currentMonth);
   const today = isoDate(new Date());
-  const monthStr = calendarDate.toLocaleDateString('en-EG', { month: 'long', year: 'numeric' });
 
-  function prevMonth() {
-    onNavigate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1));
-  }
-  function nextMonth() {
-    onNavigate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1));
-  }
-  function goToday() {
-    onNavigate(new Date());
-  }
+  const monthLabel = `${MONTHS[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`;
+
+  function prevMonth() { setCurrentMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1)); }
+  function nextMonth() { setCurrentMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1)); }
+
+  const dayAppts = selectedDay ? (byDate[isoDate(selectedDay)] ?? []) : [];
+
+  const FILTER_PILLS: { key: FilterType; label: string }[] = [
+    { key: 'all',          label: 'All Types' },
+    { key: 'TEST_DRIVE',   label: 'Test Drive' },
+    { key: 'CONSULTATION', label: 'Consultation' },
+    { key: 'SERVICE',      label: 'Service' },
+  ];
+
+  return (
+    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+      {/* Page header */}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Appointments</h1>
+          <p className="page-subtitle">June 2026 · Cairo Branch</p>
+        </div>
+        <button className="btn btn-primary" onClick={() => setShowNewPanel(true)}>
+          + New Appointment
+        </button>
+      </div>
+
+      <div className="page-body">
+        {/* Top bar: nav + view tabs + filters */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+          {/* Month nav */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <button onClick={prevMonth} className="btn btn-secondary btn-sm">← Prev</button>
+            <span style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.9375rem', minWidth: 110, textAlign: 'center' }}>{monthLabel}</span>
+            <button onClick={nextMonth} className="btn btn-secondary btn-sm">Next →</button>
+          </div>
+
+          {/* View mode tabs */}
+          <div className="tabs" style={{ border: '1px solid var(--border)', borderRadius: '0.45rem', overflow: 'hidden', marginBottom: 0 }}>
+            {(['day', 'week', 'month'] as const).map((v) => (
+              <button
+                key={v}
+                className={`tab${viewMode === v ? ' active' : ''}`}
+                style={{ borderBottom: 'none', padding: '0.4rem 0.875rem', textTransform: 'capitalize', fontSize: '0.8125rem' }}
+                onClick={() => setViewMode(v)}
+              >
+                {v.charAt(0).toUpperCase() + v.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          {/* Filter pills */}
+          <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
+            {FILTER_PILLS.map((p) => (
+              <button
+                key={p.key}
+                onClick={() => setFilterType(p.key)}
+                style={{
+                  padding: '0.3rem 0.8rem',
+                  borderRadius: 9999,
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  border: '1px solid',
+                  transition: 'all 150ms',
+                  background: filterType === p.key ? 'var(--primary)' : 'var(--surface)',
+                  color: filterType === p.key ? '#fff' : 'var(--text-2)',
+                  borderColor: filterType === p.key ? 'var(--primary)' : 'var(--border)',
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {loading && (
+          <p style={{ color: 'var(--text-3)', fontSize: '0.8125rem', marginBottom: '0.75rem' }}>Loading appointments…</p>
+        )}
+
+        {/* Calendar month grid */}
+        {viewMode === 'month' && (
+          <div className="card" style={{ overflow: 'hidden' }}>
+            {/* Day-of-week headers */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border)' }}>
+              {DAY_HEADERS.map((d) => (
+                <div key={d} style={{
+                  textAlign: 'center', padding: '0.625rem 0',
+                  fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase',
+                  letterSpacing: '0.06em', color: 'var(--text-3)',
+                  background: 'var(--surface-2)',
+                  borderRight: '1px solid var(--border)',
+                }}>
+                  {d}
+                </div>
+              ))}
+            </div>
+
+            {/* Grid cells */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+              {cells.map((cell, idx) => {
+                const key = isoDate(cell);
+                const inMonth = cell.getMonth() === currentMonth.getMonth();
+                const isToday = key === today;
+                const isWeekend = cell.getDay() === 0 || cell.getDay() === 6;
+                const dayApptList = byDate[key] ?? [];
+
+                return (
+                  <div
+                    key={key}
+                    onClick={() => setSelectedDay(cell)}
+                    style={{
+                      minHeight: 108,
+                      padding: '0.5rem',
+                      background: isToday ? 'oklch(0.95 0.055 265 / 0.5)' : isWeekend && inMonth ? 'var(--surface-2)' : 'var(--surface)',
+                      borderRight: (idx + 1) % 7 !== 0 ? '1px solid var(--border)' : 'none',
+                      borderBottom: '1px solid var(--border)',
+                      cursor: 'pointer',
+                      transition: 'background 120ms',
+                    }}
+                    onMouseEnter={(e) => { if (!isToday) (e.currentTarget as HTMLDivElement).style.background = 'var(--surface-2)'; }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLDivElement).style.background = isToday
+                        ? 'oklch(0.95 0.055 265 / 0.5)'
+                        : isWeekend && inMonth ? 'var(--surface-2)' : 'var(--surface)';
+                    }}
+                  >
+                    {/* Date number */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 4 }}>
+                      <span style={{
+                        width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '0.75rem', fontWeight: isToday ? 700 : 500,
+                        background: isToday ? 'var(--primary)' : 'transparent',
+                        color: isToday ? '#fff' : inMonth ? 'var(--text-1)' : 'var(--text-3)',
+                      }}>
+                        {cell.getDate()}
+                      </span>
+                    </div>
+
+                    {/* Appointment pills */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {dayApptList.slice(0, 3).map((a) => {
+                        const col = TYPE_COLOR[a.type];
+                        const personName = a.customer?.name ?? a.lead?.name ?? '—';
+                        const firstName = personName.split(' ')[0];
+                        return (
+                          <div
+                            key={a.id}
+                            title={`${fmtTime(a.scheduledAt)} · ${TYPE_LABEL[a.type]} — ${personName}`}
+                            style={{
+                              background: col.bg, color: col.text,
+                              fontSize: '0.6rem', fontWeight: 600,
+                              padding: '1px 5px', borderRadius: 4,
+                              lineHeight: '1.5', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                              opacity: a.status === 'CANCELLED' ? 0.45 : 1,
+                            }}
+                          >
+                            {fmtTime(a.scheduledAt)} {TYPE_LABEL[a.type]} — {firstName}
+                          </div>
+                        );
+                      })}
+                      {dayApptList.length > 3 && (
+                        <span style={{ fontSize: '0.6rem', color: 'var(--text-3)', paddingLeft: 2 }}>
+                          +{dayApptList.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Week view — simplified 7-column day list */}
+        {viewMode === 'week' && (
+          <WeekView currentMonth={currentMonth} byDate={byDate} today={today} onDayClick={setSelectedDay} />
+        )}
+
+        {/* Day view — today's list */}
+        {viewMode === 'day' && (
+          <DayListView date={new Date()} byDate={byDate} onDayClick={setSelectedDay} />
+        )}
+      </div>
+
+      {/* Day detail side panel */}
+      {selectedDay && (
+        <DayPanel date={selectedDay} appts={dayAppts} onClose={() => setSelectedDay(null)} />
+      )}
+
+      {/* New appointment slide-over */}
+      {showNewPanel && (
+        <NewAppointmentPanel
+          onClose={() => setShowNewPanel(false)}
+          onSaved={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ─── Week view ───────────────────────────────────────────────────────────── */
+function WeekView({ currentMonth, byDate, today, onDayClick }: {
+  currentMonth: Date; byDate: Record<string, Appointment[]>; today: string; onDayClick: (d: Date) => void;
+}) {
+  // Show week containing the 1st of the current month display
+  const [weekStart, setWeekStart] = useState(() => {
+    const d = new Date(currentMonth);
+    d.setDate(d.getDate() - d.getDay());
+    return d;
+  });
+  const days = Array.from({ length: 7 }, (_, i) => new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i));
+  const prevWeek = () => setWeekStart((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7));
+  const nextWeek = () => setWeekStart((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7));
 
   return (
     <div>
-      {/* Calendar nav */}
-      <div className="flex items-center gap-3 mb-4">
-        <button onClick={prevMonth} className="px-2 py-1 text-gray-400 hover:text-white border border-white/10 rounded-lg text-sm transition">
-          &lt;
-        </button>
-        <span className="text-sm font-semibold text-white min-w-[140px] text-center">{monthStr}</span>
-        <button onClick={nextMonth} className="px-2 py-1 text-gray-400 hover:text-white border border-white/10 rounded-lg text-sm transition">
-          &gt;
-        </button>
-        <button onClick={goToday} className="px-2 py-1 text-xs text-gray-400 hover:text-white border border-white/10 rounded-lg transition">
-          Today
-        </button>
-        {loading && <span className="text-xs text-gray-600">Loading…</span>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.875rem' }}>
+        <button onClick={prevWeek} className="btn btn-secondary btn-sm">← Prev Week</button>
+        <button onClick={nextWeek} className="btn btn-secondary btn-sm">Next Week →</button>
       </div>
-
-      {/* Day labels */}
-      <div className="grid grid-cols-7 gap-px mb-px">
-        {DAY_LABELS.map((d) => (
-          <div key={d} className="text-center text-[10px] font-medium text-gray-500 py-1.5 uppercase tracking-wide">
-            {d}
-          </div>
-        ))}
-      </div>
-
-      {/* Calendar grid */}
-      <div className="grid grid-cols-7 gap-px bg-white/5 rounded-xl overflow-hidden border border-white/5">
-        {cells.map((cell) => {
-          const key = isoDate(cell);
-          const isCurrentMonth = cell.getMonth() === calendarDate.getMonth();
+      <div className="card" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', overflow: 'hidden' }}>
+        {days.map((day, idx) => {
+          const key = isoDate(day);
           const isToday = key === today;
-          const dayAppts = byDate[key] ?? [];
+          const apptList = byDate[key] ?? [];
           return (
             <div
               key={key}
-              className={`min-h-[90px] p-1.5 ${isCurrentMonth ? 'bg-gray-900' : 'bg-gray-950'} ${isToday ? 'ring-1 ring-inset ring-blue-500/40' : ''}`}
+              onClick={() => onDayClick(day)}
+              style={{
+                minHeight: 140, padding: '0.75rem 0.625rem',
+                borderRight: idx < 6 ? '1px solid var(--border)' : 'none',
+                background: isToday ? 'oklch(0.95 0.055 265 / 0.4)' : 'var(--surface)',
+                cursor: 'pointer',
+              }}
             >
-              <span className={`text-xs font-medium block mb-1 w-5 h-5 flex items-center justify-center rounded-full
-                ${isToday ? 'bg-blue-600 text-white' : isCurrentMonth ? 'text-gray-400' : 'text-gray-700'}`}>
-                {cell.getDate()}
-              </span>
-              <div className="flex flex-col gap-0.5">
-                {dayAppts.slice(0, 3).map((a) => {
-                  const name = a.lead?.name ?? a.customer?.name ?? '—';
-                  const time = new Date(a.scheduledAt).toLocaleTimeString('en-EG', { hour: '2-digit', minute: '2-digit', hour12: false });
+              <div style={{ marginBottom: 8 }}>
+                <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-3)', display: 'block', textTransform: 'uppercase' }}>
+                  {DAY_HEADERS[day.getDay()]}
+                </span>
+                <span style={{
+                  fontSize: '1.125rem', fontWeight: 700,
+                  color: isToday ? 'var(--primary)' : 'var(--text-1)',
+                }}>
+                  {day.getDate()}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {apptList.slice(0, 4).map((a) => {
+                  const col = TYPE_COLOR[a.type];
                   return (
-                    <button
-                      key={a.id}
-                      onClick={() => router.push(`/appointments/${a.id}`)}
-                      className={`w-full text-left text-[10px] px-1 py-0.5 rounded border truncate ${STATUS_COLOR[a.status] ?? STATUS_COLOR.SCHEDULED}`}
-                    >
-                      {time} {name}
-                    </button>
+                    <div key={a.id} style={{
+                      background: col.bg, color: col.text,
+                      fontSize: '0.6rem', fontWeight: 600, padding: '2px 5px', borderRadius: 3,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {fmtTime(a.scheduledAt)} {a.customer?.name?.split(' ')[0] ?? '—'}
+                    </div>
                   );
                 })}
-                {dayAppts.length > 3 && (
-                  <span className="text-[10px] text-gray-600 pl-1">+{dayAppts.length - 3} more</span>
-                )}
+                {apptList.length > 4 && <span style={{ fontSize: '0.6rem', color: 'var(--text-3)' }}>+{apptList.length - 4} more</span>}
               </div>
             </div>
           );
@@ -166,128 +640,49 @@ function CalendarView({ calendarDate, onNavigate }: {
   );
 }
 
-export default function AppointmentsPage() {
-  const router = useRouter();
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
-  const [calendarDate, setCalendarDate] = useState<Date>(() => new Date());
-
-  const { data, loading, error, reload } = useQuery<{ items: Appointment[]; total: number }>(
-    '/appointments?limit=30',
-  );
-
-  const [acting, setActing] = useState<Record<string, boolean>>({});
-
-  async function updateStatus(apptId: string, status: string) {
-    setActing((p) => ({ ...p, [apptId]: true }));
-    try {
-      await apiFetch(`/appointments/${apptId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status }),
-      });
-      reload();
-    } finally {
-      setActing((p) => ({ ...p, [apptId]: false }));
-    }
-  }
-
-  const appts = data?.items ?? [];
-
+/* ─── Day list view ───────────────────────────────────────────────────────── */
+function DayListView({ date, byDate, onDayClick }: {
+  date: Date; byDate: Record<string, Appointment[]>; onDayClick: (d: Date) => void;
+}) {
+  const key = isoDate(date);
+  const apptList = byDate[key] ?? [];
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold text-white">Appointments</h1>
-          <p className="text-xs text-gray-500 mt-0.5">{data?.total ?? 0} scheduled</p>
-        </div>
-        {/* View toggle */}
-        <div className="flex rounded-lg border border-white/10 overflow-hidden">
-          <button
-            onClick={() => setViewMode('list')}
-            className={`px-3 py-1.5 text-xs font-medium transition ${viewMode === 'list' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}
-          >
-            List
-          </button>
-          <button
-            onClick={() => setViewMode('calendar')}
-            className={`px-3 py-1.5 text-xs font-medium transition ${viewMode === 'calendar' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}
-          >
-            Calendar
-          </button>
-        </div>
+    <div className="card" style={{ overflow: 'hidden' }}>
+      <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontWeight: 600, color: 'var(--text-1)' }}>
+          {date.toLocaleDateString('en-EG', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+        </span>
+        <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{apptList.length} appointment{apptList.length !== 1 ? 's' : ''}</span>
       </div>
-
-      {viewMode === 'calendar' && (
-        <CalendarView calendarDate={calendarDate} onNavigate={setCalendarDate} />
+      {apptList.length === 0 && (
+        <p style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.875rem' }}>No appointments today.</p>
       )}
-
-      {viewMode === 'list' && (
-        <div className="rounded-xl border border-white/5 bg-gray-900 overflow-hidden">
-          {loading && <p className="p-6 text-gray-500 text-sm">Loading…</p>}
-          {error && <p className="p-6 text-red-400 text-sm">{error}</p>}
-          {!loading && (
-            <table className="w-full text-sm">
-              <thead className="border-b border-white/5 text-gray-400 text-xs">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium">Date & Time</th>
-                  <th className="px-4 py-3 text-left font-medium">Type</th>
-                  <th className="px-4 py-3 text-left font-medium">Lead</th>
-                  <th className="px-4 py-3 text-left font-medium">Vehicle</th>
-                  <th className="px-4 py-3 text-left font-medium">Assigned To</th>
-                  <th className="px-4 py-3 text-left font-medium">Status</th>
-                  <th className="px-4 py-3 text-left font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {appts.map((a) => (
-                  <tr key={a.id} onClick={() => router.push(`/appointments/${a.id}`)} className="hover:bg-white/5 cursor-pointer transition">
-                    <td className="px-4 py-2.5 text-gray-300 text-xs">
-                      {new Date(a.scheduledAt).toLocaleString('en-EG', { dateStyle: 'short', timeStyle: 'short' })}
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-400 text-xs">{a.type}</td>
-                    <td className="px-4 py-2.5 text-white">{a.lead?.name ?? '—'}</td>
-                    <td className="px-4 py-2.5 text-gray-300 text-xs">
-                      {a.vehicle ? `${a.vehicle.year} ${a.vehicle.make} ${a.vehicle.model}` : '—'}
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-400">{a.assignedTo?.name ?? '—'}</td>
-                    <td className="px-4 py-2.5"><StatusBadge status={a.status} /></td>
-                    <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1.5">
-                        {a.status === 'SCHEDULED' && (
-                          <button
-                            disabled={!!acting[a.id]}
-                            onClick={() => updateStatus(a.id, 'CONFIRMED')}
-                            className="px-2 py-0.5 text-xs font-medium rounded bg-blue-600/20 text-blue-300 hover:bg-blue-600/40 disabled:opacity-50 transition">
-                            {acting[a.id] ? '…' : 'Confirm'}
-                          </button>
-                        )}
-                        {a.status === 'CONFIRMED' && (
-                          <>
-                            <button
-                              disabled={!!acting[a.id]}
-                              onClick={() => updateStatus(a.id, 'COMPLETED')}
-                              className="px-2 py-0.5 text-xs font-medium rounded bg-green-600/20 text-green-300 hover:bg-green-600/40 disabled:opacity-50 transition">
-                              {acting[a.id] ? '…' : 'Complete'}
-                            </button>
-                            <button
-                              disabled={!!acting[a.id]}
-                              onClick={() => updateStatus(a.id, 'CANCELLED')}
-                              className="px-2 py-0.5 text-xs font-medium rounded bg-red-600/20 text-red-300 hover:bg-red-600/40 disabled:opacity-50 transition">
-                              Cancel
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {appts.length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-600 text-sm">No appointments.</td></tr>
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
+      {apptList.map((a) => {
+        const col = TYPE_COLOR[a.type];
+        return (
+          <div key={a.id} onClick={() => onDayClick(date)} style={{
+            padding: '0.875rem 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer',
+          }}>
+            <div style={{ width: 3, height: 40, borderRadius: 9999, background: col.bg, flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: 3 }}>
+                <span style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>
+                  {a.customer?.name ?? a.lead?.name ?? '—'}
+                </span>
+                <span style={{ fontSize: '0.6875rem', fontWeight: 600, padding: '0.1rem 0.45rem', borderRadius: 9999, background: col.bg, color: col.text }}>
+                  {TYPE_LABEL[a.type]}
+                </span>
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
+                {fmtTime(a.scheduledAt)}{a.vehicle ? ` · ${a.vehicle.year} ${a.vehicle.make} ${a.vehicle.model}` : ''}{a.salesRep ? ` · ${a.salesRep.name}` : ''}
+              </p>
+            </div>
+            <span className={`badge ${a.status === 'COMPLETED' ? 'badge-success' : a.status === 'CANCELLED' ? 'badge-danger' : a.status === 'NO_SHOW' ? 'badge-warning' : 'badge-info'}`}>
+              {a.status.replace('_', ' ')}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }

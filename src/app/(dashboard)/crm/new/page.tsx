@@ -8,16 +8,19 @@ import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 
 interface User { id: string; name: string; role: string; }
 interface Location { id: string; name: string; city?: string; }
-interface Vehicle { id: string; make: string; model: string; year: number; price: number; }
+interface Vehicle { id: string; make: string; model: string; year: number; }
 
 const SOURCES = [
   { value: 'WEBSITE', label: 'Website' },
   { value: 'PHONE', label: 'Phone' },
-  { value: 'WALK_IN', label: 'Walk-in' },
+  { value: 'WALK_IN', label: 'Walk-In' },
   { value: 'FACEBOOK', label: 'Facebook' },
+  { value: 'REFERRAL', label: 'Referral' },
   { value: 'MARKETPLACE', label: 'Marketplace' },
   { value: 'OTHER', label: 'Other' },
 ];
+
+const MAKES = ['Toyota', 'Hyundai', 'Kia', 'Suzuki', 'Nissan', 'BMW', 'Mercedes', 'Volkswagen', 'Mitsubishi', 'Renault', 'Peugeot', 'Chevrolet'].map((m) => ({ value: m, label: m }));
 
 export default function NewLeadPage() {
   const router = useRouter();
@@ -25,17 +28,15 @@ export default function NewLeadPage() {
   const { data: locationsRaw } = useQuery<Location[]>('/locations');
   const { data: vehiclesRes } = useQuery<{ data: Vehicle[] }>('/vehicles?status=AVAILABLE&limit=200');
 
-  const salesReps = (usersRaw ?? []).filter((u) => ['SALES_REP', 'MANAGER', 'ADMIN'].includes(u.role));
+  const salesReps = (usersRaw ?? []).filter((u) => ['SALES_REP', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(u.role));
   const locations = Array.isArray(locationsRaw) ? locationsRaw : [];
   const vehicles = vehiclesRes?.data ?? [];
 
   const [form, setForm] = useState({
     name: '', phone: '', email: '',
-    source: 'WALK_IN',
-    locationId: '',
-    vehicleId: '',
-    assignedToUserId: '',
-    notes: '',
+    source: 'WALK_IN', locationId: '',
+    vehicleId: '', assignedToUserId: '',
+    budget: '', notes: '',
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
@@ -44,103 +45,107 @@ export default function NewLeadPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name || !form.locationId) { setErr('Name and location are required.'); return; }
-    setSaving(true);
-    setErr('');
+    if (!form.name.trim()) { setErr('Full name is required.'); return; }
+    if (!form.phone.trim()) { setErr('Phone is required.'); return; }
+    if (!form.locationId) { setErr('Branch / Location is required.'); return; }
+    setSaving(true); setErr('');
     try {
       const lead = await apiFetch<{ id: string }>('/leads', {
         method: 'POST',
         body: JSON.stringify({
-          name: form.name,
-          phone: form.phone || undefined,
-          email: form.email || undefined,
+          name: form.name.trim(),
+          phone: form.phone.trim() || undefined,
+          email: form.email.trim() || undefined,
           source: form.source,
           locationId: form.locationId,
           vehicleId: form.vehicleId || undefined,
           assignedToUserId: form.assignedToUserId || undefined,
-          notes: form.notes || undefined,
+          notes: form.notes.trim() || undefined,
+          budget: form.budget ? Number(form.budget) : undefined,
         }),
       });
       router.push(`/crm/${lead.id}`);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
   const repOpts = salesReps.map((u) => ({ value: u.id, label: u.name }));
-  const locationOpts = locations.map((l) => ({
-    value: l.id,
-    label: `${l.name}${l.city ? ` — ${l.city}` : ''}`,
-  }));
+  const locationOpts = locations.map((l) => ({ value: l.id, label: l.city ? `${l.name} — ${l.city}` : l.name }));
   const vehicleOpts = [
     { value: '', label: 'No specific vehicle' },
     ...vehicles.map((v) => ({ value: v.id, label: `${v.year} ${v.make} ${v.model}` })),
   ];
 
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/crm" className="text-gray-500 hover:text-white text-xs transition">← CRM</Link>
-        <h1 className="text-xl font-semibold text-white">New Lead</h1>
+    <div style={{ padding: '1.25rem 1.5rem', maxWidth: '640px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+        <Link href="/crm" style={{ color: 'var(--text-3)', textDecoration: 'none', fontSize: '0.75rem' }}>← CRM</Link>
+        <span style={{ color: 'var(--border-strong)' }}>›</span>
+        <h1 className="page-title" style={{ margin: 0 }}>New Lead</h1>
       </div>
 
       {err && (
-        <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{err}</div>
+        <div className="card" style={{ padding: '0.75rem 1rem', marginBottom: '1rem', background: 'var(--danger-bg)', borderColor: 'var(--danger)', color: 'var(--danger-fg)', fontSize: '0.8125rem' }}>
+          {err}
+        </div>
       )}
 
-      <form onSubmit={submit} className="space-y-4">
-        {/* Contact */}
-        <div className="rounded-xl border border-white/5 bg-gray-900 p-5 space-y-4">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Contact</p>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Name *</label>
-            <input required value={form.name} onChange={(e) => set('name', e.target.value)}
-              className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
+      <form onSubmit={submit}>
+        {/* Contact info */}
+        <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
+          <p className="section-label" style={{ marginBottom: '1rem' }}>Contact Information</p>
+          <div style={{ marginBottom: '0.875rem' }}>
+            <label className="input-label">Full Name *</label>
+            <input required className="input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Ahmed Hassan" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.875rem' }}>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Phone</label>
-              <input value={form.phone} onChange={(e) => set('phone', e.target.value)}
-                placeholder="01X XXXX XXXX"
-                className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500" />
+              <label className="input-label">Phone *</label>
+              <input required className="input" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="01X XXXX XXXX" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Email</label>
-              <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)}
-                className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
+              <label className="input-label">Email</label>
+              <input type="email" className="input" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="optional" />
             </div>
           </div>
         </div>
 
         {/* Lead details */}
-        <div className="rounded-xl border border-white/5 bg-gray-900 p-5 space-y-4">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Lead Details</p>
-          <SearchableCombobox label="Source" options={SOURCES} value={form.source} onChange={(v) => set('source', v)} />
-          <SearchableCombobox label="Location *" options={locationOpts} value={form.locationId}
-            onChange={(v) => set('locationId', v)} placeholder="Select location…" />
-          <SearchableCombobox label="Vehicle Interest" options={vehicleOpts}
-            value={form.vehicleId} onChange={(v) => set('vehicleId', v)} clearable />
-          <SearchableCombobox label="Assign To" options={repOpts}
-            value={form.assignedToUserId} onChange={(v) => set('assignedToUserId', v)}
-            placeholder="Unassigned" clearable />
+        <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
+          <p className="section-label" style={{ marginBottom: '1rem' }}>Lead Details</p>
+          <div style={{ marginBottom: '0.875rem' }}>
+            <label className="input-label">Source *</label>
+            <SearchableCombobox options={SOURCES} value={form.source} onChange={(v) => set('source', v)} />
+          </div>
+          <div style={{ marginBottom: '0.875rem' }}>
+            <label className="input-label">Branch / Location *</label>
+            <SearchableCombobox options={locationOpts} value={form.locationId} onChange={(v) => set('locationId', v)} placeholder="Select branch…" />
+          </div>
+          <div style={{ marginBottom: '0.875rem' }}>
+            <label className="input-label">Vehicle Interested In</label>
+            <SearchableCombobox options={vehicleOpts} value={form.vehicleId} onChange={(v) => set('vehicleId', v)} clearable clearLabel="No specific vehicle" />
+          </div>
+          <div style={{ marginBottom: '0.875rem' }}>
+            <label className="input-label">Assign to Rep</label>
+            <SearchableCombobox options={repOpts} value={form.assignedToUserId} onChange={(v) => set('assignedToUserId', v)} placeholder="Unassigned" clearable clearLabel="Unassigned" />
+          </div>
+          <div style={{ marginBottom: '0.875rem' }}>
+            <label className="input-label">Budget (EGP)</label>
+            <input type="number" min="0" step="1000" className="input" value={form.budget} onChange={(e) => set('budget', e.target.value)} placeholder="e.g. 500000" />
+          </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Notes</label>
-            <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)}
-              rows={3} placeholder="Initial notes…"
-              className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 resize-none" />
+            <label className="input-label">Notes</label>
+            <textarea className="textarea" rows={3} value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Initial notes about this lead…" style={{ resize: 'vertical' }} />
           </div>
         </div>
 
-        <div className="flex justify-end gap-3">
-          <Link href="/crm"
-            className="px-4 py-2 text-sm text-gray-400 hover:text-white rounded-lg border border-white/10 hover:border-white/20 transition">
-            Cancel
-          </Link>
-          <button type="submit" disabled={saving}
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition">
-            {saving ? 'Creating…' : 'Create Lead'}
+        {/* Actions */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.625rem' }}>
+          <Link href="/crm" className="btn btn-secondary">Cancel</Link>
+          <button type="submit" disabled={saving} className="btn btn-primary">
+            {saving ? 'Saving…' : 'Save Lead'}
           </button>
         </div>
       </form>

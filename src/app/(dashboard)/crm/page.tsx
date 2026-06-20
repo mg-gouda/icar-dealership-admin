@@ -1,248 +1,252 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '../../../lib/useApi';
-import StatusBadge from '../../../components/StatusBadge';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+const token = () => (typeof window !== 'undefined' ? localStorage.getItem('accessToken') ?? '' : '');
+const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
+
 interface Lead {
-  id: string; name: string; phone?: string; email?: string;
-  status: string; source?: string; createdAt: string; notes?: string;
-  stageChangedAt?: string;
-  vehicle?: { make: string; model: string; year: number };
+  id: string; name: string; email?: string; phone?: string;
+  status: string; source?: string; interestedIn?: string;
   assignedTo?: { name: string };
+  vehicle?: { make: string; model: string; year: number };
+  daysInStage?: number; createdAt: string;
+  stageChangedAt?: string;
   location?: { name: string };
 }
 
-const STATUS_OPTIONS = [
-  { value: 'NEW', label: 'New' },
-  { value: 'CONTACTED', label: 'Contacted' },
-  { value: 'QUALIFIED', label: 'Qualified' },
-  { value: 'NEGOTIATING', label: 'Negotiating' },
-  { value: 'CLOSED_WON', label: 'Closed Won' },
-  { value: 'CLOSED_LOST', label: 'Closed Lost' },
+const COLUMNS = [
+  { status: 'NEW',          label: 'New',          dotColor: 'var(--primary)',   badgeClass: 'badge-info'    },
+  { status: 'CONTACTED',    label: 'Contacted',     dotColor: 'var(--purple)',    badgeClass: 'badge-purple'  },
+  { status: 'QUALIFIED',    label: 'Qualified',     dotColor: 'var(--success)',   badgeClass: 'badge-success' },
+  { status: 'NEGOTIATING',  label: 'Negotiating',   dotColor: 'var(--orange)',    badgeClass: 'badge-orange'  },
+  { status: 'CLOSED_WON',   label: 'Closed Won',    dotColor: 'var(--success)',   badgeClass: 'badge-success' },
+  { status: 'CLOSED_LOST',  label: 'Closed Lost',   dotColor: 'var(--text-3)',    badgeClass: 'badge-neutral' },
 ];
 
-const KANBAN_COLUMNS: { status: string; label: string; color: string; bg: string; border: string }[] = [
-  { status: 'NEW',         label: 'New',         color: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/30' },
-  { status: 'CONTACTED',   label: 'Contacted',   color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30' },
-  { status: 'QUALIFIED',   label: 'Qualified',   color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/30' },
-  { status: 'NEGOTIATING', label: 'Negotiating', color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/30' },
-  { status: 'CLOSED_WON',  label: 'Won',         color: 'text-green-400',  bg: 'bg-green-500/10',  border: 'border-green-500/30' },
-  { status: 'CLOSED_LOST', label: 'Lost',        color: 'text-gray-400',   bg: 'bg-gray-500/10',   border: 'border-gray-500/30' },
+const SOURCE_OPTIONS = [
+  { value: '', label: 'All Sources' },
+  { value: 'WEBSITE', label: 'Website' },
+  { value: 'PHONE', label: 'Phone' },
+  { value: 'FACEBOOK', label: 'Facebook' },
+  { value: 'WALK_IN', label: 'Walk-In' },
+  { value: 'REFERRAL', label: 'Referral' },
+  { value: 'MARKETPLACE', label: 'Marketplace' },
+  { value: 'OTHER', label: 'Other' },
 ];
 
-function daysAgo(dateStr: string): number {
-  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000);
+const AVATAR_COLORS = [
+  'var(--primary)', 'var(--success)', 'var(--warning)',
+  'var(--purple)', 'var(--orange)', 'var(--danger)',
+];
+
+function avatarColor(name: string): string {
+  const code = name.charCodeAt(0) + (name.charCodeAt(1) || 0);
+  return AVATAR_COLORS[code % AVATAR_COLORS.length];
 }
 
-function SourceBadge({ source }: { source?: string }) {
-  if (!source) return null;
-  const colors: Record<string, string> = {
-    WEBSITE: 'bg-blue-500/20 text-blue-300',
-    PHONE: 'bg-green-500/20 text-green-300',
-    WALK_IN: 'bg-purple-500/20 text-purple-300',
-    FACEBOOK: 'bg-indigo-500/20 text-indigo-300',
-    MARKETPLACE: 'bg-orange-500/20 text-orange-300',
-    OTHER: 'bg-gray-500/20 text-gray-400',
+function initials(name: string): string {
+  return name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+}
+
+function sourceIcon(source?: string): string {
+  const map: Record<string, string> = {
+    WEBSITE: '🌐', PHONE: '📞', FACEBOOK: '📘', WALK_IN: '🚶', REFERRAL: '🤝', MARKETPLACE: '🛒', OTHER: '💬',
   };
-  return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${colors[source] ?? colors.OTHER}`}>
-      {source.replace(/_/g, ' ')}
-    </span>
-  );
+  return map[source ?? ''] ?? '📋';
 }
 
-function KanbanCard({ lead }: { lead: Lead }) {
+function daysInStage(lead: Lead): number {
+  const base = lead.stageChangedAt ?? lead.createdAt;
+  return Math.floor((Date.now() - new Date(base).getTime()) / 86_400_000);
+}
+
+function LeadCard({ lead }: { lead: Lead }) {
   const router = useRouter();
-  const days = daysAgo(lead.stageChangedAt ?? lead.createdAt);
+  const days = daysInStage(lead);
+  const repName = lead.assignedTo?.name ?? '';
+  const bg = repName ? avatarColor(repName) : 'var(--text-3)';
+  const vehicleLabel = lead.vehicle
+    ? `${lead.vehicle.make} ${lead.vehicle.model} ${lead.vehicle.year}`
+    : lead.interestedIn ?? '';
+
   return (
     <div
       onClick={() => router.push(`/crm/${lead.id}`)}
-      className="bg-gray-900 border border-white/5 rounded-lg p-3 cursor-pointer hover:border-white/20 hover:bg-gray-800/80 transition space-y-2"
+      className="card"
+      style={{ padding: '0.875rem', cursor: 'pointer', marginBottom: '0.5rem', boxShadow: '0 1px 4px oklch(0 0 0 / 0.06)', transition: 'box-shadow 150ms, border-color 150ms' }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 12px oklch(0 0 0 / 0.1)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-strong)'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 4px oklch(0 0 0 / 0.06)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
     >
-      <div className="flex items-start justify-between gap-1">
-        <p className="text-sm font-medium text-white leading-tight">{lead.name}</p>
-        <span className={`text-[10px] tabular-nums shrink-0 px-1.5 py-0.5 rounded ${days > 7 ? 'bg-red-500/20 text-red-300' : 'bg-white/5 text-gray-500'}`}>
-          {days}d
-        </span>
+      {/* Top row: name + avatar */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.5rem' }}>
+        <span style={{ fontWeight: 500, fontSize: '0.8125rem', color: 'var(--text-1)', lineHeight: 1.3 }}>{lead.name}</span>
+        {repName && (
+          <span className="avatar" style={{ width: '1.75rem', height: '1.75rem', background: bg, color: '#fff', fontSize: '0.625rem', flexShrink: 0 }}>
+            {initials(repName)}
+          </span>
+        )}
       </div>
-      {lead.phone && <p className="text-xs text-gray-500">{lead.phone}</p>}
-      <div className="flex flex-wrap gap-1 items-center">
-        <SourceBadge source={lead.source} />
-      </div>
-      {lead.vehicle && (
-        <p className="text-[11px] text-gray-400">
-          {lead.vehicle.year} {lead.vehicle.make} {lead.vehicle.model}
+      {/* Vehicle */}
+      {vehicleLabel && (
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-2)', marginBottom: '0.35rem' }}>
+          🚗 {vehicleLabel}
         </p>
       )}
-      {lead.assignedTo && (
-        <p className="text-[11px] text-gray-500">{lead.assignedTo.name}</p>
+      {/* Source */}
+      {lead.source && (
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginBottom: '0.35rem' }}>
+          {sourceIcon(lead.source)} {lead.source.replace(/_/g, ' ')}
+        </p>
       )}
+      {/* Days in stage */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.6875rem', color: days > 7 ? 'var(--danger-fg)' : 'var(--text-3)', marginTop: '0.5rem' }}>
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0 }}>
+          <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2"/>
+          <path d="M6 3.5V6l2 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+        </svg>
+        {days} {days === 1 ? 'day' : 'days'} in stage
+      </div>
     </div>
   );
 }
 
 export default function CrmPage() {
-  const [status, setStatus] = useState('');
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
+  const [source, setSource] = useState('');
+  const [branch, setBranch] = useState('');
 
-  const { data: leads, loading, error } = useQuery<Lead[]>(
-    `/leads?${new URLSearchParams({ ...(status && { status }), limit: '200' })}`,
-    [status],
-  );
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams({ limit: '200' });
+      const res = await fetch(`${API}/leads?${qs}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error('Failed');
+      const json = await res.json();
+      setLeads(Array.isArray(json) ? json : (json.data ?? []));
+    } catch { setLeads([]); }
+    finally { setLoading(false); }
+  }, []);
 
-  const router = useRouter();
-  const filtered = (leads ?? []).filter((l) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return [l.name, l.phone, l.email].some((f) => f?.toLowerCase().includes(q));
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = leads.filter((l) => {
+    if (search) {
+      const q = search.toLowerCase();
+      if (![l.name, l.phone, l.email].some((f) => f?.toLowerCase().includes(q))) return false;
+    }
+    if (source && l.source !== source) return false;
+    if (branch && l.location?.name !== branch) return false;
+    return true;
   });
 
-  // Group by status for kanban
-  const byStatus = KANBAN_COLUMNS.reduce<Record<string, Lead[]>>((acc, col) => {
+  const byStatus = COLUMNS.reduce<Record<string, Lead[]>>((acc, col) => {
     acc[col.status] = filtered.filter((l) => l.status === col.status);
     return acc;
   }, {});
 
+  const branchOptions = [
+    { value: '', label: 'All Branches' },
+    ...Array.from(new Set(leads.map((l) => l.location?.name).filter(Boolean) as string[])).map((n) => ({ value: n, label: n })),
+  ];
+
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Page header */}
+      <div className="page-header" style={{ flexShrink: 0 }}>
         <div>
-          <h1 className="text-xl font-semibold text-white">CRM / Leads</h1>
-          <p className="text-xs text-gray-500 mt-0.5">Customer pipeline</p>
+          <h1 className="page-title">Leads &amp; CRM</h1>
+          <p className="page-subtitle">{leads.length} active leads · Auto-assigned by branch</p>
         </div>
-        <div className="flex items-center gap-2">
-          {/* View toggle */}
-          <div className="flex rounded-lg border border-white/10 overflow-hidden">
-            <button
-              onClick={() => setViewMode('table')}
-              className={`px-3 py-1.5 text-xs font-medium transition ${viewMode === 'table' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-              Table
-            </button>
-            <button
-              onClick={() => setViewMode('kanban')}
-              className={`px-3 py-1.5 text-xs font-medium transition ${viewMode === 'kanban' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-              Kanban
-            </button>
-          </div>
-          <Link href="/crm/new" className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition">
-            + New Lead
-          </Link>
-        </div>
+        <Link href="/crm/new" className="btn btn-primary">
+          + New Lead
+        </Link>
       </div>
 
-      <div className="flex gap-3 mb-5">
-        <input value={search} onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search name, phone…"
-          className="flex-1 px-3 py-1.5 bg-gray-900 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" />
-        {viewMode === 'table' && (
-          <SearchableCombobox
-            options={STATUS_OPTIONS}
-            value={status}
-            onChange={setStatus}
-            placeholder="All Statuses"
-            clearable
-            clearLabel="All Statuses"
-            className="w-44"
+      {/* Toolbar */}
+      <div style={{ padding: '0.75rem 1.5rem', display: 'flex', gap: '0.625rem', alignItems: 'center', flexShrink: 0, borderBottom: '1px solid var(--border)' }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ position: 'absolute', left: '0.625rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-3)', pointerEvents: 'none' }}>
+            <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2"/>
+            <path d="M9.5 9.5L12.5 12.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+          </svg>
+          <input
+            className="input"
+            style={{ paddingLeft: '2rem' }}
+            placeholder="Search leads…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
           />
+        </div>
+        <SearchableCombobox
+          options={SOURCE_OPTIONS}
+          value={source}
+          onChange={setSource}
+          placeholder="Source ▾"
+          clearable
+          clearLabel="All Sources"
+          className="w-36"
+        />
+        <SearchableCombobox
+          options={branchOptions}
+          value={branch}
+          onChange={setBranch}
+          placeholder="Branch ▾"
+          clearable
+          clearLabel="All Branches"
+          className="w-36"
+        />
+      </div>
+
+      {/* Kanban board */}
+      <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', padding: '1rem 1.5rem' }}>
+        {loading ? (
+          <p style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>Loading…</p>
+        ) : (
+          <div style={{ display: 'flex', gap: '0.875rem', height: '100%', minWidth: 'max-content' }}>
+            {COLUMNS.map((col) => {
+              const cards = byStatus[col.status] ?? [];
+              return (
+                <div
+                  key={col.status}
+                  style={{
+                    width: '240px',
+                    flexShrink: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    background: 'var(--bg)',
+                    borderRadius: '0.625rem',
+                    border: '1px solid var(--border)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* Column header */}
+                  <div style={{ padding: '0.625rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
+                    <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: col.dotColor, flexShrink: 0 }} />
+                    <span style={{ fontWeight: 600, fontSize: '0.8125rem', color: 'var(--text-1)', flex: 1 }}>{col.label}</span>
+                    <span className={`badge ${col.badgeClass}`} style={{ fontSize: '0.625rem', padding: '0.1rem 0.45rem' }}>
+                      {cards.length}
+                    </span>
+                  </div>
+                  {/* Cards */}
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem' }}>
+                    {cards.map((lead) => <LeadCard key={lead.id} lead={lead} />)}
+                    {cards.length === 0 && (
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', textAlign: 'center', marginTop: '1.5rem' }}>No leads</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
-
-      {viewMode === 'table' && (
-        <>
-          <div className="grid grid-cols-4 gap-3 mb-6">
-            {(['NEW', 'CONTACTED', 'QUALIFIED', 'NEGOTIATING'] as const).map((s) => (
-              <button key={s} onClick={() => setStatus(status === s ? '' : s)}
-                className={`rounded-xl border p-3 text-left transition ${status === s ? 'border-blue-500 bg-blue-900/20' : 'border-white/5 bg-gray-900'}`}>
-                <p className="text-xs text-gray-400">{s.replace(/_/g, ' ')}</p>
-                <p className="text-lg font-semibold text-white mt-0.5">
-                  {(leads ?? []).filter((l) => l.status === s).length}
-                </p>
-              </button>
-            ))}
-          </div>
-
-          {loading && <p className="text-gray-500 text-sm">Loading…</p>}
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-
-          {!loading && !error && (
-            <div className="rounded-xl border border-white/5 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-900 text-gray-400 text-xs">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-medium">Customer</th>
-                    <th className="text-left px-4 py-3 font-medium">Interest</th>
-                    <th className="text-left px-4 py-3 font-medium">Source</th>
-                    <th className="text-left px-4 py-3 font-medium">Assigned To</th>
-                    <th className="text-left px-4 py-3 font-medium">Status</th>
-                    <th className="text-left px-4 py-3 font-medium">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {filtered.map((l) => (
-                    <tr key={l.id}
-                      onClick={() => router.push(`/crm/${l.id}`)}
-                      className="hover:bg-white/5 transition cursor-pointer">
-                      <td className="px-4 py-3">
-                        <p className="text-white font-medium">{l.name}</p>
-                        <p className="text-xs text-gray-500">{l.phone}</p>
-                      </td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">
-                        {l.vehicle ? `${l.vehicle.year} ${l.vehicle.make} ${l.vehicle.model}` : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">{l.source ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-400">{l.assignedTo?.name ?? '—'}</td>
-                      <td className="px-4 py-3"><StatusBadge status={l.status} /></td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">
-                        {new Date(l.createdAt).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))}
-                  {filtered.length === 0 && (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500 text-sm">No leads found.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      )}
-
-      {viewMode === 'kanban' && (
-        <>
-          {loading && <p className="text-gray-500 text-sm">Loading…</p>}
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-          {!loading && !error && (
-            <div className="flex gap-3 overflow-x-auto pb-4" style={{ minHeight: '60vh' }}>
-              {KANBAN_COLUMNS.map((col) => {
-                const cards = byStatus[col.status] ?? [];
-                return (
-                  <div key={col.status} className={`flex-shrink-0 w-64 rounded-xl border ${col.border} ${col.bg} flex flex-col`}>
-                    {/* Column header */}
-                    <div className={`flex items-center justify-between px-3 py-2.5 border-b ${col.border}`}>
-                      <span className={`text-xs font-semibold uppercase tracking-wide ${col.color}`}>{col.label}</span>
-                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${col.bg} ${col.color}`}>{cards.length}</span>
-                    </div>
-                    {/* Cards */}
-                    <div className="flex flex-col gap-2 p-2 overflow-y-auto flex-1">
-                      {cards.map((lead) => <KanbanCard key={lead.id} lead={lead} />)}
-                      {cards.length === 0 && (
-                        <p className="text-xs text-gray-600 text-center mt-4">No leads</p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
     </div>
   );
 }

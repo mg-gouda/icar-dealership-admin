@@ -1,186 +1,298 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../../lib/useApi';
-import StatusBadge from '../../../../../components/StatusBadge';
 
 interface JELine {
-  id: string;
-  debit: number;
-  credit: number;
+  id: string; debit: number; credit: number;
   description?: string;
   account?: { code: string; name: string };
   partner?: { name: string };
+  branch?: string;
 }
 
 interface JournalEntry {
-  id: string;
-  date: string;
-  ref?: string;
-  status: string;
+  id: string; date: string; ref?: string; reference?: string; number?: string;
+  description?: string; status: 'DRAFT' | 'POSTED' | 'CANCELLED';
   journal?: { code: string; name: string };
   currency?: { code: string };
   lines: JELine[];
   createdBy?: { name: string };
+  totalDebit?: number; totalCredit?: number;
 }
 
-const fmt = (n: number) =>
-  Number(n).toLocaleString('en-EG', { maximumFractionDigits: 2 });
+const egp = (n: number) =>
+  'EGP ' + Number(n).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const fmtDate = (d: string) =>
+  new Date(d).toLocaleDateString('en-EG', { day: '2-digit', month: 'long', year: 'numeric' });
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    DRAFT: 'badge badge-neutral',
+    POSTED: 'badge badge-info',
+    CANCELLED: 'badge badge-danger',
+  };
+  const labels: Record<string, string> = {
+    DRAFT: 'Draft', POSTED: 'Posted', CANCELLED: 'Cancelled',
+  };
+  return <span className={map[status] ?? 'badge badge-neutral'}>{labels[status] ?? status}</span>;
+}
 
 export default function GlDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const { data: entry, loading, error, reload } = useQuery<JournalEntry>(
-    `/finance/gl/entries/${id}`,
+    `/finance/gl/${id}`,
     [id],
   );
 
   const [posting, setPosting] = useState(false);
   const [reversing, setReversing] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [actionErr, setActionErr] = useState('');
 
   async function post() {
-    setPosting(true);
-    setActionErr('');
+    setPosting(true); setActionErr('');
     try {
-      await apiFetch(`/finance/gl/entries/${id}/post`, { method: 'PATCH' });
+      await apiFetch(`/finance/gl/${id}/post`, { method: 'POST' });
       await reload();
-    } catch (e: unknown) {
-      setActionErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setPosting(false);
-    }
+    } catch (e: unknown) { setActionErr(e instanceof Error ? e.message : String(e)); }
+    finally { setPosting(false); }
   }
 
   async function reverse() {
     if (!confirm('Create a reversal entry for this journal entry?')) return;
-    setReversing(true);
-    setActionErr('');
+    setReversing(true); setActionErr('');
     try {
-      await apiFetch(`/finance/gl/entries/${id}/reverse`, { method: 'POST' });
-      await reload();
-    } catch (e: unknown) {
-      setActionErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setReversing(false);
-    }
+      const rev = await apiFetch<{ id: string }>(`/finance/gl/${id}/reverse`, { method: 'POST' });
+      router.push(`/finance/gl/${(rev as any).id}`);
+    } catch (e: unknown) { setActionErr(e instanceof Error ? e.message : String(e)); }
+    finally { setReversing(false); }
   }
 
-  if (loading) return <div className="p-6 text-gray-500 text-sm">Loading…</div>;
-  if (error || !entry) return (
-    <div className="p-6">
-      <p className="text-red-400 text-sm mb-3">{error ?? 'Entry not found'}</p>
-      <Link href="/finance/gl" className="text-blue-400 text-sm hover:text-blue-300">← Back</Link>
-    </div>
-  );
+  async function duplicate() {
+    setDuplicating(true); setActionErr('');
+    try {
+      const dup = await apiFetch<{ id: string }>(`/finance/gl/${id}/duplicate`, { method: 'POST' });
+      router.push(`/finance/gl/${(dup as any).id}`);
+    } catch (e: unknown) { setActionErr(e instanceof Error ? e.message : String(e)); }
+    finally { setDuplicating(false); }
+  }
 
-  const totalDebit = entry.lines.reduce((s, l) => s + Number(l.debit), 0);
-  const totalCredit = entry.lines.reduce((s, l) => s + Number(l.credit), 0);
+  async function del() {
+    if (!confirm('Delete this journal entry? This cannot be undone.')) return;
+    setDeleting(true); setActionErr('');
+    try {
+      await apiFetch(`/finance/gl/${id}`, { method: 'DELETE' });
+      router.push('/finance/gl');
+    } catch (e: unknown) { setActionErr(e instanceof Error ? e.message : String(e)); }
+    finally { setDeleting(false); }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-3 p-8 text-[--text-3] text-sm">
+        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+        </svg>
+        Loading journal entry…
+      </div>
+    );
+  }
+
+  if (error || !entry) {
+    return (
+      <div className="p-8">
+        <p className="text-danger-fg text-sm mb-3">{error ?? 'Entry not found'}</p>
+        <Link href="/finance/gl" className="btn btn-secondary btn-sm">← Back to Journal Entries</Link>
+      </div>
+    );
+  }
+
+  const totalDebit = entry.totalDebit ?? entry.lines.reduce((s, l) => s + Number(l.debit), 0);
+  const totalCredit = entry.totalCredit ?? entry.lines.reduce((s, l) => s + Number(l.credit), 0);
   const balanced = Math.abs(totalDebit - totalCredit) < 0.01;
+  const entryRef = entry.number ?? entry.reference ?? entry.ref ?? entry.id.slice(0, 8).toUpperCase();
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex items-start justify-between mb-6">
+    <div className="flex gap-5 p-6 min-h-screen bg-[--bg]">
+      {/* Main content */}
+      <div className="flex-1 space-y-5 min-w-0">
+        {/* Breadcrumb + title */}
         <div>
-          <Link href="/finance/gl" className="text-xs text-gray-500 hover:text-white transition mb-2 inline-block">
-            ← Journal Entries
+          <Link href="/finance/gl" className="text-xs text-[--text-3] hover:text-[--text-1] transition inline-flex items-center gap-1 mb-2">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Journal Entries
           </Link>
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-white font-mono">{entry.ref ?? entry.id.slice(0, 8)}</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="page-title font-mono">
+              {entryRef.startsWith('JE-') ? entryRef : `JE-${entryRef}`}
+            </h1>
             <StatusBadge status={entry.status} />
             {!balanced && (
-              <span className="text-xs bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded">
-                Unbalanced
-              </span>
+              <span className="badge badge-danger">Unbalanced</span>
             )}
           </div>
-          <p className="text-gray-400 text-sm mt-1">
-            {entry.journal?.code} — {entry.journal?.name}
+          <p className="page-subtitle mt-1">
+            {entry.journal?.name ?? entry.journal?.code ?? 'General Ledger'} — {fmtDate(entry.date)}
           </p>
         </div>
 
-        <div className="flex gap-2">
+        {actionErr && (
+          <div className="rounded-lg bg-danger-bg border border-danger px-4 py-3">
+            <p className="text-xs text-danger-fg">{actionErr}</p>
+          </div>
+        )}
+
+        {/* Entry Details card */}
+        <div className="card p-5">
+          <p className="section-label">Entry Details</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="input-label">Journal</label>
+              <p className="text-sm text-[--text-1] font-medium">{entry.journal?.name ?? '—'}</p>
+            </div>
+            <div>
+              <label className="input-label">Date</label>
+              <p className="text-sm text-[--text-1] font-medium">{fmtDate(entry.date)}</p>
+            </div>
+            <div>
+              <label className="input-label">Reference / Description</label>
+              <p className="text-sm text-[--text-1]">{entry.description ?? entry.ref ?? '—'}</p>
+            </div>
+            <div>
+              <label className="input-label">Currency</label>
+              <p className="text-sm text-[--text-1] font-medium">{entry.currency?.code ?? 'EGP'} — Egyptian Pound</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Journal Lines card */}
+        <div className="card overflow-hidden">
+          <div className="px-5 py-3 border-b border-[--border] bg-[--surface-2]">
+            <p className="section-label mb-0">Journal Lines</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[--border] bg-[--surface-2] text-[11px] font-semibold uppercase tracking-wider text-[--text-3]">
+                  <td className="px-4 py-2.5">Account</td>
+                  <td className="px-3 py-2.5">Partner</td>
+                  <td className="px-3 py-2.5">Label</td>
+                  <td className="px-3 py-2.5">Branch</td>
+                  <td className="px-3 py-2.5 text-right">Debit (EGP)</td>
+                  <td className="px-3 py-2.5 text-right">Credit (EGP)</td>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[--border]">
+                {entry.lines.map((l) => (
+                  <tr key={l.id} className="hover:bg-[--surface-2] transition">
+                    <td className="px-4 py-3">
+                      {l.account ? (
+                        <span className="text-xs text-[--text-1]">
+                          <span className="font-mono text-[--text-3] mr-1.5">{l.account.code}</span>
+                          — {l.account.name}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td className="px-3 py-3 text-xs text-[--text-2]">{l.partner?.name ?? '—'}</td>
+                    <td className="px-3 py-3 text-xs text-[--text-2]">{l.description ?? '—'}</td>
+                    <td className="px-3 py-3 text-xs text-[--text-2]">{l.branch ?? '—'}</td>
+                    <td className="px-3 py-3 text-right tabular-nums text-sm font-medium text-[--primary]">
+                      {Number(l.debit) > 0 ? egp(l.debit) : '—'}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums text-sm font-medium text-[--primary]">
+                      {Number(l.credit) > 0 ? egp(l.credit) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-[--border-strong] bg-[--surface-2]">
+                  <td colSpan={4} className="px-4 py-2.5 text-xs font-semibold text-[--text-2] uppercase tracking-wider">
+                    Total
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-sm font-bold text-[--primary]">
+                    {egp(totalDebit)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-sm font-bold text-[--primary]">
+                    {egp(totalCredit)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Right sidebar */}
+      <div className="w-64 shrink-0 space-y-4 pt-14">
+        {/* Balance check */}
+        <div className={`card p-5 text-center ${balanced ? 'bg-success-bg border-success' : 'bg-danger-bg border-danger'}`}>
+          <p className={`section-label mb-3 ${balanced ? 'text-success-fg' : 'text-danger-fg'}`}>
+            {balanced ? '✅ Balance Check' : '⚠ Balance Check'}
+          </p>
+          <p className={`text-3xl font-bold tabular-nums ${balanced ? 'text-success-fg' : 'text-danger-fg'}`}>
+            {balanced ? 'EGP 0' : egp(Math.abs(totalDebit - totalCredit))}
+          </p>
+          <p className={`text-xs mt-1 ${balanced ? 'text-success-fg' : 'text-danger-fg'}`}>
+            {balanced ? 'Difference — Ready to Post' : `Unbalanced by ${egp(Math.abs(totalDebit - totalCredit))}`}
+          </p>
+        </div>
+
+        {/* Actions */}
+        <div className="card p-4 space-y-2">
+          <p className="section-label">Actions</p>
           {entry.status === 'DRAFT' && (
-            <button onClick={post} disabled={posting}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition">
-              {posting ? 'Posting…' : 'Post'}
+            <button onClick={post} disabled={posting || !balanced} className="btn btn-primary w-full">
+              {posting ? 'Posting…' : '✅ Post Entry'}
             </button>
           )}
           {entry.status === 'POSTED' && (
-            <button onClick={reverse} disabled={reversing}
-              className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-gray-300 text-sm rounded-lg transition">
-              {reversing ? '…' : 'Reverse'}
+            <button onClick={reverse} disabled={reversing} className="btn btn-secondary w-full">
+              {reversing ? '…' : '↩ Reverse Entry'}
+            </button>
+          )}
+          <button onClick={duplicate} disabled={duplicating} className="btn btn-secondary w-full">
+            {duplicating ? '…' : '⎘ Duplicate'}
+          </button>
+          {entry.status === 'DRAFT' && (
+            <button onClick={del} disabled={deleting} className="btn btn-danger w-full">
+              {deleting ? 'Deleting…' : 'Delete'}
             </button>
           )}
         </div>
-      </div>
 
-      {actionErr && (
-        <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-          {actionErr}
+        {/* Fiscal period */}
+        <div className="card p-4">
+          <div className="flex items-start gap-2">
+            <span className="text-sm">💡</span>
+            <div>
+              <p className="text-xs font-semibold text-[--text-1] mb-1">Fiscal Period</p>
+              <p className="text-xs text-[--text-2]">
+                {new Date(entry.date).toLocaleDateString('en-EG', { month: 'short', year: 'numeric' })} — Open
+              </p>
+              <p className="text-xs text-[--text-3] mt-0.5">
+                Lock date: {new Date(new Date(entry.date).getFullYear(), new Date(entry.date).getMonth() + 1, 0).toLocaleDateString('en-EG', { month: 'short', day: 'numeric' })} at EOD
+              </p>
+            </div>
+          </div>
         </div>
-      )}
 
-      {/* Meta */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        <div className="rounded-xl border border-white/5 bg-gray-900 p-4">
-          <p className="text-xs text-gray-500 mb-1">Date</p>
-          <p className="text-sm text-white font-medium">{new Date(entry.date).toLocaleDateString('en-EG')}</p>
-        </div>
-        <div className="rounded-xl border border-white/5 bg-gray-900 p-4">
-          <p className="text-xs text-gray-500 mb-1">Currency</p>
-          <p className="text-sm text-white font-medium">{entry.currency?.code ?? 'EGP'}</p>
-        </div>
-        <div className="rounded-xl border border-white/5 bg-gray-900 p-4">
-          <p className="text-xs text-gray-500 mb-1">Balance</p>
-          <p className={`text-sm font-medium ${balanced ? 'text-green-400' : 'text-red-400'}`}>
-            {balanced ? '✓ Balanced' : `Diff: ${fmt(Math.abs(totalDebit - totalCredit))}`}
-          </p>
-        </div>
-      </div>
-
-      {/* Lines */}
-      <div className="rounded-xl border border-white/5 bg-gray-900 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="text-xs text-gray-500 border-b border-white/5">
-            <tr>
-              <th className="px-5 py-3 text-left font-medium">Account</th>
-              <th className="px-5 py-3 text-left font-medium">Partner</th>
-              <th className="px-5 py-3 text-left font-medium">Description</th>
-              <th className="px-5 py-3 text-right font-medium">Debit</th>
-              <th className="px-5 py-3 text-right font-medium">Credit</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {entry.lines.map((l) => (
-              <tr key={l.id}>
-                <td className="px-5 py-3 text-gray-300 text-xs">
-                  {l.account ? `${l.account.code} — ${l.account.name}` : '—'}
-                </td>
-                <td className="px-5 py-3 text-gray-400 text-xs">{l.partner?.name ?? '—'}</td>
-                <td className="px-5 py-3 text-gray-400 text-xs">{l.description ?? ''}</td>
-                <td className="px-5 py-3 text-right tabular-nums">
-                  {Number(l.debit) > 0 ? (
-                    <span className="text-green-400">{fmt(l.debit)}</span>
-                  ) : ''}
-                </td>
-                <td className="px-5 py-3 text-right tabular-nums">
-                  {Number(l.credit) > 0 ? (
-                    <span className="text-red-400">{fmt(l.credit)}</span>
-                  ) : ''}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot className="border-t border-white/10 text-xs font-semibold">
-            <tr>
-              <td colSpan={3} className="px-5 py-3 text-gray-400">Totals</td>
-              <td className="px-5 py-3 text-right text-green-400 tabular-nums">{fmt(totalDebit)}</td>
-              <td className="px-5 py-3 text-right text-red-400 tabular-nums">{fmt(totalCredit)}</td>
-            </tr>
-          </tfoot>
-        </table>
+        {/* Created by */}
+        {entry.createdBy && (
+          <div className="card p-4">
+            <p className="section-label">Created By</p>
+            <p className="text-xs text-[--text-1]">{entry.createdBy.name}</p>
+          </div>
+        )}
       </div>
     </div>
   );

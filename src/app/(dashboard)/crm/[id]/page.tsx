@@ -1,166 +1,319 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { useQuery, apiFetch } from '../../../../lib/useApi';
-import StatusBadge from '../../../../components/StatusBadge';
-import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import Link from 'next/link';
+import { useState, useEffect, useCallback } from 'react';
 
-interface Activity {
-  id: string; type: string; note: string; outcome?: string;
-  createdAt: string; nextFollowUp?: string;
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+const token = () => (typeof window !== 'undefined' ? localStorage.getItem('accessToken') ?? '' : '');
+const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
+
+async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
+  const res = await fetch(`${API}${path}`, { ...opts, headers: { ...authHeaders(), ...(opts.headers ?? {}) } });
+  if (!res.ok) { const e = await res.json().catch(() => ({ message: res.statusText })); throw new Error(e.message ?? res.statusText); }
+  return res.json();
 }
 
+interface Activity {
+  id: string; type: string; note: string; outcome?: string; createdAt: string;
+}
 interface Lead {
   id: string; name: string; phone?: string; email?: string;
   status: string; source?: string; notes?: string; createdAt: string;
+  leadScore?: number;
   vehicle?: { make: string; model: string; year: number };
   assignedTo?: { name: string; email?: string };
   location?: { name: string };
   activities?: Activity[];
+  nextAppointment?: { date: string; type: string; notes?: string };
 }
 
-const ACTIVITY_TYPES = ['CALL', 'EMAIL', 'VISIT', 'TEST_DRIVE', 'FOLLOW_UP', 'NOTE'];
+const STAGES = ['NEW', 'CONTACTED', 'QUALIFIED', 'NEGOTIATING', 'CLOSED_WON', 'CLOSED_LOST'];
+const STAGE_LABELS: Record<string, string> = {
+  NEW: 'New', CONTACTED: 'Contacted', QUALIFIED: 'Qualified',
+  NEGOTIATING: 'Negotiating', CLOSED_WON: 'Closed Won', CLOSED_LOST: 'Closed Lost',
+};
+
+const AVATAR_COLORS = ['var(--primary)', 'var(--success)', 'var(--warning)', 'var(--purple)', 'var(--orange)', 'var(--danger)'];
+function avatarColor(name: string) { const c = name.charCodeAt(0) + (name.charCodeAt(1) || 0); return AVATAR_COLORS[c % AVATAR_COLORS.length]; }
+function initials(name: string) { return name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase(); }
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+const ACTIVITY_TYPE_OPTS = ['CALL', 'EMAIL', 'VISIT', 'TEST_DRIVE', 'FOLLOW_UP', 'NOTE'].map((t) => ({ value: t, label: t.replace(/_/g, ' ') }));
+
+const ACTIVITY_DOT: Record<string, string> = {
+  CALL: 'var(--warning)', EMAIL: 'var(--primary)', VISIT: 'var(--purple)',
+  TEST_DRIVE: 'var(--orange)', FOLLOW_UP: 'var(--info)', NOTE: 'var(--success)', SYSTEM: 'var(--text-3)',
+};
 
 export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { data: lead, loading, error, reload } = useQuery<Lead>(`/leads/${id}`);
-  const [activityForm, setActivityForm] = useState({ type: 'CALL', note: '', outcome: '' });
+  const [lead, setLead] = useState<Lead | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [callNote, setCallNote] = useState('');
+  const [activeType, setActiveType] = useState<'NOTE' | 'CALL'>('NOTE');
 
-  async function addActivity() {
-    if (!activityForm.note.trim()) return;
-    setSaving(true);
-    try {
-      await apiFetch(`/leads/${id}/activities`, {
-        method: 'POST',
-        body: JSON.stringify(activityForm),
-      });
-      setActivityForm({ type: 'CALL', note: '', outcome: '' });
-      reload();
-    } finally {
-      setSaving(false);
-    }
-  }
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setLead(await apiFetch<Lead>(`/leads/${id}`)); setError(''); }
+    catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setLoading(false); }
+  }, [id]);
+
+  useEffect(() => { load(); }, [load]);
 
   async function updateStatus(status: string) {
-    await apiFetch(`/leads/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
-    reload();
+    try { await apiFetch(`/leads/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }); load(); }
+    catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
+  }
+
+  async function logActivity(type: string, note: string) {
+    if (!note.trim()) return;
+    setSaving(true);
+    try {
+      await apiFetch(`/leads/${id}/activities`, { method: 'POST', body: JSON.stringify({ type, note }) });
+      setNoteText(''); setCallNote(''); load();
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
+    finally { setSaving(false); }
   }
 
   async function convertToDeal() {
-    if (!confirm('Convert this lead to a deal? This will mark the lead CLOSED_WON and create a draft deal.')) return;
+    if (!confirm('Convert this lead to a deal?')) return;
     setConverting(true);
     try {
-      const result = await apiFetch<{ id: string | null; leadId?: string }>(`/leads/${id}/convert`, { method: 'PATCH' });
-      if (result.id) {
-        router.push(`/deals/${result.id}`);
-      } else {
-        // No customer/vehicle on lead — go to new deal form
-        router.push(`/deals/new?leadId=${id}`);
-      }
-    } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
+      const result = await apiFetch<{ id: string | null }>(`/leads/${id}/convert`, { method: 'PATCH' });
+      if (result.id) router.push(`/deals/${result.id}`);
+      else router.push(`/deals/new?leadId=${id}`);
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
     finally { setConverting(false); }
   }
 
-  const [converting, setConverting] = useState(false);
-
-  if (loading) return <div className="p-6 text-gray-500 text-sm">Loading…</div>;
-  if (error) return <div className="p-6 text-red-400 text-sm">{error}</div>;
+  if (loading) return <div style={{ padding: '2rem', color: 'var(--text-3)', fontSize: '0.875rem' }}>Loading…</div>;
+  if (error) return <div style={{ padding: '2rem', color: 'var(--danger-fg)', fontSize: '0.875rem' }}>{error}</div>;
   if (!lead) return null;
 
-  return (
-    <div className="p-6 max-w-4xl">
-      <button onClick={() => router.back()} className="text-gray-500 hover:text-white text-xs mb-5 transition">← Back</button>
+  const repName = lead.assignedTo?.name ?? '';
 
-      <div className="flex items-start justify-between mb-6">
+  return (
+    <div style={{ padding: '1.25rem 1.5rem' }}>
+      {/* Breadcrumb */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--text-3)', marginBottom: '1rem' }}>
+        <Link href="/crm" style={{ color: 'var(--text-3)', textDecoration: 'none' }}>Leads &amp; CRM</Link>
+        <span>›</span>
+        <span style={{ color: 'var(--text-1)' }}>{lead.name}</span>
+      </div>
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.25rem' }}>
         <div>
-          <h1 className="text-xl font-semibold text-white">{lead.name}</h1>
-          <p className="text-xs text-gray-500 mt-0.5">{lead.phone} {lead.email && `· ${lead.email}`}</p>
+          <h1 className="page-title">{lead.name}</h1>
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '0.25rem', fontSize: '0.8125rem', color: 'var(--text-2)' }}>
+            {lead.phone && <span>📞 {lead.phone}</span>}
+            {lead.email && <span>✉ {lead.email}</span>}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <StatusBadge status={lead.status} />
-          {['QUALIFIED', 'NEGOTIATING'].includes(lead.status) && (
-            <button onClick={convertToDeal} disabled={converting}
-              className="px-3 py-1.5 text-xs font-medium text-white bg-green-700 hover:bg-green-600 disabled:opacity-50 rounded-lg transition">
-              {converting ? '…' : 'Convert to Deal →'}
+        <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+          <button className="btn btn-secondary btn-sm" onClick={() => alert('Schedule appointment — coming soon')}>
+            📅 Schedule Appointment
+          </button>
+          {['QUALIFIED', 'NEGOTIATING', 'NEW', 'CONTACTED'].includes(lead.status) && (
+            <button className="btn btn-primary btn-sm" onClick={convertToDeal} disabled={converting}>
+              {converting ? '…' : 'Convert to Deal'}
             </button>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="rounded-xl border border-white/5 bg-gray-900 p-4">
-          <p className="text-xs text-gray-500 mb-2">Interest</p>
-          <p className="text-white text-sm">{lead.vehicle ? `${lead.vehicle.year} ${lead.vehicle.make} ${lead.vehicle.model}` : '—'}</p>
-        </div>
-        <div className="rounded-xl border border-white/5 bg-gray-900 p-4">
-          <p className="text-xs text-gray-500 mb-2">Source</p>
-          <p className="text-white text-sm">{lead.source ?? '—'}</p>
-        </div>
-        <div className="rounded-xl border border-white/5 bg-gray-900 p-4">
-          <p className="text-xs text-gray-500 mb-2">Assigned To</p>
-          <p className="text-white text-sm">{lead.assignedTo?.name ?? '—'}</p>
-        </div>
+      {/* Metadata row */}
+      <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', fontSize: '0.8125rem', color: 'var(--text-2)', flexWrap: 'wrap' }}>
+        {lead.vehicle && (
+          <span>Interested in: <strong style={{ color: 'var(--text-1)' }}>{lead.vehicle.year} {lead.vehicle.make} {lead.vehicle.model}</strong></span>
+        )}
+        {repName && (
+          <span>Assigned to: <strong style={{ color: 'var(--text-1)' }}>{repName}</strong></span>
+        )}
+        {lead.leadScore !== undefined && (
+          <span>Lead Score: <strong style={{ color: 'var(--primary)' }}>{lead.leadScore}</strong></span>
+        )}
       </div>
 
-      {/* Quick status buttons */}
-      <div className="flex flex-wrap gap-2 mb-6">
-        {['CONTACTED', 'QUALIFIED', 'NEGOTIATING', 'CLOSED_WON', 'CLOSED_LOST'].map((s) => (
-          <button key={s} onClick={() => updateStatus(s)}
-            className={`px-3 py-1.5 text-xs rounded-lg border transition ${
-              lead.status === s
-                ? 'border-blue-500 bg-blue-900/30 text-blue-300'
-                : 'border-white/10 text-gray-400 hover:text-white hover:border-white/30'
-            }`}>{s.replace(/_/g, ' ')}</button>
-        ))}
-      </div>
+      {/* 2-col layout */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: '1.25rem', alignItems: 'start' }}>
 
-      {/* Log activity */}
-      <div className="rounded-xl border border-white/5 bg-gray-900 p-4 mb-6">
-        <p className="text-xs text-gray-500 mb-3 font-medium uppercase tracking-wide">Log Activity</p>
-        <div className="flex gap-3 mb-3">
-          <SearchableCombobox
-            options={ACTIVITY_TYPES.map((t) => ({ value: t, label: t.replace(/_/g, ' ') }))}
-            value={activityForm.type}
-            onChange={(v) => setActivityForm((p) => ({ ...p, type: v }))}
-            className="w-44"
-          />
-          <input value={activityForm.outcome} onChange={(e) => setActivityForm((p) => ({ ...p, outcome: e.target.value }))}
-            placeholder="Outcome (optional)"
-            className="flex-1 px-3 py-1.5 bg-gray-800 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" />
-        </div>
-        <div className="flex gap-3">
-          <textarea value={activityForm.note} onChange={(e) => setActivityForm((p) => ({ ...p, note: e.target.value }))}
-            placeholder="Notes…" rows={2}
-            className="flex-1 px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none" />
-          <button onClick={addActivity} disabled={saving || !activityForm.note.trim()}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm rounded-lg transition self-end">
-            {saving ? '…' : 'Log'}
-          </button>
-        </div>
-      </div>
+        {/* LEFT: Activity timeline */}
+        <div>
+          <div className="card" style={{ padding: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <h2 style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-1)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Activity Timeline</h2>
+            </div>
 
-      {/* Activity timeline */}
-      <div className="rounded-xl border border-white/5 bg-gray-900 p-4">
-        <p className="text-xs text-gray-500 mb-4 font-medium uppercase tracking-wide">Activity Timeline</p>
-        {(lead.activities?.length ?? 0) === 0 && <p className="text-gray-600 text-sm">No activities yet.</p>}
-        <div className="space-y-4">
-          {(lead.activities ?? []).map((a) => (
-            <div key={a.id} className="flex gap-3">
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-2 flex-shrink-0" />
-              <div>
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-xs font-medium text-white">{a.type}</span>
-                  {a.outcome && <span className="text-xs text-gray-400">· {a.outcome}</span>}
-                  <span className="text-xs text-gray-600">{new Date(a.createdAt).toLocaleDateString()}</span>
-                </div>
-                <p className="text-sm text-gray-300">{a.note}</p>
+            {/* Timeline entries */}
+            <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
+              {/* System: created */}
+              <TimelineEntry
+                dot="var(--text-3)" title="Lead Created" time={timeAgo(lead.createdAt)}
+                description={`Lead was created from ${lead.source?.replace(/_/g, ' ') ?? 'unknown source'}`}
+              />
+              {/* System: auto-assigned */}
+              {repName && (
+                <TimelineEntry
+                  dot="var(--primary)" title="Auto-Assigned" time={timeAgo(lead.createdAt)}
+                  description={`Assigned to ${repName} at ${lead.location?.name ?? 'branch'}`}
+                />
+              )}
+              {/* Activities */}
+              {(lead.activities ?? []).slice().reverse().map((a) => (
+                <TimelineEntry
+                  key={a.id}
+                  dot={ACTIVITY_DOT[a.type] ?? 'var(--text-3)'}
+                  title={a.type.replace(/_/g, ' ')}
+                  time={timeAgo(a.createdAt)}
+                  description={a.note}
+                  outcome={a.outcome}
+                />
+              ))}
+            </div>
+
+            {/* Add activity */}
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <button
+                  className={`btn btn-sm ${activeType === 'NOTE' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setActiveType('NOTE')}
+                >Add Note</button>
+                <button
+                  className={`btn btn-sm ${activeType === 'CALL' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setActiveType('CALL')}
+                >Log Call</button>
+              </div>
+              <textarea
+                className="textarea"
+                style={{ resize: 'vertical', marginBottom: '0.5rem' }}
+                rows={3}
+                placeholder={activeType === 'NOTE' ? 'Write a note…' : 'Call outcome and notes…'}
+                value={activeType === 'NOTE' ? noteText : callNote}
+                onChange={(e) => activeType === 'NOTE' ? setNoteText(e.target.value) : setCallNote(e.target.value)}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  className="btn btn-primary btn-sm"
+                  disabled={saving || !(activeType === 'NOTE' ? noteText.trim() : callNote.trim())}
+                  onClick={() => logActivity(activeType, activeType === 'NOTE' ? noteText : callNote)}
+                >
+                  {saving ? '…' : activeType === 'NOTE' ? 'Add Note' : 'Log Call'}
+                </button>
               </div>
             </div>
-          ))}
+          </div>
         </div>
+
+        {/* RIGHT: Sidebar */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+
+          {/* Stage selector */}
+          <div className="card" style={{ padding: '1rem' }}>
+            <p className="section-label">Stage</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              {STAGES.map((s) => {
+                const active = lead.status === s;
+                return (
+                  <button
+                    key={s}
+                    onClick={() => updateStatus(s)}
+                    style={{
+                      display: 'block', width: '100%', textAlign: 'left',
+                      padding: '0.45rem 0.75rem', borderRadius: '0.375rem',
+                      fontSize: '0.8125rem', fontWeight: active ? 600 : 400,
+                      cursor: 'pointer', transition: 'all 150ms', border: 'none',
+                      background: active ? 'var(--primary)' : 'transparent',
+                      color: active ? '#fff' : 'var(--text-2)',
+                    }}
+                    onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'; }}
+                    onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                  >
+                    {STAGE_LABELS[s]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Upcoming appointment */}
+          {lead.nextAppointment && (
+            <div className="card" style={{ padding: '1rem' }}>
+              <p className="section-label">Upcoming Appointment</p>
+              <p style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-1)' }}>
+                {lead.nextAppointment.type.replace(/_/g, ' ')}
+              </p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-2)', marginTop: '0.2rem' }}>
+                {new Date(lead.nextAppointment.date).toLocaleDateString('en-EG', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+              </p>
+              {lead.nextAppointment.notes && (
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginTop: '0.35rem' }}>{lead.nextAppointment.notes}</p>
+              )}
+            </div>
+          )}
+
+          {/* Assigned rep */}
+          <div className="card" style={{ padding: '1rem' }}>
+            <p className="section-label">Assigned Rep</p>
+            {repName ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.625rem' }}>
+                  <span className="avatar" style={{ width: '2.25rem', height: '2.25rem', background: avatarColor(repName), color: '#fff', fontSize: '0.75rem' }}>
+                    {initials(repName)}
+                  </span>
+                  <div>
+                    <p style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-1)' }}>{repName}</p>
+                    {lead.location?.name && (
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{lead.location.name}</p>
+                    )}
+                  </div>
+                </div>
+                <button className="btn btn-ghost btn-sm" style={{ padding: 0, fontSize: '0.75rem', color: 'var(--primary)' }}>
+                  ← Reassign Lead
+                </button>
+              </>
+            ) : (
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-3)' }}>Unassigned</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TimelineEntry({ dot, title, description, time, outcome }: {
+  dot: string; title: string; description: string; time: string; outcome?: string;
+}) {
+  return (
+    <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+        <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: dot, flexShrink: 0, marginTop: '3px' }} />
+        <span style={{ width: '1px', flex: 1, background: 'var(--border)', minHeight: '1rem', marginTop: '4px' }} />
+      </div>
+      <div style={{ flex: 1, paddingBottom: '0.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.15rem' }}>
+          <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-1)' }}>{title}</span>
+          {outcome && <span style={{ fontSize: '0.75rem', color: 'var(--text-2)' }}>· {outcome}</span>}
+          <span style={{ fontSize: '0.6875rem', color: 'var(--text-3)', marginLeft: 'auto' }}>{time}</span>
+        </div>
+        <p style={{ fontSize: '0.8125rem', color: 'var(--text-2)', lineHeight: 1.45 }}>{description}</p>
       </div>
     </div>
   );

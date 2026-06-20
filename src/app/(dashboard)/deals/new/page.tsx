@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
@@ -19,7 +19,7 @@ const METHODS = [
 const fmt = (n: number) =>
   n.toLocaleString('en-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 0 });
 
-export default function NewDealPage() {
+function NewDealContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const leadId = searchParams.get('leadId');
@@ -243,5 +243,14 @@ export default function NewDealPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+// BUG-001: useSearchParams() requires Suspense boundary in Next.js App Router
+export default function NewDealPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-gray-400">Loading…</div>}>
+      <NewDealContent />
+    </Suspense>
   );
 }

@@ -1,182 +1,432 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
-import StatusBadge from '../../../../components/StatusBadge';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 
 interface Payment {
-  id: string; type: string; status: string; date: string;
-  amount: number; method: string; memo?: string;
-  partner?: { name: string }; journal?: { code: string };
+  id: string;
+  number?: string;
+  type: string;
+  status: string;
+  date: string;
+  amount: number;
+  method: string;
+  memo?: string;
+  partner?: { name: string };
+  journal?: { code: string };
+  allocations?: { invoiceId: string; invoiceNumber?: string; amount: number }[];
 }
 
-const PAYMENT_TYPES = [
-  { value: 'INBOUND', label: 'Received (Inbound)' },
-  { value: 'OUTBOUND', label: 'Sent (Outbound)' },
-];
+interface Invoice {
+  id: string;
+  number?: string;
+  amountTotal: number;
+  amountResidual: number;
+  partner?: { name: string };
+}
 
 const PAYMENT_METHODS = [
   { value: 'CASH', label: 'Cash' },
-  { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
+  { value: 'TRANSFER', label: 'Bank Transfer' },
   { value: 'CHEQUE', label: 'Cheque' },
   { value: 'CARD', label: 'Card' },
 ];
 
-export default function PaymentsPage() {
-  const router = useRouter();
-  const [type, setType] = useState('INBOUND');
-  const { data, loading, error, reload } = useQuery<{ items: Payment[]; total: number }>(
-    `/finance/payments?type=${type}&limit=30`,
-    [type],
+const STATUS_OPTS = [
+  { value: '', label: 'All statuses' },
+  { value: 'DRAFT', label: 'Draft' },
+  { value: 'POSTED', label: 'Posted' },
+  { value: 'RECONCILED', label: 'Reconciled' },
+  { value: 'CANCELLED', label: 'Cancelled' },
+];
+
+function statusBadge(status: string) {
+  const map: Record<string, string> = {
+    DRAFT: 'badge badge-neutral',
+    POSTED: 'badge badge-info',
+    RECONCILED: 'badge badge-success',
+    CANCELLED: 'badge badge-danger',
+  };
+  return map[status] ?? 'badge badge-neutral';
+}
+
+const egp = (n: number) =>
+  'EGP ' + Number(n).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// ── Register Payment Slide-over ──────────────────────────────────────────────
+function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
+  onClose: () => void; onSuccess: () => void; tab: 'customer' | 'vendor';
+}) {
+  const [form, setForm] = useState({
+    partnerId: '',
+    journalId: '',
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    method: 'TRANSFER',
+    reference: '',
+    note: '',
+  });
+  const [allocations, setAllocations] = useState<{ invoiceId: string; amount: string }[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const { data: partnersRaw } = useQuery<any[]>(
+    tab === 'customer' ? '/partners?limit=200&type=CUSTOMER' : '/partners?limit=200&type=VENDOR',
+  );
+  const { data: journalsRaw } = useQuery<any[]>('/finance/journals?type=BANK&limit=50');
+  const { data: openInvoicesRaw } = useQuery<{ items: Invoice[] }>(
+    form.partnerId
+      ? `/finance/invoices?partnerId=${form.partnerId}&status=POSTED&limit=50&type=${tab === 'customer' ? 'CUSTOMER_INVOICE' : 'VENDOR_BILL'}`
+      : null,
+    [form.partnerId],
   );
 
-  const { data: journalsRaw } = useQuery<any[]>('/finance/gl/journals');
-  const { data: partnersRaw } = useQuery<any[]>('/partners?limit=100');
+  const partnerOpts = (Array.isArray(partnersRaw) ? partnersRaw : []).map((p) => ({ value: p.id, label: p.name }));
+  const journalOpts = (Array.isArray(journalsRaw) ? journalsRaw : []).map((j) => ({ value: j.id, label: `${j.code} — ${j.name}` }));
+  const openInvoices = openInvoicesRaw?.items ?? [];
 
-  const payments = data?.items ?? [];
-  const journals = (Array.isArray(journalsRaw) ? journalsRaw : []).map((j) => ({ value: j.id, label: `${j.code} — ${j.name}` }));
-  const partners = (Array.isArray(partnersRaw) ? partnersRaw : []).map((p) => ({ value: p.id, label: p.name }));
+  function toggleAllocation(inv: Invoice) {
+    setAllocations((prev) => {
+      const exists = prev.find((a) => a.invoiceId === inv.id);
+      if (exists) return prev.filter((a) => a.invoiceId !== inv.id);
+      return [...prev, { invoiceId: inv.id, amount: Number(inv.amountResidual).toFixed(2) }];
+    });
+  }
 
-  const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({
-    type: 'INBOUND', partnerId: '', journalId: '',
-    amount: '', date: new Date().toISOString().split('T')[0],
-    method: 'BANK_TRANSFER', memo: '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [saveErr, setSaveErr] = useState('');
-
-  function set(k: string, v: string) { setForm((p) => ({ ...p, [k]: v })); }
+  function updateAllocAmt(invoiceId: string, val: string) {
+    setAllocations((prev) => prev.map((a) => a.invoiceId === invoiceId ? { ...a, amount: val } : a));
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.partnerId || !form.journalId || !form.amount) { setSaveErr('Partner, journal, and amount required.'); return; }
-    setSaving(true); setSaveErr('');
+    if (!form.partnerId || !form.journalId || !form.amount) {
+      setErr('Customer/vendor, journal, and amount required.');
+      return;
+    }
+    setSaving(true); setErr('');
     try {
-      const pmt = await apiFetch<{ id: string }>('/finance/payments', {
+      await apiFetch('/finance/payments', {
         method: 'POST',
-        body: JSON.stringify({ ...form, amount: Number(form.amount) }),
+        body: JSON.stringify({
+          type: tab === 'customer' ? 'INBOUND' : 'OUTBOUND',
+          partnerId: form.partnerId,
+          journalId: form.journalId,
+          amount: Number(form.amount),
+          date: form.date,
+          method: form.method,
+          memo: form.note || form.reference || undefined,
+          ...(allocations.length > 0 && {
+            allocations: allocations.map((a) => ({ invoiceId: a.invoiceId, amount: Number(a.amount) })),
+          }),
+        }),
       });
-      setShowNew(false);
-      setForm({ type: 'INBOUND', partnerId: '', journalId: '', amount: '', date: new Date().toISOString().split('T')[0], method: 'BANK_TRANSFER', memo: '' });
-      router.push(`/finance/payments/${pmt.id}`);
-    } catch (err: unknown) { setSaveErr(err instanceof Error ? err.message : String(err)); }
+      onSuccess();
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Error'); }
     finally { setSaving(false); }
   }
 
-  const fmt = (n: number) => n.toLocaleString('en-EG', { maximumFractionDigits: 2 });
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <div
+        className="flex-1"
+        style={{ background: 'rgba(0,0,0,0.35)' }}
+        onClick={onClose}
+      />
+      <div
+        className="relative flex flex-col"
+        style={{ width: 480, background: 'var(--surface)', borderLeft: '1px solid var(--border)', overflowY: 'auto' }}
+      >
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
+          <div>
+            <h2 style={{ fontWeight: 600, fontSize: '0.9375rem', color: 'var(--text-1)' }}>Register Payment</h2>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
+              {tab === 'customer' ? 'Customer receipt' : 'Vendor payment'}
+            </p>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ fontSize: '1.2rem' }}>×</button>
+        </div>
+
+        <form onSubmit={submit} className="p-6 space-y-4 flex-1">
+          <div>
+            <label className="input-label">{tab === 'customer' ? 'Customer' : 'Vendor'} *</label>
+            <SearchableCombobox
+              options={partnerOpts}
+              value={form.partnerId}
+              onChange={(v) => { setForm((p) => ({ ...p, partnerId: v })); setAllocations([]); }}
+              placeholder={`Search ${tab === 'customer' ? 'customers' : 'vendors'}…`}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="input-label">Amount (EGP) *</label>
+              <input
+                type="number" step="0.01" min="0.01" required className="input"
+                value={form.amount}
+                onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label className="input-label">Date *</label>
+              <input
+                type="date" required className="input"
+                value={form.date}
+                onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="input-label">Method</label>
+            <SearchableCombobox
+              options={PAYMENT_METHODS}
+              value={form.method}
+              onChange={(v) => setForm((p) => ({ ...p, method: v }))}
+            />
+          </div>
+
+          <div>
+            <label className="input-label">Journal *</label>
+            <SearchableCombobox
+              options={journalOpts}
+              value={form.journalId}
+              onChange={(v) => setForm((p) => ({ ...p, journalId: v }))}
+              placeholder="Select bank/cash journal…"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="input-label">Reference #</label>
+              <input
+                className="input" placeholder="Cheque / transfer ref…"
+                value={form.reference}
+                onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="input-label">Note</label>
+              <input
+                className="input" placeholder="Optional note…"
+                value={form.note}
+                onChange={(e) => setForm((p) => ({ ...p, note: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          {/* Allocations */}
+          {openInvoices.length > 0 && (
+            <div>
+              <p className="section-label">Allocate to Invoices</p>
+              <div className="card" style={{ overflow: 'hidden' }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th />
+                      <th>Invoice #</th>
+                      <th className="text-right">Original</th>
+                      <th className="text-right">Applied</th>
+                      <th className="text-right">Remaining</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {openInvoices.map((inv) => {
+                      const alloc = allocations.find((a) => a.invoiceId === inv.id);
+                      return (
+                        <tr key={inv.id}>
+                          <td style={{ width: 36 }}>
+                            <input
+                              type="checkbox"
+                              checked={!!alloc}
+                              onChange={() => toggleAllocation(inv)}
+                            />
+                          </td>
+                          <td style={{ fontSize: '0.8rem', fontFamily: 'monospace', color: 'var(--primary)' }}>
+                            {inv.number ?? inv.id.slice(0, 8)}
+                          </td>
+                          <td className="text-right tabular-nums" style={{ fontSize: '0.8rem' }}>
+                            {egp(Number(inv.amountTotal))}
+                          </td>
+                          <td className="text-right" style={{ width: 110 }}>
+                            {alloc ? (
+                              <input
+                                type="number" step="0.01" min="0"
+                                className="input text-right"
+                                style={{ padding: '0.2rem 0.4rem', fontSize: '0.75rem', width: 100 }}
+                                value={alloc.amount}
+                                onChange={(e) => updateAllocAmt(inv.id, e.target.value)}
+                              />
+                            ) : (
+                              <span style={{ color: 'var(--text-3)', fontSize: '0.8rem' }}>—</span>
+                            )}
+                          </td>
+                          <td className="text-right tabular-nums" style={{ fontSize: '0.8rem', color: 'var(--warning-fg)' }}>
+                            {egp(Number(inv.amountResidual))}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {err && <p style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>{err}</p>}
+
+          <div
+            className="flex gap-3 pt-2"
+            style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', marginTop: 'auto' }}
+          >
+            <button type="button" className="btn btn-secondary flex-1" onClick={onClose}>Cancel</button>
+            <button type="submit" disabled={saving} className="btn btn-primary flex-1">
+              {saving ? 'Registering…' : 'Register Payment'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
+export default function PaymentsPage() {
+  const router = useRouter();
+  const [tab, setTab] = useState<'customer' | 'vendor'>('customer');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [search, setSearch] = useState('');
+  const [showPanel, setShowPanel] = useState(false);
+
+  const type = tab === 'customer' ? 'INBOUND' : 'OUTBOUND';
+  const qs = new URLSearchParams({
+    type,
+    limit: '30',
+    ...(statusFilter && { status: statusFilter }),
+    ...(search && { q: search }),
+  });
+  const { data, loading, error, reload } = useQuery<{ items: Payment[]; total: number }>(
+    `/finance/payments?${qs}`,
+    [tab, statusFilter, search],
+  );
+
+  const payments = data?.items ?? [];
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="page-body" style={{ maxWidth: '100%' }}>
+      {/* Header */}
+      <div className="page-header" style={{ padding: '1.25rem 0 1rem' }}>
         <div>
-          <h1 className="text-xl font-semibold text-white">Payments</h1>
-          <p className="text-xs text-gray-500 mt-0.5">{data?.total ?? 0} total</p>
+          <h1 className="page-title">Payments</h1>
+          <p className="page-subtitle">{data?.total ?? 0} records</p>
         </div>
-        <div className="flex gap-2">
-          <Link href="/finance" className="px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg border border-white/10 hover:border-white/20 transition">
-            ← Finance
-          </Link>
-          <button onClick={() => setShowNew(true)}
-            className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition font-medium">
-            + New Payment
-          </button>
+        <button className="btn btn-primary" onClick={() => setShowPanel(true)}>
+          + Register Payment
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="tabs mb-4">
+        <button
+          className={`tab${tab === 'customer' ? ' active' : ''}`}
+          onClick={() => setTab('customer')}
+        >
+          Customer Payments
+        </button>
+        <button
+          className={`tab${tab === 'vendor' ? ' active' : ''}`}
+          onClick={() => setTab('vendor')}
+        >
+          Vendor Payments
+        </button>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap gap-3 mb-4">
+        <input
+          className="input"
+          style={{ maxWidth: 240 }}
+          placeholder="Search payments…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div style={{ width: 180 }}>
+          <SearchableCombobox
+            options={STATUS_OPTS}
+            value={statusFilter}
+            onChange={setStatusFilter}
+            placeholder="All statuses"
+            clearable
+            clearLabel="All statuses"
+          />
         </div>
       </div>
 
-      <div className="flex gap-1 mb-4">
-        {[{ key: 'INBOUND', label: 'Received' }, { key: 'OUTBOUND', label: 'Sent' }].map((t) => (
-          <button key={t.key} onClick={() => setType(t.key)}
-            className={`px-3 py-1.5 text-xs rounded-lg transition ${type === t.key ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="rounded-xl border border-white/5 bg-gray-900 overflow-hidden">
-        {loading && <p className="p-6 text-gray-500 text-sm">Loading…</p>}
-        {error && <p className="p-6 text-red-400 text-sm">{error}</p>}
+      {/* Table */}
+      <div className="card" style={{ overflow: 'hidden' }}>
+        {loading && <p className="p-6 text-sm" style={{ color: 'var(--text-3)' }}>Loading…</p>}
+        {error && <p className="p-6 text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
         {!loading && (
-          <table className="w-full text-sm">
-            <thead className="border-b border-white/5 text-gray-400 text-xs">
+          <table className="data-table">
+            <thead>
               <tr>
-                <th className="px-4 py-3 text-left font-medium">Date</th>
-                <th className="px-4 py-3 text-left font-medium">Partner</th>
-                <th className="px-4 py-3 text-left font-medium">Journal</th>
-                <th className="px-4 py-3 text-left font-medium">Method</th>
-                <th className="px-4 py-3 text-right font-medium">Amount</th>
-                <th className="px-4 py-3 text-left font-medium">Status</th>
+                <th>Payment #</th>
+                <th>{tab === 'customer' ? 'Customer' : 'Vendor'}</th>
+                <th>Date</th>
+                <th>Method</th>
+                <th className="text-right">Amount</th>
+                <th>Applied To</th>
+                <th>Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody>
               {payments.map((p) => (
-                <tr key={p.id} onClick={() => router.push(`/finance/payments/${p.id}`)}
-                  className="hover:bg-white/5 transition cursor-pointer">
-                  <td className="px-4 py-2.5 text-gray-300 text-xs">{new Date(p.date).toLocaleDateString('en-EG')}</td>
-                  <td className="px-4 py-2.5 text-white">{p.partner?.name ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-gray-400 text-xs">{p.journal?.code ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-gray-400 text-xs">{p.method}</td>
-                  <td className="px-4 py-2.5 text-right text-white tabular-nums">{fmt(Number(p.amount))}</td>
-                  <td className="px-4 py-2.5"><StatusBadge status={p.status} /></td>
+                <tr
+                  key={p.id}
+                  className="cursor-pointer"
+                  onClick={() => router.push(`/finance/payments/${p.id}`)}
+                >
+                  <td>
+                    <span style={{ color: 'var(--primary)', fontFamily: 'monospace', fontSize: '0.8rem', fontWeight: 500 }}>
+                      {p.number ?? p.id.slice(0, 8).toUpperCase()}
+                    </span>
+                  </td>
+                  <td style={{ fontWeight: 500 }}>{p.partner?.name ?? '—'}</td>
+                  <td style={{ color: 'var(--text-2)', fontSize: '0.8rem' }}>
+                    {new Date(p.date).toLocaleDateString('en-EG')}
+                  </td>
+                  <td style={{ color: 'var(--text-2)', fontSize: '0.8rem' }}>{p.method}</td>
+                  <td className="text-right tabular-nums" style={{ fontWeight: 600 }}>{egp(Number(p.amount))}</td>
+                  <td style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
+                    {p.allocations?.length
+                      ? p.allocations.map((a) => a.invoiceNumber ?? a.invoiceId.slice(0, 8)).join(', ')
+                      : '—'}
+                  </td>
+                  <td>
+                    <span className={statusBadge(p.status)}>{p.status}</span>
+                  </td>
                 </tr>
               ))}
               {payments.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-600 text-sm">No payments found.</td></tr>
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-3)', padding: '2.5rem' }}>
+                    No payments found.
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
         )}
       </div>
 
-      {/* New Payment Dialog */}
-      {showNew && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowNew(false)} />
-          <div className="relative w-full max-w-md rounded-2xl bg-gray-900 border border-white/10 shadow-2xl">
-            <div className="flex items-center justify-between p-5 border-b border-white/5">
-              <h2 className="text-sm font-semibold text-white">New Payment</h2>
-              <button onClick={() => setShowNew(false)} className="text-gray-500 hover:text-white text-lg leading-none">×</button>
-            </div>
-            <form onSubmit={submit} className="p-5 space-y-3">
-              <SearchableCombobox label="Type" options={PAYMENT_TYPES} value={form.type} onChange={(v) => set('type', v)} />
-              <SearchableCombobox label="Partner *" options={partners} value={form.partnerId}
-                onChange={(v) => set('partnerId', v)} placeholder="Select partner" />
-              <SearchableCombobox label="Journal *" options={journals} value={form.journalId}
-                onChange={(v) => set('journalId', v)} placeholder="Select journal" />
-              <SearchableCombobox label="Method" options={PAYMENT_METHODS} value={form.method} onChange={(v) => set('method', v)} />
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Amount (EGP) *</label>
-                  <input type="number" min="0.01" step="0.01" value={form.amount}
-                    onChange={(e) => set('amount', e.target.value)} required
-                    className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Date *</label>
-                  <input type="date" value={form.date} onChange={(e) => set('date', e.target.value)} required
-                    className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Memo</label>
-                <input value={form.memo} onChange={(e) => set('memo', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
-              </div>
-              {saveErr && <p className="text-red-400 text-xs">{saveErr}</p>}
-              <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => setShowNew(false)}
-                  className="flex-1 py-2 text-sm text-gray-400 border border-white/10 rounded-lg hover:text-white transition">Cancel</button>
-                <button type="submit" disabled={saving}
-                  className="flex-1 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition">
-                  {saving ? '…' : 'Create'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {showPanel && (
+        <RegisterPaymentPanel
+          tab={tab}
+          onClose={() => setShowPanel(false)}
+          onSuccess={() => { setShowPanel(false); reload(); }}
+        />
       )}
     </div>
   );

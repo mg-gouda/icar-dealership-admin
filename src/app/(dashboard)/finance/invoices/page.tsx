@@ -1,246 +1,523 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
-import StatusBadge from '../../../../components/StatusBadge';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 
 interface Invoice {
-  id: string; type: string; status: string; paymentStatus: string;
-  date: string; dueDate?: string; amountTotal: number; amountResidual: number;
-  partner?: { name: string }; journal?: { code: string };
+  id: string;
+  number: string;
+  status: 'DRAFT' | 'POSTED' | 'PAID' | 'PARTIAL' | 'CANCELLED';
+  date: string;
+  dueDate?: string;
+  amountUntaxed: number;
+  amountTax: number;
+  amountTotal: number;
+  partner?: { name: string; email?: string; phone?: string };
+  deal?: { ref?: string };
 }
 
-interface InvLine { accountId: string; description: string; quantity: string; unitPrice: string; }
-const EMPTY_LINE = (): InvLine => ({ accountId: '', description: '', quantity: '1', unitPrice: '' });
+interface InvLine {
+  description: string;
+  qty: string;
+  unitPrice: string;
+  taxRate: string;
+}
 
-const INV_TYPES = [
-  { value: 'CUSTOMER_INVOICE', label: 'Customer Invoice' },
-  { value: 'VENDOR_BILL', label: 'Vendor Bill' },
-  { value: 'CREDIT_NOTE', label: 'Credit Note' },
+const EMPTY_LINE = (): InvLine => ({ description: '', qty: '1', unitPrice: '', taxRate: '14' });
+
+const STATUS_OPTS = [
+  { value: '', label: 'All statuses' },
+  { value: 'DRAFT', label: 'Draft' },
+  { value: 'POSTED', label: 'Posted' },
+  { value: 'PAID', label: 'Paid' },
+  { value: 'PARTIAL', label: 'Partial' },
+  { value: 'CANCELLED', label: 'Cancelled' },
 ];
 
-export default function InvoicesPage() {
+const PAYMENT_TERM_OPTS = [
+  { value: 'NET_30', label: 'Net 30' },
+  { value: 'NET_60', label: 'Net 60' },
+  { value: 'DUE_ON_RECEIPT', label: 'Due on Receipt' },
+  { value: 'CUSTOM', label: 'Custom' },
+];
+
+function statusBadge(status: string) {
+  const map: Record<string, string> = {
+    DRAFT: 'badge badge-neutral',
+    POSTED: 'badge badge-info',
+    PAID: 'badge badge-success',
+    PARTIAL: 'badge badge-warning',
+    CANCELLED: 'badge badge-danger',
+  };
+  return map[status] ?? 'badge badge-neutral';
+}
+
+const egp = (n: number) =>
+  'EGP ' + n.toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+export default function CustomerInvoicesPage() {
   const router = useRouter();
-  const [type, setType] = useState('CUSTOMER_INVOICE');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [search, setSearch] = useState('');
+  const [showForm, setShowForm] = useState(false);
+
+  const qs = new URLSearchParams({ limit: '30', ...(statusFilter && { status: statusFilter }), ...(search && { q: search }) });
   const { data, loading, error, reload } = useQuery<{ items: Invoice[]; total: number }>(
-    `/finance/invoices?type=${type}&limit=30`,
-    [type],
+    `/finance/invoices?type=CUSTOMER_INVOICE&${qs}`,
+    [statusFilter, search],
   );
 
-  const { data: journalsRaw } = useQuery<any[]>('/finance/gl/journals');
-  const { data: accountsRaw } = useQuery<{ items: any[] }>('/finance/gl/accounts?limit=200');
-  const { data: partnersRaw } = useQuery<any[]>('/partners?limit=100');
+  const { data: partnersRaw } = useQuery<any[]>('/partners?limit=200&type=CUSTOMER');
+  const { data: journalsRaw } = useQuery<any[]>('/finance/journals?type=SALES&limit=50');
+  const { data: dealsRaw } = useQuery<{ items: any[] }>('/deals?limit=100&status=ACTIVE');
 
   const invoices = data?.items ?? [];
-  const journals = (Array.isArray(journalsRaw) ? journalsRaw : []).map((j) => ({ value: j.id, label: `${j.code} — ${j.name}` }));
-  const accounts = (accountsRaw?.items ?? []).map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` }));
-  const partners = (Array.isArray(partnersRaw) ? partnersRaw : []).map((p) => ({ value: p.id, label: p.name }));
+  const partnerOpts = (Array.isArray(partnersRaw) ? partnersRaw : []).map((p) => ({ value: p.id, label: p.name }));
+  const journalOpts = (Array.isArray(journalsRaw) ? journalsRaw : []).map((j) => ({ value: j.id, label: `${j.code} — ${j.name}` }));
+  const dealOpts = [
+    { value: '', label: 'No deal reference' },
+    ...((dealsRaw?.items ?? []).map((d) => ({ value: d.id, label: d.ref ?? d.id.slice(0, 8) }))),
+  ];
 
-  const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ type: 'CUSTOMER_INVOICE', journalId: '', partnerId: '', date: new Date().toISOString().split('T')[0], dueDate: '' });
+  // Form state
+  const [form, setForm] = useState({
+    partnerId: '', journalId: '', dealId: '',
+    date: new Date().toISOString().split('T')[0],
+    dueDate: '',
+    paymentTerms: 'NET_30',
+    notes: '',
+  });
   const [lines, setLines] = useState<InvLine[]>([EMPTY_LINE()]);
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState('');
 
   function setLine(i: number, k: keyof InvLine, v: string) {
-    setLines((prev) => prev.map((l, idx) => idx === i ? { ...l, [k]: v } : l));
+    setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, [k]: v } : l)));
   }
 
-  const subtotal = lines.reduce((s, l) => s + (Number(l.quantity) || 0) * (Number(l.unitPrice) || 0), 0);
+  const subtotal = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0), 0);
+  const tax = lines.reduce((s, l) => {
+    const lineAmt = (Number(l.qty) || 0) * (Number(l.unitPrice) || 0);
+    return s + lineAmt * ((Number(l.taxRate) || 0) / 100);
+  }, 0);
+  const total = subtotal + tax;
 
-  async function submit(e: React.FormEvent) {
+  async function saveDraft(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.journalId || !form.partnerId) { setSaveErr('Journal and partner required.'); return; }
-    const valid = lines.filter((l) => l.accountId && l.description && Number(l.unitPrice) > 0);
-    if (!valid.length) { setSaveErr('At least 1 valid line required.'); return; }
+    await submitInvoice('DRAFT');
+  }
+
+  async function postInvoice(e: React.FormEvent) {
+    e.preventDefault();
+    await submitInvoice('POSTED');
+  }
+
+  async function submitInvoice(targetStatus: string) {
+    if (!form.partnerId || !form.journalId) { setSaveErr('Customer and journal required.'); return; }
+    const valid = lines.filter((l) => l.description && Number(l.unitPrice) > 0);
+    if (!valid.length) { setSaveErr('At least one valid line required.'); return; }
     setSaving(true); setSaveErr('');
     try {
       const inv = await apiFetch<{ id: string }>('/finance/invoices', {
         method: 'POST',
         body: JSON.stringify({
-          ...form,
-          dueDate: form.dueDate || undefined,
+          type: 'CUSTOMER_INVOICE',
+          partnerId: form.partnerId,
+          journalId: form.journalId,
+          ...(form.dealId && { dealId: form.dealId }),
+          date: form.date,
+          ...(form.dueDate && { dueDate: form.dueDate }),
+          paymentTerms: form.paymentTerms,
+          notes: form.notes || undefined,
           lines: valid.map((l) => ({
-            accountId: l.accountId,
             description: l.description,
-            quantity: Number(l.quantity) || 1,
+            quantity: Number(l.qty) || 1,
             unitPrice: Number(l.unitPrice),
+            taxRate: Number(l.taxRate) || 0,
           })),
+          status: targetStatus,
         }),
       });
-      setShowNew(false);
-      setForm({ type: 'CUSTOMER_INVOICE', journalId: '', partnerId: '', date: new Date().toISOString().split('T')[0], dueDate: '' });
+      setShowForm(false);
+      setForm({ partnerId: '', journalId: '', dealId: '', date: new Date().toISOString().split('T')[0], dueDate: '', paymentTerms: 'NET_30', notes: '' });
       setLines([EMPTY_LINE()]);
+      reload();
       router.push(`/finance/invoices/${inv.id}`);
-    } catch (err: unknown) { setSaveErr(err instanceof Error ? err.message : 'Error'); }
-    finally { setSaving(false); }
+    } catch (err: unknown) {
+      setSaveErr(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  const draftCount = invoices.filter((i) => i.status === 'DRAFT').length;
-
   return (
-    <div className="p-6">
-      {draftCount > 0 && (
-        <div className="mb-4 flex items-center justify-between rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3">
-          <p className="text-sm text-amber-300 font-medium">
-            {draftCount} invoice{draftCount !== 1 ? 's' : ''} pending review
-          </p>
-          <button onClick={() => {}} className="text-xs text-amber-400 hover:text-amber-300 underline">
-            Filter to Draft
-          </button>
-        </div>
-      )}
-      <div className="flex items-center justify-between mb-6">
+    <div className="page-body" style={{ maxWidth: '100%' }}>
+      {/* Page header */}
+      <div className="page-header" style={{ padding: '1.25rem 0 1rem' }}>
         <div>
-          <h1 className="text-xl font-semibold text-white">Invoices</h1>
-          <p className="text-xs text-gray-500 mt-0.5">{data?.total ?? 0} total</p>
+          <h1 className="page-title">Customer Invoices</h1>
+          <p className="page-subtitle">{data?.total ?? 0} invoices total</p>
         </div>
-        <div className="flex gap-2">
-          <Link href="/finance" className="px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg border border-white/10 hover:border-white/20 transition">
-            ← Finance
-          </Link>
-          <button onClick={() => setShowNew(true)}
-            className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition font-medium">
-            + New Invoice
-          </button>
+        <button className="btn btn-primary" onClick={() => setShowForm(true)}>
+          + New Invoice
+        </button>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <input
+          className="input"
+          style={{ maxWidth: 240 }}
+          placeholder="Search invoices…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div style={{ width: 180 }}>
+          <SearchableCombobox
+            options={STATUS_OPTS}
+            value={statusFilter}
+            onChange={setStatusFilter}
+            placeholder="All statuses"
+            clearable
+            clearLabel="All statuses"
+          />
         </div>
       </div>
 
-      {/* Type tabs */}
-      <div className="flex gap-1 mb-4">
-        {[
-          { key: 'CUSTOMER_INVOICE', label: 'Customer Invoices' },
-          { key: 'VENDOR_BILL', label: 'Vendor Bills' },
-          { key: 'CREDIT_NOTE', label: 'Credit Notes' },
-        ].map((t) => (
-          <button key={t.key} onClick={() => setType(t.key)}
-            className={`px-3 py-1.5 text-xs rounded-lg transition ${type === t.key ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="rounded-xl border border-white/5 bg-gray-900 overflow-hidden">
-        {loading && <p className="p-6 text-gray-500 text-sm">Loading…</p>}
-        {error && <p className="p-6 text-red-400 text-sm">{error}</p>}
+      {/* Table */}
+      <div className="card" style={{ overflow: 'hidden' }}>
+        {loading && <p className="p-6 text-sm" style={{ color: 'var(--text-3)' }}>Loading…</p>}
+        {error && <p className="p-6 text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
         {!loading && (
-          <table className="w-full text-sm">
-            <thead className="border-b border-white/5 text-gray-400 text-xs">
+          <table className="data-table">
+            <thead>
               <tr>
-                <th className="px-4 py-3 text-left font-medium">Date</th>
-                <th className="px-4 py-3 text-left font-medium">Partner</th>
-                <th className="px-4 py-3 text-left font-medium">Journal</th>
-                <th className="px-4 py-3 text-right font-medium">Total</th>
-                <th className="px-4 py-3 text-right font-medium">Due</th>
-                <th className="px-4 py-3 text-left font-medium">Status</th>
-                <th className="px-4 py-3 text-left font-medium">Payment</th>
+                <th>Invoice #</th>
+                <th>Customer</th>
+                <th>Date</th>
+                <th>Due Date</th>
+                <th className="text-right">Amount (EGP)</th>
+                <th className="text-right">Tax</th>
+                <th className="text-right">Total</th>
+                <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody>
               {invoices.map((inv) => (
-                <tr key={inv.id} onClick={() => router.push(`/finance/invoices/${inv.id}`)}
-                  className="hover:bg-white/5 transition cursor-pointer">
-                  <td className="px-4 py-2.5 text-gray-300 text-xs">{new Date(inv.date).toLocaleDateString('en-EG')}</td>
-                  <td className="px-4 py-2.5 text-white">{inv.partner?.name ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-gray-400 text-xs">{inv.journal?.code ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-right text-white tabular-nums">
-                    {Number(inv.amountTotal).toLocaleString('en-EG', { maximumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums">
-                    <span className={Number(inv.amountResidual) > 0 ? 'text-amber-400' : 'text-gray-500'}>
-                      {Number(inv.amountResidual).toLocaleString('en-EG', { maximumFractionDigits: 2 })}
+                <tr
+                  key={inv.id}
+                  className="cursor-pointer"
+                  onClick={() => router.push(`/finance/invoices/${inv.id}`)}
+                >
+                  <td>
+                    <span style={{ color: 'var(--primary)', fontWeight: 500, fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                      {inv.number || inv.id.slice(0, 8).toUpperCase()}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5"><StatusBadge status={inv.status} /></td>
-                  <td className="px-4 py-2.5"><StatusBadge status={inv.paymentStatus} /></td>
+                  <td style={{ fontWeight: 500 }}>{inv.partner?.name ?? '—'}</td>
+                  <td style={{ color: 'var(--text-2)', fontSize: '0.8rem' }}>
+                    {new Date(inv.date).toLocaleDateString('en-EG')}
+                  </td>
+                  <td style={{ color: 'var(--text-2)', fontSize: '0.8rem' }}>
+                    {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('en-EG') : '—'}
+                  </td>
+                  <td className="text-right tabular-nums">{egp(Number(inv.amountUntaxed))}</td>
+                  <td className="text-right tabular-nums" style={{ color: 'var(--text-2)' }}>
+                    {egp(Number(inv.amountTax))}
+                  </td>
+                  <td className="text-right tabular-nums" style={{ fontWeight: 600 }}>
+                    {egp(Number(inv.amountTotal))}
+                  </td>
+                  <td>
+                    <span className={statusBadge(inv.status)}>{inv.status}</span>
+                  </td>
+                  <td>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={(e) => { e.stopPropagation(); router.push(`/finance/invoices/${inv.id}`); }}
+                    >
+                      View
+                    </button>
+                  </td>
                 </tr>
               ))}
               {invoices.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-600 text-sm">No invoices found.</td></tr>
+                <tr>
+                  <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-3)', padding: '2.5rem' }}>
+                    No invoices found.
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
         )}
       </div>
 
-      {/* New Invoice Dialog */}
-      {showNew && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowNew(false)} />
-          <div className="relative w-full max-w-2xl rounded-2xl bg-gray-900 border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-white/5 sticky top-0 bg-gray-900 z-10">
-              <h2 className="text-sm font-semibold text-white">New Invoice</h2>
-              <button onClick={() => setShowNew(false)} className="text-gray-500 hover:text-white text-lg leading-none">×</button>
-            </div>
-            <form onSubmit={submit} className="p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <SearchableCombobox label="Type" options={INV_TYPES} value={form.type}
-                  onChange={(v) => setForm({ ...form, type: v })} />
-                <SearchableCombobox label="Journal *" options={journals} value={form.journalId}
-                  onChange={(v) => setForm({ ...form, journalId: v })} placeholder="Select journal" />
-                <SearchableCombobox label="Partner *" options={partners} value={form.partnerId}
-                  onChange={(v) => setForm({ ...form, partnerId: v })} placeholder="Select partner" />
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Date *</label>
-                  <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required
-                    className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Due Date</label>
-                  <input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
-                </div>
-              </div>
-
-              {/* Lines */}
+      {/* New Invoice Form Modal */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4" style={{ paddingTop: '2rem' }}>
+          <div
+            className="absolute inset-0"
+            style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
+            onClick={() => setShowForm(false)}
+          />
+          <div
+            className="relative w-full card shadow-2xl"
+            style={{ maxWidth: 900, background: 'var(--surface)', zIndex: 10 }}
+          >
+            {/* Modal header */}
+            <div
+              className="flex items-center justify-between px-6 py-4"
+              style={{ borderBottom: '1px solid var(--border)' }}
+            >
               <div>
-                <p className="text-xs text-gray-500 mb-2">Lines</p>
-                <div className="grid grid-cols-[1fr_1fr_80px_90px_24px] gap-1.5 text-xs text-gray-500 mb-1.5 px-1">
-                  <span>Account</span><span>Description</span><span className="text-right">Qty</span><span className="text-right">Unit Price</span><span />
+                <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-1)' }}>New Customer Invoice</h2>
+                <p className="page-subtitle">Auto-generated number on save</p>
+              </div>
+              <button
+                onClick={() => setShowForm(false)}
+                className="btn btn-ghost btn-sm"
+                style={{ fontSize: '1.2rem', lineHeight: 1 }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Top row: customer + dates */}
+              <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
+                <div className="col-span-2" style={{ gridColumn: 'span 2' }}>
+                  <label className="input-label">Bill To — Customer *</label>
+                  <SearchableCombobox
+                    options={partnerOpts}
+                    value={form.partnerId}
+                    onChange={(v) => setForm({ ...form, partnerId: v })}
+                    placeholder="Search customers…"
+                  />
                 </div>
-                <div className="space-y-1.5">
-                  {lines.map((line, i) => (
-                    <div key={i} className="grid grid-cols-[1fr_1fr_80px_90px_24px] gap-1.5 items-center">
-                      <SearchableCombobox options={accounts} value={line.accountId}
-                        onChange={(v) => setLine(i, 'accountId', v)} placeholder="Account…" />
-                      <input value={line.description} onChange={(e) => setLine(i, 'description', e.target.value)}
-                        placeholder="Description"
-                        className="px-2.5 py-2 bg-gray-800 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500" />
-                      <input type="number" min="1" step="1" value={line.quantity}
-                        onChange={(e) => setLine(i, 'quantity', e.target.value)}
-                        className="px-2.5 py-2 bg-gray-800 border border-white/10 rounded-lg text-xs text-right tabular-nums text-white focus:outline-none focus:border-blue-500" />
-                      <input type="number" min="0" step="0.01" value={line.unitPrice}
-                        onChange={(e) => setLine(i, 'unitPrice', e.target.value)}
-                        placeholder="0.00"
-                        className="px-2.5 py-2 bg-gray-800 border border-white/10 rounded-lg text-xs text-right tabular-nums text-white focus:outline-none focus:border-blue-500" />
-                      <button type="button" onClick={() => setLines((prev) => prev.filter((_, idx) => idx !== i))}
-                        disabled={lines.length <= 1}
-                        className="text-gray-600 hover:text-red-400 disabled:opacity-30 text-sm leading-none">×</button>
-                    </div>
-                  ))}
+                <div>
+                  <label className="input-label">Invoice Date *</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={form.date}
+                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    required
+                  />
                 </div>
-                <div className="flex items-center justify-between mt-2">
-                  <button type="button" onClick={() => setLines((prev) => [...prev, EMPTY_LINE()])}
-                    className="text-xs text-blue-400 hover:text-blue-300 transition">+ Add line</button>
-                  <span className="text-xs text-gray-400 tabular-nums">
-                    Subtotal: <span className="text-white font-medium">{subtotal.toLocaleString('en-EG', { maximumFractionDigits: 2 })} EGP</span>
-                  </span>
+                <div>
+                  <label className="input-label">Due Date</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={form.dueDate}
+                    onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+                  />
                 </div>
               </div>
 
-              {saveErr && <p className="text-red-400 text-xs">{saveErr}</p>}
-              <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => setShowNew(false)}
-                  className="flex-1 py-2 text-sm text-gray-400 border border-white/10 rounded-lg hover:text-white transition">Cancel</button>
-                <button type="submit" disabled={saving}
-                  className="flex-1 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition">
-                  {saving ? '…' : 'Create Draft'}
+              <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+                <div>
+                  <label className="input-label">Sales Journal *</label>
+                  <SearchableCombobox
+                    options={journalOpts}
+                    value={form.journalId}
+                    onChange={(v) => setForm({ ...form, journalId: v })}
+                    placeholder="Select journal…"
+                  />
+                </div>
+                <div>
+                  <label className="input-label">Deal Reference (optional)</label>
+                  <SearchableCombobox
+                    options={dealOpts}
+                    value={form.dealId}
+                    onChange={(v) => setForm({ ...form, dealId: v })}
+                    placeholder="No deal"
+                    clearable
+                    clearLabel="No deal reference"
+                  />
+                </div>
+                <div>
+                  <label className="input-label">Payment Terms</label>
+                  <SearchableCombobox
+                    options={PAYMENT_TERM_OPTS}
+                    value={form.paymentTerms}
+                    onChange={(v) => setForm({ ...form, paymentTerms: v })}
+                  />
+                </div>
+              </div>
+
+              {/* Invoice lines */}
+              <div>
+                <p className="section-label">Invoice Lines</p>
+                <div
+                  className="card"
+                  style={{ overflow: 'hidden', border: '1px solid var(--border)' }}
+                >
+                  <table className="data-table" style={{ tableLayout: 'fixed' }}>
+                    <colgroup>
+                      <col style={{ width: 32 }} />
+                      <col style={{ width: 'auto' }} />
+                      <col style={{ width: 72 }} />
+                      <col style={{ width: 130 }} />
+                      <col style={{ width: 90 }} />
+                      <col style={{ width: 130 }} />
+                      <col style={{ width: 28 }} />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Description</th>
+                        <th className="text-right">Qty</th>
+                        <th className="text-right">Unit Price</th>
+                        <th className="text-right">Tax %</th>
+                        <th className="text-right">Amount</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lines.map((line, i) => {
+                        const amt = (Number(line.qty) || 0) * (Number(line.unitPrice) || 0);
+                        return (
+                          <tr key={i}>
+                            <td style={{ color: 'var(--text-3)', fontSize: '0.75rem' }}>{i + 1}</td>
+                            <td>
+                              <input
+                                className="input"
+                                style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+                                placeholder="Description…"
+                                value={line.description}
+                                onChange={(e) => setLine(i, 'description', e.target.value)}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                className="input text-right"
+                                style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+                                value={line.qty}
+                                onChange={(e) => setLine(i, 'qty', e.target.value)}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                className="input text-right tabular-nums"
+                                style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+                                placeholder="0.00"
+                                value={line.unitPrice}
+                                onChange={(e) => setLine(i, 'unitPrice', e.target.value)}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                className="input text-right"
+                                style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+                                value={line.taxRate}
+                                onChange={(e) => setLine(i, 'taxRate', e.target.value)}
+                              />
+                            </td>
+                            <td className="text-right tabular-nums" style={{ fontSize: '0.8rem', fontWeight: 500 }}>
+                              {egp(amt)}
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                onClick={() => setLines((prev) => prev.filter((_, idx) => idx !== i))}
+                                disabled={lines.length <= 1}
+                                style={{ color: 'var(--danger)', opacity: lines.length <= 1 ? 0.3 : 1, fontSize: '1rem', lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer' }}
+                              >
+                                ×
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <div
+                    className="flex items-center justify-between px-4 py-3"
+                    style={{ borderTop: '1px solid var(--border)' }}
+                  >
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setLines((prev) => [...prev, EMPTY_LINE()])}
+                    >
+                      + Add Line
+                    </button>
+                    <div className="space-y-1 text-right" style={{ minWidth: 220 }}>
+                      <div className="flex justify-between gap-8 text-sm" style={{ color: 'var(--text-2)' }}>
+                        <span>Subtotal</span>
+                        <span className="tabular-nums">{egp(subtotal)}</span>
+                      </div>
+                      <div className="flex justify-between gap-8 text-sm" style={{ color: 'var(--text-2)' }}>
+                        <span>Tax</span>
+                        <span className="tabular-nums">{egp(tax)}</span>
+                      </div>
+                      <div
+                        className="flex justify-between gap-8"
+                        style={{ fontWeight: 700, fontSize: '0.9375rem', borderTop: '1px solid var(--border)', paddingTop: '0.5rem', marginTop: '0.25rem' }}
+                      >
+                        <span>Total</span>
+                        <span className="tabular-nums" style={{ color: 'var(--primary)' }}>{egp(total)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="input-label">Notes</label>
+                <textarea
+                  className="textarea input"
+                  rows={3}
+                  placeholder="Internal notes or customer-facing comments…"
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+
+              {saveErr && (
+                <p style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>{saveErr}</p>
+              )}
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-2" style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={saving}
+                  onClick={saveDraft}
+                >
+                  Save Draft
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={saving}
+                  onClick={postInvoice}
+                >
+                  {saving ? 'Saving…' : 'Validate & Post'}
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

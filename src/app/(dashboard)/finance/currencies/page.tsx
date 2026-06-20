@@ -3,45 +3,169 @@
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 
-interface Currency {
-  id: string; code: string; symbol: string; decimalPlaces: number; active: boolean;
-  rates?: { rate: number; date: string }[];
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface ExchangeRate {
+  rate: number | string;
+  date: string;
 }
 
-export default function CurrenciesPage() {
-  const { data: currencies, loading, reload } = useQuery<Currency[]>('/finance/currencies');
-  const [adding, setAdding] = useState<string | null>(null); // currency id being rate-added
-  const [rate, setRate] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+interface Currency {
+  id:            string;
+  code:          string;
+  name?:         string;
+  symbol:        string;
+  decimalPlaces: number;
+  active:        boolean;
+  rates?:        ExchangeRate[];
+}
+
+const fmt = (n: number | string) =>
+  Number(n).toLocaleString('en-EG', { minimumFractionDigits: 4, maximumFractionDigits: 6 });
+
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const h    = Math.floor(diff / 3600000);
+  if (h < 1)   return 'Just now';
+  if (h < 24)  return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+// ── Add Currency Modal ────────────────────────────────────────────────────────
+function AddCurrencyModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [form, setForm] = useState({ code: '', name: '', symbol: '', decimalPlaces: '2' });
   const [saving, setSaving] = useState(false);
+  const [err,    setErr]    = useState('');
+
+  function set(k: string, v: string) { setForm((p) => ({ ...p, [k]: v })); }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.code || !form.symbol) { setErr('Code and symbol are required.'); return; }
+    setSaving(true); setErr('');
+    try {
+      await apiFetch('/finance/currencies', {
+        method: 'POST',
+        body: JSON.stringify({
+          code:          form.code.toUpperCase(),
+          name:          form.name || undefined,
+          symbol:        form.symbol,
+          decimalPlaces: Number(form.decimalPlaces) || 2,
+        }),
+      });
+      onSuccess();
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose} />
+      <div className="relative w-full max-w-sm card shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
+          <h2 className="page-title" style={{ fontSize: '0.9375rem' }}>Add Currency</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: '1.25rem', lineHeight: 1 }}>×</button>
+        </div>
+        <form onSubmit={submit} className="p-5 space-y-3">
+          <div>
+            <label className="input-label">Currency Code *</label>
+            <input required className="input" value={form.code} onChange={(e) => set('code', e.target.value.toUpperCase())} placeholder="USD" maxLength={3} />
+          </div>
+          <div>
+            <label className="input-label">Name</label>
+            <input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="US Dollar" />
+          </div>
+          <div>
+            <label className="input-label">Symbol *</label>
+            <input required className="input" value={form.symbol} onChange={(e) => set('symbol', e.target.value)} placeholder="$" maxLength={4} />
+          </div>
+          <div>
+            <label className="input-label">Decimal Places</label>
+            <input type="number" min="0" max="6" className="input" value={form.decimalPlaces} onChange={(e) => set('decimalPlaces', e.target.value)} />
+          </div>
+          {err && <p style={{ fontSize: '0.75rem', color: 'var(--danger-fg)' }}>{err}</p>}
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose} className="btn btn-secondary" style={{ flex: 1 }}>Cancel</button>
+            <button type="submit" disabled={saving} className="btn btn-primary" style={{ flex: 1 }}>
+              {saving ? '…' : 'Add Currency'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Rate History Mini Chart ───────────────────────────────────────────────────
+function RateHistoryChart({ rates }: { rates: ExchangeRate[] }) {
+  if (rates.length < 2) return null;
+  const values = rates.slice(-12).map((r) => Number(r.rate));
+  const min    = Math.min(...values);
+  const max    = Math.max(...values, min + 0.001);
+  const W      = 160;
+  const H      = 36;
+  const pts    = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * W;
+    const y = H - ((v - min) / (max - min)) * H;
+    return `${x},${y}`;
+  });
+
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
+      <polyline
+        points={pts.join(' ')}
+        fill="none"
+        stroke="var(--primary)"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <circle cx={pts[pts.length - 1]?.split(',')[0]} cy={pts[pts.length - 1]?.split(',')[1]} r={2.5} fill="var(--primary)" />
+    </svg>
+  );
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+export default function CurrenciesPage() {
+  const { data: raw, loading, reload } = useQuery<Currency[]>('/finance/currencies');
+  const [addingId,    setAddingId]    = useState<string | null>(null);
+  const [rateInput,   setRateInput]   = useState('');
+  const [dateInput,   setDateInput]   = useState(new Date().toISOString().slice(0, 10));
+  const [saving,      setSaving]      = useState(false);
+  const [showAdd,     setShowAdd]     = useState(false);
+  const [revaluing,   setRevaluing]   = useState(false);
+  const [revalResult, setRevalResult] = useState<{ revaluedCount: number; totalVariance: number } | null>(null);
+  const [selectedId,  setSelectedId]  = useState<string | null>(null);
+
+  const currencies = Array.isArray(raw) ? raw : [];
+  const selected   = currencies.find((c) => c.id === selectedId) ?? currencies[0];
 
   async function addRate(currencyId: string) {
-    if (!rate) return;
+    if (!rateInput) return;
     setSaving(true);
     try {
       await apiFetch(`/finance/currencies/${currencyId}/rates`, {
         method: 'POST',
-        body: JSON.stringify({ rate: parseFloat(rate), date: new Date(date).toISOString() }),
+        body: JSON.stringify({ rate: parseFloat(rateInput), date: new Date(dateInput).toISOString() }),
       });
-      setAdding(null); setRate(''); reload();
+      setAddingId(null);
+      setRateInput('');
+      reload();
     } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
     finally { setSaving(false); }
   }
 
-  async function toggle(id: string) {
+  async function toggleActive(id: string) {
     try {
       await apiFetch(`/finance/currencies/${id}/toggle-active`, { method: 'PATCH' });
       reload();
     } catch (e: unknown) { alert(e instanceof Error ? e.message : String(e)); }
   }
 
-  const list = Array.isArray(currencies) ? currencies : [];
-  const [revaluing, setRevaluing] = useState(false);
-  const [revalResult, setRevalResult] = useState<{ revaluedCount: number; totalVariance: number } | null>(null);
-
   async function runRevaluation() {
     if (!confirm('Run period-end FX revaluation? This will post GL entries for all open foreign-currency balances.')) return;
-    setRevaluing(true); setRevalResult(null);
+    setRevaluing(true);
+    setRevalResult(null);
     try {
       const res = await apiFetch<{ revaluedCount: number; totalVariance: number }>('/finance/currencies/revaluate', { method: 'POST' });
       setRevalResult(res);
@@ -50,73 +174,215 @@ export default function CurrenciesPage() {
   }
 
   return (
-    <div className="p-6 max-w-3xl">
-      <div className="flex items-center justify-between mb-1">
-        <h1 className="text-xl font-semibold text-white">Currencies</h1>
-        <button onClick={runRevaluation} disabled={revaluing}
-          className="px-3 py-1.5 text-xs bg-purple-700 hover:bg-purple-600 disabled:opacity-50 text-white rounded-lg transition">
-          {revaluing ? 'Running…' : 'Run FX Revaluation'}
-        </button>
-      </div>
-      <p className="text-xs text-gray-500 mb-2">Exchange rates — manual entry</p>
-      {revalResult && (
-        <div className="mb-4 p-3 rounded-lg bg-purple-900/20 border border-purple-500/20 text-xs text-purple-300">
-          Revaluation complete — {revalResult.revaluedCount} lines adjusted, net variance {revalResult.totalVariance.toLocaleString()} EGP
+    <div>
+      {/* Page header */}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Currencies &amp; Exchange Rates</h1>
+          <p className="page-subtitle">Manual exchange rate entry — EGP is the base currency</p>
         </div>
-      )}
-
-      {loading && <p className="text-gray-500 text-sm">Loading…</p>}
-
-      <div className="space-y-3">
-        {list.map((c) => (
-          <div key={c.id} className="rounded-xl border border-white/5 bg-gray-900 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-lg font-bold text-white">{c.symbol}</span>
-                <div>
-                  <p className="text-sm font-medium text-white">{c.code}</p>
-                  <p className="text-xs text-gray-500">{c.decimalPlaces} decimal places</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                {c.code !== 'EGP' && (
-                  <button onClick={() => { setAdding(c.id); setRate(''); }}
-                    className="text-xs text-blue-400 hover:text-blue-300 transition">+ Rate</button>
-                )}
-                <button onClick={() => toggle(c.id)}
-                  className={`px-2.5 py-1 text-xs rounded-full font-medium transition ${
-                    c.active ? 'bg-green-900/40 text-green-300 hover:bg-red-900/40 hover:text-red-300'
-                              : 'bg-gray-800 text-gray-500 hover:bg-green-900/40 hover:text-green-300'
-                  }`}>
-                  {c.active ? 'Active' : 'Inactive'}
-                </button>
-              </div>
-            </div>
-
-            {adding === c.id && (
-              <div className="mt-3 pt-3 border-t border-white/5 flex items-end gap-3">
-                <div className="flex-1">
-                  <label className="block text-xs text-gray-500 mb-1">Rate (EGP per 1 {c.code})</label>
-                  <input type="number" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)}
-                    placeholder="e.g. 49.50"
-                    className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Date</label>
-                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-                    className="px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
-                </div>
-                <button onClick={() => addRate(c.id)} disabled={saving}
-                  className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition">
-                  {saving ? '…' : 'Save'}
-                </button>
-                <button onClick={() => setAdding(null)}
-                  className="px-3 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
-              </div>
-            )}
-          </div>
-        ))}
+        <div className="flex gap-2">
+          <button className="btn btn-secondary" onClick={runRevaluation} disabled={revaluing}>
+            {revaluing ? 'Running…' : 'Run FX Revaluation'}
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
+            + Add Currency
+          </button>
+        </div>
       </div>
+
+      <div className="page-body space-y-4">
+        {/* Revaluation result */}
+        {revalResult && (
+          <div className="card p-4 flex items-center gap-3" style={{ borderColor: 'var(--success-bg)', background: 'var(--success-bg)' }}>
+            <svg className="w-5 h-5 shrink-0" style={{ color: 'var(--success-fg)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--success-fg)' }}>
+              Revaluation complete — {revalResult.revaluedCount} lines adjusted, net variance{' '}
+              <strong>{revalResult.totalVariance.toLocaleString('en-EG')} EGP</strong>
+            </p>
+            <button onClick={() => setRevalResult(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--success-fg)', fontSize: '1.1rem' }}>×</button>
+          </div>
+        )}
+
+        {loading && (
+          <div className="card py-12 text-center" style={{ color: 'var(--text-3)' }}>Loading currencies…</div>
+        )}
+
+        <div className="grid gap-4" style={{ gridTemplateColumns: '1fr auto' }}>
+          {/* Currency table */}
+          <div className="card overflow-hidden" style={{ alignSelf: 'start' }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Currency Code</th>
+                  <th>Name</th>
+                  <th>Symbol</th>
+                  <th style={{ textAlign: 'right' }}>Rate to EGP</th>
+                  <th>Last Updated</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {currencies.map((c) => {
+                  const latestRate = c.rates?.[c.rates.length - 1];
+                  const isBase     = c.code === 'EGP';
+
+                  return [
+                    <tr
+                      key={c.id}
+                      onClick={() => setSelectedId(c.id)}
+                      style={{ cursor: 'pointer', background: selectedId === c.id ? 'var(--surface-2)' : undefined }}
+                    >
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="flex items-center justify-center rounded-md"
+                            style={{ width: 32, height: 32, background: 'var(--surface-2)', flexShrink: 0 }}
+                          >
+                            <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-1)' }}>{c.symbol}</span>
+                          </div>
+                          <span style={{ fontWeight: 600, color: 'var(--text-1)', fontFamily: 'monospace' }}>{c.code}</span>
+                        </div>
+                      </td>
+                      <td style={{ color: 'var(--text-2)' }}>{c.name ?? '—'}</td>
+                      <td style={{ color: 'var(--text-2)' }}>{c.symbol}</td>
+                      <td style={{ textAlign: 'right', fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums', color: 'var(--text-1)' }}>
+                        {isBase ? '1.000000' : latestRate ? fmt(latestRate.rate) : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                      </td>
+                      <td style={{ color: 'var(--text-3)' }}>
+                        {latestRate ? timeAgo(latestRate.date) : isBase ? 'Base' : '—'}
+                      </td>
+                      <td>
+                        <span className={`badge ${c.active ? 'badge-success' : 'badge-neutral'}`}>
+                          {c.active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          {!isBase && (
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => { setAddingId(addingId === c.id ? null : c.id); setRateInput(''); }}
+                            >
+                              Update Rate
+                            </button>
+                          )}
+                          {!isBase && (
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => toggleActive(c.id)}
+                              style={{ color: c.active ? 'var(--danger-fg)' : 'var(--success-fg)' }}
+                            >
+                              {c.active ? 'Deactivate' : 'Activate'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>,
+
+                    // Inline rate update row
+                    addingId === c.id && (
+                      <tr key={`${c.id}-rate`}>
+                        <td colSpan={8} style={{ padding: '0.75rem 1rem', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+                          <div className="flex items-end gap-3">
+                            <div>
+                              <label className="input-label">Rate (EGP per 1 {c.code})</label>
+                              <input
+                                type="number"
+                                step="0.000001"
+                                className="input"
+                                style={{ width: 180 }}
+                                value={rateInput}
+                                onChange={(e) => setRateInput(e.target.value)}
+                                placeholder="e.g. 49.500000"
+                                autoFocus
+                              />
+                            </div>
+                            <div>
+                              <label className="input-label">Effective Date</label>
+                              <input
+                                type="date"
+                                className="input"
+                                style={{ width: 160 }}
+                                value={dateInput}
+                                onChange={(e) => setDateInput(e.target.value)}
+                              />
+                            </div>
+                            <button
+                              className="btn btn-primary btn-sm"
+                              disabled={saving || !rateInput}
+                              onClick={() => addRate(c.id)}
+                            >
+                              {saving ? '…' : 'Save Rate'}
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => setAddingId(null)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ),
+                  ].filter(Boolean);
+                })}
+
+                {currencies.length === 0 && !loading && (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-3)' }}>
+                      No currencies configured. Click "+ Add Currency" to start.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Rate history panel */}
+          {selected && (
+            <div className="card p-5" style={{ width: 240, alignSelf: 'start' }}>
+              <p className="section-label">Rate History</p>
+              <div className="flex items-center gap-2 mb-3">
+                <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-1)' }}>{selected.symbol}</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-1)', fontFamily: 'monospace' }}>{selected.code}</span>
+              </div>
+              {selected.code === 'EGP' ? (
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>Base currency — always 1.000000</p>
+              ) : selected.rates && selected.rates.length > 0 ? (
+                <>
+                  <RateHistoryChart rates={selected.rates} />
+                  <div className="mt-3 space-y-1 max-h-48 overflow-y-auto">
+                    {[...selected.rates].reverse().slice(0, 10).map((r, i) => (
+                      <div key={i} className="flex items-center justify-between">
+                        <span style={{ fontSize: '0.6875rem', color: 'var(--text-3)' }}>
+                          {new Date(r.date).toLocaleDateString('en-EG', { day: '2-digit', month: 'short' })}
+                        </span>
+                        <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-1)', fontVariantNumeric: 'tabular-nums' }}>
+                          {fmt(r.rate)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>No rate history. Click "Update Rate" to add one.</p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Add Currency Modal */}
+      {showAdd && (
+        <AddCurrencyModal
+          onClose={() => setShowAdd(false)}
+          onSuccess={() => { setShowAdd(false); reload(); }}
+        />
+      )}
     </div>
   );
 }
