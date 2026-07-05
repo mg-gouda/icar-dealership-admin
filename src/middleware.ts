@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/auth'];
+const PUBLIC_PATHS = ['/login', '/auth', '/not-authorized'];
 
 // ponytail: role gating via lightweight admin_role cookie (set at login alongside admin_session)
 const FINANCE_PATHS = ['/finance'];
@@ -28,10 +28,10 @@ export function middleware(request: NextRequest) {
 
   // MANAGER has read-only finance/settings visibility; API enforces write restrictions
   if (requiresFinance && !['MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN'].includes(role)) {
-    return NextResponse.redirect(new URL('/', request.url));
+    return NextResponse.redirect(new URL('/not-authorized', request.url));
   }
   if (requiresAdmin && !['MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(role)) {
-    return NextResponse.redirect(new URL('/', request.url));
+    return NextResponse.redirect(new URL('/not-authorized', request.url));
   }
 
   return NextResponse.next();

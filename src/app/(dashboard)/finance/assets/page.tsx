@@ -86,6 +86,8 @@ export default function AssetsPage() {
   const [err, setErr] = useState('');
   const [postingMonth, setPostingMonth] = useState('');
   const [posting, setPosting] = useState(false);
+  const [runningDepr, setRunningDepr] = useState(false);
+  const [deprMsg, setDeprMsg] = useState('');
 
   const qs = new URLSearchParams();
   if (categoryFilter) qs.set('category', categoryFilter);
@@ -174,9 +176,27 @@ export default function AssetsPage() {
           <h1 className="page-title">Fixed Assets Register</h1>
           <p className="page-subtitle">Asset Register &amp; Depreciation Schedule</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-          + Register New Asset
-        </button>
+        <div style={{ display: 'flex', gap: '0.625rem', alignItems: 'center' }}>
+          {deprMsg && <span style={{ fontSize: '0.8125rem', color: 'var(--success-fg)', fontWeight: 600 }}>{deprMsg}</span>}
+          <button
+            className="btn btn-outline btn-sm"
+            disabled={runningDepr}
+            onClick={async () => {
+              setRunningDepr(true); setDeprMsg('');
+              try {
+                await apiFetch('/tasks/run-depreciation', { method: 'POST' });
+                setDeprMsg('Depreciation run complete ✓');
+                reload();
+              } catch (e: unknown) { setDeprMsg(e instanceof Error ? e.message : 'Error'); }
+              finally { setRunningDepr(false); }
+            }}
+          >
+            {runningDepr ? 'Running…' : '⟳ Run Depreciation'}
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+            + Register New Asset
+          </button>
+        </div>
       </div>
 
       <div className="page-body space-y-5">

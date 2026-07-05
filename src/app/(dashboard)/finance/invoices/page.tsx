@@ -57,11 +57,127 @@ function statusBadge(status: string) {
 const egp = (n: number) =>
   'EGP ' + n.toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+function ApPaymentRunModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [journalId, setJournalId] = useState('');
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<{ processed: number; errors: number } | null>(null);
+
+  const { data: vendorBills } = useQuery<{ items: Invoice[] }>(
+    '/finance/invoices?type=VENDOR_BILL&status=POSTED&limit=100',
+  );
+  const { data: journalsRaw } = useQuery<any[]>('/finance/journals?type=BANK&limit=50');
+  const bills = vendorBills?.items ?? [];
+  const journalOpts = (Array.isArray(journalsRaw) ? journalsRaw : []).map((j: any) => ({ value: j.id, label: `${j.code} — ${j.name}` }));
+
+  const toggle = (id: string) =>
+    setSelectedIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+  const toggleAll = () =>
+    setSelectedIds(p => p.length === bills.length ? [] : bills.map(b => b.id));
+
+  const run = async () => {
+    if (!selectedIds.length || !journalId) return;
+    setRunning(true);
+    try {
+      const r = await apiFetch<any>('/finance/invoices/ap-payment-run', {
+        method: 'POST',
+        body: JSON.stringify({ invoiceIds: selectedIds, paymentDate, journalId }),
+      });
+      setResult({ processed: r.processed ?? selectedIds.length, errors: r.errors ?? 0 });
+      onSuccess();
+    } catch (e: any) {
+      setResult({ processed: 0, errors: selectedIds.length });
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 700 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>AP Payment Run</h3>
+          <p style={{ fontSize: '0.8125rem', color: 'var(--text-2)', marginTop: '0.25rem' }}>
+            Select posted vendor bills to pay in batch
+          </p>
+        </div>
+        <div className="modal-body">
+          {result ? (
+            <div style={{ padding: '1rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{result.errors === 0 ? '✓' : '⚠'}</div>
+              <p style={{ fontWeight: 600 }}>{result.processed} bill{result.processed !== 1 ? 's' : ''} paid</p>
+              {result.errors > 0 && <p style={{ color: 'var(--danger)', fontSize: '0.875rem' }}>{result.errors} errors</p>}
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                <div style={{ flex: 1 }}>
+                  <label className="field-label">Payment Date</label>
+                  <input className="input" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
+                </div>
+                <div style={{ flex: 2 }}>
+                  <label className="field-label">Bank Journal</label>
+                  <SearchableCombobox options={journalOpts} value={journalId} onChange={setJournalId} placeholder="Select bank" />
+                </div>
+              </div>
+              <div style={{ overflowX: 'auto', maxHeight: 280, overflowY: 'auto' }}>
+                <table className="data-table" style={{ fontSize: '0.8125rem' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 36 }}>
+                        <input type="checkbox" checked={selectedIds.length === bills.length && bills.length > 0}
+                          onChange={toggleAll} />
+                      </th>
+                      <th>Vendor</th><th>Invoice #</th><th>Due</th><th>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bills.length === 0 && (
+                      <tr><td colSpan={5} style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-2)' }}>No posted vendor bills</td></tr>
+                    )}
+                    {bills.map(b => (
+                      <tr key={b.id} style={{ background: selectedIds.includes(b.id) ? 'color-mix(in srgb, var(--primary) 5%, transparent)' : undefined }}>
+                        <td><input type="checkbox" checked={selectedIds.includes(b.id)} onChange={() => toggle(b.id)} /></td>
+                        <td>{b.partner?.name ?? '—'}</td>
+                        <td style={{ fontFamily: 'monospace' }}>{b.number ?? b.id.slice(0,8)}</td>
+                        <td style={{ color: b.dueDate && new Date(b.dueDate) < new Date() ? 'var(--danger)' : undefined }}>
+                          {b.dueDate ? new Date(b.dueDate).toLocaleDateString('en-EG') : '—'}
+                        </td>
+                        <td>{egp(Number(b.amountTotal))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {selectedIds.length > 0 && (
+                <div style={{ marginTop: '0.75rem', fontSize: '0.8125rem', color: 'var(--text-2)' }}>
+                  {selectedIds.length} bill{selectedIds.length !== 1 ? 's' : ''} selected · Total:{' '}
+                  <strong>{egp(bills.filter(b => selectedIds.includes(b.id)).reduce((s, b) => s + Number(b.amountTotal), 0))}</strong>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn" onClick={onClose}>{result ? 'Close' : 'Cancel'}</button>
+          {!result && (
+            <button className="btn btn-primary" disabled={running || !selectedIds.length || !journalId} onClick={run}>
+              {running ? 'Processing…' : `Pay ${selectedIds.length} Bill${selectedIds.length !== 1 ? 's' : ''}`}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CustomerInvoicesPage() {
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [showApRun, setShowApRun] = useState(false);
 
   const qs = new URLSearchParams({ limit: '30', ...(statusFilter && { status: statusFilter }), ...(search && { q: search }) });
   const { data, loading, error, reload } = useQuery<{ items: Invoice[]; total: number }>(
@@ -160,10 +276,17 @@ export default function CustomerInvoicesPage() {
           <h1 className="page-title">Customer Invoices</h1>
           <p className="page-subtitle">{data?.total ?? 0} invoices total</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowForm(true)}>
-          + New Invoice
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button className="btn" onClick={() => setShowApRun(true)}>AP Payment Run</button>
+          <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ New Invoice</button>
+        </div>
       </div>
+      {showApRun && (
+        <ApPaymentRunModal
+          onClose={() => setShowApRun(false)}
+          onSuccess={() => { setShowApRun(false); reload(); }}
+        />
+      )}
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 mb-4">

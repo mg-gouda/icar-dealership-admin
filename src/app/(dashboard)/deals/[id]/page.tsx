@@ -152,9 +152,18 @@ export default function DealDetailPage() {
   const totalDue = salePrice - tradeInCredit + adminFee + insurance + vat;
 
   const principal = Math.max(0, salePrice - ipForm.downPayment);
-  const totalInterest = principal * (ipForm.interestRate / 100) * (ipForm.durationMonths / 12);
-  const totalPayable = principal + totalInterest;
-  const monthly = ipForm.durationMonths > 0 ? totalPayable / ipForm.durationMonths : 0;
+  // ponytail: PMT formula for reducing balance; flat simple-interest for flat rate
+  let monthly = 0;
+  let totalPayable = 0;
+  if (ipForm.calcMethod === 'REDUCING_BALANCE' && ipForm.durationMonths > 0 && ipForm.interestRate > 0) {
+    const r = ipForm.interestRate / 100 / 12;
+    monthly = principal * r * Math.pow(1 + r, ipForm.durationMonths) / (Math.pow(1 + r, ipForm.durationMonths) - 1);
+    totalPayable = monthly * ipForm.durationMonths;
+  } else {
+    const totalInterest = principal * (ipForm.interestRate / 100) * (ipForm.durationMonths / 12);
+    totalPayable = principal + totalInterest;
+    monthly = ipForm.durationMonths > 0 ? totalPayable / ipForm.durationMonths : 0;
+  }
 
   async function generatePlan(e: React.FormEvent) {
     e.preventDefault(); setGeneratingPlan(true);
@@ -394,7 +403,7 @@ export default function DealDetailPage() {
           )}
 
           {/* ── BANK FINANCING TAB ───────────────────────────────────────── */}
-          {payTab === 'BANK_FINANCING' && (
+          <div style={{ display: payTab === 'BANK_FINANCING' ? 'block' : 'none' }}>
             <div className="card" style={{ padding: '1.25rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
                 <p className="section-label" style={{ margin: 0 }}>🏦 Bank Financing Application</p>
@@ -502,10 +511,11 @@ export default function DealDetailPage() {
                 </>
               )}
             </div>
-          )}
+          </div>
 
           {/* ── INSTALLMENT PLAN TAB ─────────────────────────────────────── */}
-          {payTab === 'DEALERSHIP_INSTALLMENT' && !deal.installmentPlan && (
+          <div style={{ display: payTab === 'DEALERSHIP_INSTALLMENT' ? 'block' : 'none' }}>
+          {!deal.installmentPlan && (
             <div className="card" style={{ padding: '1.25rem' }}>
               <p className="section-label" style={{ marginBottom: '1rem' }}>Installment Plan Setup</p>
               <form onSubmit={generatePlan}>
@@ -574,7 +584,7 @@ export default function DealDetailPage() {
             </div>
           )}
 
-          {payTab === 'DEALERSHIP_INSTALLMENT' && deal.installmentPlan && (
+          {deal.installmentPlan && (
             <div className="card" style={{ padding: '1.25rem' }}>
               <p className="section-label" style={{ marginBottom: '0.875rem' }}>Payment Schedule</p>
               <div style={{ border: '1px solid var(--border)', borderRadius: '0.5rem', overflow: 'hidden' }}>
@@ -614,6 +624,7 @@ export default function DealDetailPage() {
               </div>
             </div>
           )}
+          </div>
         </div>
 
         {/* RIGHT SIDEBAR */}

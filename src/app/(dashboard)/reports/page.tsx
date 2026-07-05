@@ -311,6 +311,18 @@ export default function ReportsPage() {
       desc:  'P&L, Balance Sheet, ebitda',
       href:  '/finance',
     },
+    {
+      icon:  '🎯', color: 'oklch(0.52 0.20 22)',
+      title: 'Sales Targets',
+      desc:  'Rep attainment vs monthly targets',
+      href:  '/reports/targets',
+    },
+    {
+      icon:  '🔽', color: 'oklch(0.52 0.22 250)',
+      title: 'Sales Funnel',
+      desc:  'Lead stage conversion analytics',
+      href:  '/reports/funnel',
+    },
   ];
 
   return (

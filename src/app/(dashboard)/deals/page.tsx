@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
@@ -18,6 +18,8 @@ interface Deal {
   paymentMethod: string; purchaseMethod?: string;
   status: string; createdAt: string;
 }
+
+interface SalesRep { id: string; name: string; }
 
 const STATUS_TABS = [
   { key: '',                label: 'All Deals' },
@@ -62,6 +64,11 @@ export default function DealsPage() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  // ponytail: bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [salesReps, setSalesReps] = useState<SalesRep[]>([]);
+  const [toast, setToast] = useState('');
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,7 +83,6 @@ export default function DealsPage() {
     finally { setLoading(false); }
   }, [activeTab]);
 
-  // Load all to get counts
   const loadCounts = useCallback(async () => {
     try {
       const res = await fetch(`${API}/deals?limit=500`, { headers: authHeaders() });
@@ -89,11 +95,66 @@ export default function DealsPage() {
     } catch { /* non-critical */ }
   }, []);
 
+  const loadReps = useCallback(async () => {
+    if (salesReps.length > 0) return;
+    try {
+      const res = await fetch(`${API}/users?role=SALES_REP`, { headers: authHeaders() });
+      if (!res.ok) return;
+      const json = await res.json();
+      setSalesReps(Array.isArray(json) ? json : (json.data ?? []));
+    } catch { /* non-critical */ }
+  }, [salesReps.length]);
+
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadCounts(); }, [loadCounts]);
 
+  const showToast = (msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(''), 3000);
+  };
+
+  const executeBulk = useCallback(async (action: string, value?: string) => {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    try {
+      const res = await fetch(`${API}/deals/bulk`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ ids, action, ...(value !== undefined ? { value } : {}) }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      showToast(`Updated ${ids.length} record${ids.length > 1 ? 's' : ''}`);
+      setSelectedIds(new Set());
+      load();
+      loadCounts();
+    } catch {
+      showToast('Bulk action failed');
+    }
+  // ponytail: showToast is stable (no deps), load/loadCounts are callbacks
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIds, load, loadCounts]);
+
+  const allSelected = deals.length > 0 && deals.every((d) => selectedIds.has(d.id));
+  const someSelected = !allSelected && deals.some((d) => selectedIds.has(d.id));
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(deals.map((d) => d.id)));
+    }
+  };
+
+  const toggleOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
   const totalValue = deals.reduce((s, d) => s + Number(d.salePrice ?? 0), 0);
-  const thisMonth = new Date().toLocaleString('en-EG', { month: 'long', year: 'numeric' });
 
   function dealNumber(d: Deal): string {
     if (d.dealNumber) return `#${d.dealNumber}`;
@@ -109,7 +170,7 @@ export default function DealsPage() {
         <div>
           <h1 className="page-title">Deals Pipeline</h1>
           <p className="page-subtitle">
-            {Object.values(counts).reduce((a, b) => a + b, 0)} deals this month · {fmt(totalValue)} total value
+            {Object.values(counts).reduce((a, b) => a + b, 0)} deals · {fmt(totalValue)} total value
           </p>
         </div>
         <Link href="/deals/new" className="btn btn-primary">+ New Deal</Link>
@@ -124,7 +185,7 @@ export default function DealsPage() {
               <button
                 key={t.key}
                 className={`tab ${activeTab === t.key ? 'active' : ''}`}
-                onClick={() => setActiveTab(t.key)}
+                onClick={() => { setActiveTab(t.key); setSelectedIds(new Set()); }}
               >
                 {t.label}{count > 0 ? ` (${count})` : ''}
               </button>
@@ -142,6 +203,16 @@ export default function DealsPage() {
             <table className="data-table">
               <thead>
                 <tr>
+                  <th style={{ width: '2.5rem', paddingLeft: '1rem' }}>
+                    {/* ponytail: indeterminate must be set via DOM ref */}
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                      onChange={toggleAll}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </th>
                   <th>Deal #</th>
                   <th>Customer</th>
                   <th>Vehicle</th>
@@ -157,8 +228,27 @@ export default function DealsPage() {
                 {deals.map((d) => {
                   const custName = d.customer?.name ?? '—';
                   const m = method(d);
+                  const isSelected = selectedIds.has(d.id);
                   return (
-                    <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => router.push(`/deals/${d.id}`)}>
+                    <tr
+                      key={d.id}
+                      style={{
+                        cursor: 'pointer',
+                        background: isSelected ? 'color-mix(in srgb, var(--primary) 6%, transparent)' : undefined,
+                      }}
+                      onClick={() => router.push(`/deals/${d.id}`)}
+                    >
+                      <td
+                        style={{ paddingLeft: '1rem' }}
+                        onClick={(e) => { e.stopPropagation(); toggleOne(d.id); }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleOne(d.id)}
+                          style={{ cursor: 'pointer' }}
+                        />
+                      </td>
                       <td>
                         <span style={{ color: 'var(--primary)', fontWeight: 500 }}>{dealNumber(d)}</span>
                       </td>
@@ -202,7 +292,7 @@ export default function DealsPage() {
                 })}
                 {deals.length === 0 && (
                   <tr>
-                    <td colSpan={9} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-3)' }}>
+                    <td colSpan={10} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-3)' }}>
                       No deals found{activeTab ? ` in "${activeTab.replace(/_/g, ' ')}"` : ''}.
                     </td>
                   </tr>
@@ -212,6 +302,68 @@ export default function DealsPage() {
           </div>
         )}
       </div>
+
+      {/* Floating bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div style={{
+          position: 'fixed', bottom: '1.5rem', left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--surface-2)', border: '1px solid var(--border-2)',
+          borderRadius: '8px', padding: '0.75rem 1.25rem',
+          display: 'flex', alignItems: 'center', gap: '0.75rem',
+          boxShadow: '0 4px 24px oklch(0 0 0 / 0.3)', zIndex: 100,
+          whiteSpace: 'nowrap',
+        }}>
+          <span style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-1)' }}>
+            {selectedIds.size} selected
+          </span>
+          <div style={{ width: '1px', height: '1.25rem', background: 'var(--border)' }} />
+          {/* Assign Rep */}
+          <select
+            className="input"
+            style={{ fontSize: '0.8125rem', padding: '0.3rem 0.6rem', height: 'auto' }}
+            value=""
+            onFocus={loadReps}
+            onChange={(e) => { if (e.target.value) executeBulk('ASSIGN_REP', e.target.value); }}
+          >
+            <option value="" disabled>Assign Rep…</option>
+            {salesReps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+          {/* Cancel */}
+          <button
+            className="btn btn-danger"
+            style={{ fontSize: '0.8125rem', padding: '0.35rem 0.75rem' }}
+            onClick={() => {
+              if (window.confirm(`Cancel ${selectedIds.size} deal${selectedIds.size > 1 ? 's' : ''}?`)) {
+                executeBulk('CANCEL');
+              }
+            }}
+          >
+            Cancel Deals
+          </button>
+          {/* Clear */}
+          <button
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: '1rem', lineHeight: 1, padding: '0.2rem 0.3rem' }}
+            onClick={() => setSelectedIds(new Set())}
+            title="Clear selection"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: selectedIds.size > 0 ? '5.5rem' : '1.5rem', left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--success)', color: '#fff',
+          borderRadius: '6px', padding: '0.5rem 1rem',
+          fontSize: '0.875rem', fontWeight: 500,
+          boxShadow: '0 2px 12px oklch(0 0 0 / 0.2)', zIndex: 101,
+          transition: 'bottom 150ms',
+        }}>
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

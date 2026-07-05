@@ -1,0 +1,326 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { apiFetch } from '@/lib/useApi';
+
+/* ── types ──────────────────────────────────────────────────────────────── */
+interface BranchRow {
+  branch: string;
+  revenueMTD: number;
+  grossProfit: number;
+  unitsSold: number;
+  topModel: string;
+}
+
+interface RecentDeal {
+  id: string;
+  vehicle?: { make: string; model: string };
+  customer?: { name: string };
+  salePrice: number;
+  purchaseMethod: string;
+  finalizedAt?: string;
+  createdAt: string;
+  user?: { name: string };
+}
+
+interface OverdueInstallment {
+  id: string;
+  amount: number;
+}
+
+/* ── demo data ───────────────────────────────────────────────────────────── */
+const DEMO_KPIS = {
+  totalRevenueMTD:  4_400_000,
+  unitsSoldMTD:     23,
+  grossMarginPct:   18.4,
+  avgDaysToSale:    34,
+  leadConvRate:     26.7,
+  overdueAmount:    127_500,
+  overdueCount:     7,
+  revTrend:         12.3,
+  unitsTrend:       -4.1,
+  marginTrend:      1.8,
+  daysTrend:        -2.5,
+  convTrend:        3.2,
+  overdTrend:       5.1,
+};
+
+const DEMO_BRANCHES: BranchRow[] = [
+  { branch: 'Cairo',          revenueMTD: 2_200_000, grossProfit: 420_000, unitsSold: 12, topModel: 'Hyundai Tucson' },
+  { branch: 'Alexandria',     revenueMTD: 1_100_000, grossProfit: 198_000, unitsSold: 6,  topModel: 'KIA Sportage'   },
+  { branch: 'Giza',           revenueMTD: 770_000,   grossProfit: 138_000, unitsSold: 4,  topModel: 'Toyota Corolla' },
+  { branch: 'Sharm El Sheikh',revenueMTD: 330_000,   grossProfit: 62_000,  unitsSold: 1,  topModel: 'Hyundai Elantra'},
+];
+
+const DEMO_RECENT: RecentDeal[] = [
+  { id: 'd1', vehicle: { make: 'Hyundai', model: 'Tucson 2024' },  customer: { name: 'Omar Abdallah'  }, salePrice: 480_000, purchaseMethod: 'BANK_FINANCING',          createdAt: '2026-07-05T11:20:00Z', user: { name: 'Ahmed Hassan' } },
+  { id: 'd2', vehicle: { make: 'KIA',     model: 'Sportage 2024'}, customer: { name: 'Mona El Sharif' }, salePrice: 430_000, purchaseMethod: 'CASH',                    createdAt: '2026-07-04T14:45:00Z', user: { name: 'Sara Mohamed' } },
+  { id: 'd3', vehicle: { make: 'Toyota',  model: 'Corolla 2023' }, customer: { name: 'Youssef Nabil'  }, salePrice: 295_000, purchaseMethod: 'DEALERSHIP_INSTALLMENT',   createdAt: '2026-07-03T09:10:00Z', user: { name: 'Omar Khaled'  } },
+  { id: 'd4', vehicle: { make: 'Hyundai', model: 'Elantra 2024' }, customer: { name: 'Layla Hassan'   }, salePrice: 265_000, purchaseMethod: 'CASH',                    createdAt: '2026-07-02T16:30:00Z', user: { name: 'Nour Ibrahim' } },
+  { id: 'd5', vehicle: { make: 'MG',      model: 'ZS 2024'      }, customer: { name: 'Sherif Mansour' }, salePrice: 310_000, purchaseMethod: 'BANK_FINANCING',          createdAt: '2026-07-01T10:00:00Z', user: { name: 'Ahmed Hassan' } },
+];
+
+/* ── formatters ─────────────────────────────────────────────────────────── */
+function fmtEGP(n: number) {
+  if (n >= 1_000_000) return `EGP ${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000)     return `EGP ${(n / 1_000).toFixed(0)}K`;
+  return `EGP ${n.toLocaleString()}`;
+}
+function fmtPct(n: number) { return `${n.toFixed(1)}%`; }
+function fmtDate(s: string) {
+  return new Date(s).toLocaleDateString('en-EG', { month: 'short', day: 'numeric' });
+}
+function methodLabel(m: string) {
+  if (m === 'CASH') return 'Cash';
+  if (m === 'BANK_FINANCING') return 'Bank';
+  return 'Install.';
+}
+
+/* ── TrendArrow ─────────────────────────────────────────────────────────── */
+function TrendArrow({ trend, invert = false }: { trend: number; invert?: boolean }) {
+  const positive = invert ? trend < 0 : trend > 0;
+  const color = positive ? 'var(--success-fg)' : 'var(--danger-fg)';
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: '0.6875rem', fontWeight: 500, color }}>
+      <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        style={{ transform: trend < 0 ? 'rotate(180deg)' : 'none', transition: 'transform 200ms' }}>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" />
+      </svg>
+      {Math.abs(trend).toFixed(1)}%
+    </span>
+  );
+}
+
+/* ── KpiCell ────────────────────────────────────────────────────────────── */
+interface KpiCellProps {
+  label: string; value: string; trend?: number; invertTrend?: boolean;
+}
+function KpiCell({ label, value, trend, invertTrend }: KpiCellProps) {
+  return (
+    <div style={{
+      flex: '1 1 0', minWidth: 0, padding: '0.875rem 1rem',
+      borderRight: '1px solid var(--border)',
+      display: 'flex', flexDirection: 'column', gap: 3,
+    }}>
+      <p style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {label}
+      </p>
+      <p style={{ fontSize: '1.375rem', fontWeight: 600, color: 'var(--text-1)', lineHeight: 1.15, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}>
+        {value}
+      </p>
+      {trend != null && <TrendArrow trend={trend} invert={invertTrend} />}
+    </div>
+  );
+}
+
+/* ── main page ───────────────────────────────────────────────────────────── */
+export default function ExecutivePage() {
+  const [kpis,      setKpis]      = useState(DEMO_KPIS);
+  const [branches,  setBranches]  = useState<BranchRow[]>(DEMO_BRANCHES);
+  const [recent,    setRecent]    = useState<RecentDeal[]>(DEMO_RECENT);
+  const [overdue,   setOverdue]   = useState<OverdueInstallment[]>([]);
+
+  useEffect(() => {
+    // revenue by month — extract current month total
+    apiFetch<{ months?: Array<{ revenue: number; expenses: number; month: string }> }>('/reports/revenue-by-month')
+      .then(d => {
+        if (d?.months?.length) {
+          const last = d.months[d.months.length - 1];
+          if (last) setKpis(k => ({ ...k, totalRevenueMTD: last.revenue }));
+        }
+      })
+      .catch(() => {});
+
+    // branch profit
+    apiFetch<{ branches?: BranchRow[] }>('/reports/branch-profit')
+      .then(d => { if (d?.branches) setBranches(d.branches); })
+      .catch(() => {});
+
+    // recent finalized deals
+    apiFetch<{ items?: RecentDeal[] } | RecentDeal[]>('/deals?status=FINALIZED&limit=5')
+      .then(d => {
+        const list = Array.isArray(d) ? d : (d as { items?: RecentDeal[] }).items ?? [];
+        if (list.length) setRecent(list);
+      })
+      .catch(() => {});
+
+    // leads for conversion rate
+    apiFetch<{ items?: Array<{ status: string; createdAt: string }> } | Array<{ status: string; createdAt: string }>>('/leads?limit=200')
+      .then(d => {
+        const list = Array.isArray(d) ? d : (d as { items?: Array<{ status: string; createdAt: string }> }).items ?? [];
+        if (!list.length) return;
+        const won   = list.filter(l => l.status === 'CLOSED_WON').length;
+        const rate  = Math.round((won / list.length) * 1000) / 10;
+        setKpis(k => ({ ...k, leadConvRate: rate, unitsSoldMTD: won > 0 ? won : k.unitsSoldMTD }));
+      })
+      .catch(() => {});
+
+    // overdue installments
+    apiFetch<{ items?: OverdueInstallment[] } | OverdueInstallment[]>('/deals/installments/overdue')
+      .then(d => {
+        const list = Array.isArray(d) ? d : (d as { items?: OverdueInstallment[] }).items ?? [];
+        setOverdue(list);
+        if (list.length) {
+          const total = list.reduce((s, x) => s + Number(x.amount ?? 0), 0);
+          setKpis(k => ({ ...k, overdueCount: list.length, overdueAmount: total }));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const nowLabel = new Date().toLocaleDateString('en-EG', { month: 'long', year: 'numeric' });
+
+  return (
+    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+
+      {/* header */}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Executive View</h1>
+          <p className="page-subtitle">{nowLabel} · All Locations · Command Overview</p>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <Link href="/reports" className="btn btn-secondary btn-sm">Reports</Link>
+          <Link href="/finance" className="btn btn-secondary btn-sm">Finance</Link>
+        </div>
+      </div>
+
+      <div className="page-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
+        {/* overdue alert */}
+        {(overdue.length > 0 || kpis.overdueCount > 0) && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '0.75rem 1rem', borderRadius: '0.5rem',
+            background: 'var(--warning-bg)', border: '1px solid var(--warning-border)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: 'var(--warning-fg)', flexShrink: 0 }}>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--warning-fg)' }}>
+                {kpis.overdueCount} overdue installment{kpis.overdueCount !== 1 ? 's' : ''} totaling {fmtEGP(kpis.overdueAmount)}
+              </span>
+            </div>
+            <Link href="/deals?filter=overdue_installments" style={{ fontSize: '0.8rem', color: 'var(--warning-fg)', fontWeight: 600, textDecoration: 'none' }}>
+              View →
+            </Link>
+          </div>
+        )}
+
+        {/* KPI strip */}
+        <div className="card" style={{ overflow: 'hidden' }}>
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
+            <KpiCell label="Revenue MTD"        value={fmtEGP(kpis.totalRevenueMTD)} trend={kpis.revTrend}   />
+            <KpiCell label="Units Sold MTD"     value={String(kpis.unitsSoldMTD)}    trend={kpis.unitsTrend} />
+            <KpiCell label="Gross Margin"       value={fmtPct(kpis.grossMarginPct)}  trend={kpis.marginTrend}/>
+            <KpiCell label="Avg Days to Sale"   value={`${kpis.avgDaysToSale} days`} trend={kpis.daysTrend}  invertTrend />
+            <KpiCell label="Lead Conv. Rate"    value={fmtPct(kpis.leadConvRate)}    trend={kpis.convTrend}  />
+            <div style={{ flex: '1 1 0', minWidth: 0, padding: '0.875rem 1rem', display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <p style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)' }}>
+                Overdue Exposure
+              </p>
+              <p style={{ fontSize: '1.375rem', fontWeight: 600, color: kpis.overdueCount > 0 ? 'var(--warning-fg)' : 'var(--text-1)', lineHeight: 1.15, fontVariantNumeric: 'tabular-nums' }}>
+                {fmtEGP(kpis.overdueAmount)}
+              </p>
+              <TrendArrow trend={kpis.overdTrend} invert />
+            </div>
+          </div>
+        </div>
+
+        {/* branch performance + recent deals */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '0.875rem' }}>
+
+          {/* branch table */}
+          <div className="card" style={{ overflow: 'hidden' }}>
+            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)' }}>
+              <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>Branch Performance</p>
+            </div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Location</th>
+                  <th style={{ textAlign: 'right' }}>Revenue MTD</th>
+                  <th style={{ textAlign: 'right' }}>Gross Profit</th>
+                  <th style={{ textAlign: 'right' }}>Units</th>
+                  <th>Top Model</th>
+                </tr>
+              </thead>
+              <tbody>
+                {branches.map(b => (
+                  <tr key={b.branch}>
+                    <td style={{ fontWeight: 500, color: 'var(--text-1)' }}>{b.branch}</td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtEGP(b.revenueMTD)}</td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--success-fg)', fontWeight: 600 }}>{fmtEGP(b.grossProfit)}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-1)' }}>{b.unitsSold}</td>
+                    <td style={{ fontSize: '0.8rem', color: 'var(--text-3)' }}>{b.topModel}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ borderTop: '2px solid var(--border)' }}>
+                  <td style={{ fontWeight: 700, color: 'var(--text-1)', fontSize: '0.8125rem' }}>Total</td>
+                  <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-1)', fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtEGP(branches.reduce((s, b) => s + b.revenueMTD, 0))}
+                  </td>
+                  <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--success-fg)', fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtEGP(branches.reduce((s, b) => s + b.grossProfit, 0))}
+                  </td>
+                  <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-1)' }}>
+                    {branches.reduce((s, b) => s + b.unitsSold, 0)}
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          {/* recent deals */}
+          <div className="card" style={{ overflow: 'hidden' }}>
+            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>Recent Finalized Deals</p>
+              <Link href="/deals?status=FINALIZED" style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 500, textDecoration: 'none' }}>View all →</Link>
+            </div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Vehicle</th>
+                  <th>Customer</th>
+                  <th style={{ textAlign: 'right' }}>Amount</th>
+                  <th>Method</th>
+                  <th>Date</th>
+                  <th>Rep</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recent.map(d => (
+                  <tr key={d.id}>
+                    <td style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-1)' }}>
+                      {d.vehicle ? `${d.vehicle.make} ${d.vehicle.model}` : d.id.slice(-6).toUpperCase()}
+                    </td>
+                    <td style={{ fontSize: '0.8rem', color: 'var(--text-2)' }}>{d.customer?.name ?? '—'}</td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-1)' }}>
+                      {fmtEGP(Number(d.salePrice))}
+                    </td>
+                    <td>
+                      <span className="badge" style={{
+                        background: d.purchaseMethod === 'CASH' ? 'var(--success-bg)' : d.purchaseMethod === 'BANK_FINANCING' ? 'var(--info-bg)' : 'var(--warning-bg)',
+                        color:      d.purchaseMethod === 'CASH' ? 'var(--success-fg)' : d.purchaseMethod === 'BANK_FINANCING' ? 'var(--info-fg)'    : 'var(--warning-fg)',
+                      }}>
+                        {methodLabel(d.purchaseMethod)}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: '0.8rem', color: 'var(--text-3)' }}>{fmtDate(d.finalizedAt ?? d.createdAt)}</td>
+                    <td style={{ fontSize: '0.8rem', color: 'var(--text-3)' }}>{d.user?.name ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}

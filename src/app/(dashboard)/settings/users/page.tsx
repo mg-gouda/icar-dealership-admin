@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 
+interface UserPermission { permissionKey: string; granted: boolean; }
 interface User {
   id: string;
   name: string;
@@ -13,6 +14,7 @@ interface User {
   isActive: boolean;
   lastLogin?: string;
   location?: { id: string; name: string };
+  permissions?: UserPermission[];
 }
 
 interface Location { id: string; name: string; }
@@ -137,6 +139,177 @@ function avatarStyle(name: string) {
   return AVATAR_COLORS[idx];
 }
 
+// ── Per-user Permissions Tab ──────────────────────────────────────────────────
+function UserPermissionsTab({ user }: { user: User }) {
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const fetchPerms = useCallback(async () => {
+    try {
+      const u = await apiFetch<User>(`/users/${user.id}`);
+      const map: Record<string, boolean> = {};
+      (u.permissions ?? []).forEach((p) => { map[p.permissionKey] = p.granted; });
+      setOverrides(map);
+    } catch { /* silent */ }
+  }, [user.id]);
+
+  useEffect(() => { fetchPerms(); }, [fetchPerms]);
+
+  async function toggle(key: string) {
+    setBusy(key);
+    try {
+      if (key in overrides) {
+        // remove override → revert to role default
+        await apiFetch(`/users/${user.id}/permissions/${key}`, { method: 'DELETE' });
+        setOverrides((p) => { const n = { ...p }; delete n[key]; return n; });
+      } else {
+        // grant override (opposite of role default)
+        const defaultGranted = ROLE_PERMISSIONS[user.role]?.has(key) ?? false;
+        const newGranted = !defaultGranted;
+        await apiFetch(`/users/${user.id}/permissions`, {
+          method: 'POST',
+          body: JSON.stringify({ permissionKey: key, granted: newGranted }),
+        });
+        setOverrides((p) => ({ ...p, [key]: newGranted }));
+      }
+    } catch (e) { alert(e instanceof Error ? e.message : 'Error'); }
+    finally { setBusy(null); }
+  }
+
+  return (
+    <div style={{ padding: '0.75rem 0', maxHeight: 400, overflowY: 'auto' }}>
+      <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginBottom: '0.75rem', padding: '0 1.25rem' }}>
+        Overrides apply on top of the user&apos;s role defaults. Click a permission to add or remove an override.
+      </p>
+      {PERMISSION_MATRIX.map((mod) => (
+        <div key={mod.module} style={{ marginBottom: '0.5rem' }}>
+          <p style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.07em', color: 'var(--text-3)', textTransform: 'uppercase', padding: '0.3rem 1.25rem', background: 'var(--surface-2)' }}>
+            {mod.module}
+          </p>
+          {mod.permissions.map((perm) => {
+            const roleDefault = ROLE_PERMISSIONS[user.role]?.has(perm.key) ?? false;
+            const hasOverride = perm.key in overrides;
+            const effective = hasOverride ? overrides[perm.key] : roleDefault;
+            return (
+              <div key={perm.key}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 1.25rem', borderBottom: '1px solid var(--border)' }}>
+                <div>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-1)', fontWeight: 500 }}>{perm.label}</p>
+                  <p style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>
+                    {hasOverride ? <span style={{ color: effective ? 'var(--success-fg)' : 'var(--danger-fg)', fontWeight: 600 }}>Override: {effective ? 'Granted' : 'Denied'}</span>
+                      : <span>Role default: {roleDefault ? 'Granted' : 'Denied'}</span>}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {/* Toggle pill */}
+                  <button
+                    disabled={busy === perm.key}
+                    onClick={() => toggle(perm.key)}
+                    style={{
+                      width: 36, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer',
+                      background: effective ? 'var(--success)' : 'var(--border-strong)',
+                      position: 'relative', transition: 'background 0.15s', opacity: busy === perm.key ? 0.5 : 1,
+                    }}
+                    title={hasOverride ? 'Click to remove override (revert to role default)' : 'Click to add override'}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: effective ? 18 : 3,
+                      width: 14, height: 14, borderRadius: '50%', background: '#fff',
+                      transition: 'left 0.15s', boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
+                    }} />
+                  </button>
+                  {hasOverride && (
+                    <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--primary)', background: 'var(--primary-light)', padding: '1px 5px', borderRadius: 4 }}>
+                      OVERRIDE
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Working Hours (Schedule) Tab ─────────────────────────────────────────────
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+interface WorkingHoursRow { dayOfWeek: number; startTime: string; endTime: string; }
+
+function UserScheduleTab({ userId }: { userId: string }) {
+  const [rows, setRows] = useState<WorkingHoursRow[]>(
+    DAYS.map((_, i) => ({ dayOfWeek: i, startTime: '09:00', endTime: '17:00' }))
+  );
+  const [enabled, setEnabled] = useState<boolean[]>(Array(7).fill(false));
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    apiFetch<WorkingHoursRow[]>(`/users/${userId}/working-hours`)
+      .then((data) => {
+        if (data && data.length) {
+          const map = Object.fromEntries(data.map((r) => [r.dayOfWeek, r]));
+          setRows(DAYS.map((_, i) => map[i] ?? { dayOfWeek: i, startTime: '09:00', endTime: '17:00' }));
+          const flags = Array(7).fill(false);
+          data.forEach((r) => { flags[r.dayOfWeek] = true; });
+          setEnabled(flags);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [userId]);
+
+  async function save() {
+    setSaving(true); setSaved(false);
+    try {
+      await apiFetch(`/users/${userId}/working-hours`, {
+        method: 'PATCH',
+        body: JSON.stringify({ hours: rows.filter((_, i) => enabled[i]) }),
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch { /* silent */ } finally { setSaving(false); }
+  }
+
+  if (loading) return <div className="p-5" style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>Loading…</div>;
+
+  return (
+    <div className="p-5">
+      <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginBottom: '0.75rem' }}>
+        Set which days this user is available and their hours. Used for appointment slot availability.
+      </p>
+      <div className="space-y-2">
+        {DAYS.map((day, i) => (
+          <div key={i} className="flex items-center gap-3">
+            <label className="flex items-center gap-2 w-14 shrink-0 cursor-pointer">
+              <input type="checkbox" checked={enabled[i]}
+                onChange={(e) => setEnabled((p) => p.map((v, j) => j === i ? e.target.checked : v))} />
+              <span style={{ fontSize: '0.8125rem', color: enabled[i] ? 'var(--text-1)' : 'var(--text-3)' }}>{day}</span>
+            </label>
+            <input type="time" className="input" disabled={!enabled[i]}
+              value={rows[i].startTime}
+              onChange={(e) => setRows((p) => p.map((r, j) => j === i ? { ...r, startTime: e.target.value } : r))}
+              style={{ width: '7.5rem', opacity: enabled[i] ? 1 : 0.4 }} />
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>to</span>
+            <input type="time" className="input" disabled={!enabled[i]}
+              value={rows[i].endTime}
+              onChange={(e) => setRows((p) => p.map((r, j) => j === i ? { ...r, endTime: e.target.value } : r))}
+              style={{ width: '7.5rem', opacity: enabled[i] ? 1 : 0.4 }} />
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-3 mt-4">
+        <button onClick={save} disabled={saving} className="btn btn-primary" style={{ minWidth: '8rem' }}>
+          {saving ? 'Saving…' : 'Save Schedule'}
+        </button>
+        {saved && <span style={{ fontSize: '0.75rem', color: 'var(--success-fg)' }}>Saved ✓</span>}
+      </div>
+    </div>
+  );
+}
+
 // ── Invite / Edit Modal ───────────────────────────────────────────────────────
 function UserModal({
   user,
@@ -150,6 +323,7 @@ function UserModal({
   onSuccess: () => void;
 }) {
   const editing = !!user;
+  const [modalTab, setModalTab] = useState<'details' | 'permissions' | 'schedule'>('details');
   const [form, setForm] = useState({
     name:       user?.name       ?? '',
     email:      user?.email      ?? '',
@@ -210,62 +384,91 @@ function UserModal({
           </div>
           <button onClick={onClose} style={{ color: 'var(--text-3)', fontSize: '1.25rem', lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
         </div>
-        <form onSubmit={submit} className="p-5 space-y-3">
-          <div>
-            <label className="input-label">Full Name *</label>
-            <input required className="input" value={form.name} onChange={(e) => set('name', e.target.value)} />
+
+        {/* Modal tabs — only when editing */}
+        {editing && (
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+            {(['details', 'permissions', 'schedule'] as const).map((t) => (
+              <button key={t} onClick={() => setModalTab(t)}
+                style={{
+                  flex: 1, padding: '0.6rem 0.5rem', fontSize: '0.75rem', fontWeight: 600, border: 'none', cursor: 'pointer',
+                  background: modalTab === t ? 'var(--surface)' : 'transparent',
+                  color: modalTab === t ? 'var(--text-1)' : 'var(--text-3)',
+                  borderBottom: modalTab === t ? '2px solid var(--primary)' : '2px solid transparent',
+                  textTransform: 'capitalize',
+                  whiteSpace: 'nowrap',
+                }}>
+                {t === 'details' ? 'Profile & Role' : t === 'permissions' ? 'Permissions' : 'Schedule'}
+              </button>
+            ))}
           </div>
-          {!editing && (
-            <>
-              <div>
-                <label className="input-label">Email *</label>
-                <input required type="email" className="input" value={form.email} onChange={(e) => set('email', e.target.value)} />
-              </div>
-              <div>
-                <label className="input-label">Password *</label>
-                <input required type="password" minLength={8} className="input" value={form.password} onChange={(e) => set('password', e.target.value)} />
-              </div>
-            </>
-          )}
-          <div>
-            <label className="input-label">Phone</label>
-            <input className="input" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
-          </div>
-          <SearchableCombobox
-            label="Role *"
-            options={ROLE_OPTS}
-            value={form.role}
-            onChange={(v) => set('role', v)}
-            placeholder="Select role"
-          />
-          <SearchableCombobox
-            label="Location *"
-            options={locationOpts}
-            value={form.locationId}
-            onChange={(v) => set('locationId', v)}
-            placeholder="Select location"
-            clearable
-            clearLabel="No location"
-          />
-          {needs2fa && (
-            <div className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: 'var(--info-bg)', border: '1px solid var(--info-bg)' }}>
-              <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--info-fg)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-              <span style={{ fontSize: '0.75rem', color: 'var(--info-fg)' }}>
-                2FA required for {ROLE_LABEL[form.role]} role —
-                {editing && user?.role === form.role ? ' user must enrol via Settings' : ' will be prompted on first login'}
-              </span>
+        )}
+
+        {(!editing || modalTab === 'details') && (
+          <form onSubmit={submit} className="p-5 space-y-3">
+            <div>
+              <label className="input-label">Full Name *</label>
+              <input required className="input" value={form.name} onChange={(e) => set('name', e.target.value)} />
             </div>
-          )}
-          {err && <p style={{ fontSize: '0.75rem', color: 'var(--danger-fg)' }}>{err}</p>}
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose} className="btn btn-secondary" style={{ flex: 1 }}>Cancel</button>
-            <button type="submit" disabled={saving} className="btn btn-primary" style={{ flex: 1 }}>
-              {saving ? '…' : editing ? 'Save Changes' : 'Send Invite'}
-            </button>
-          </div>
-        </form>
+            {!editing && (
+              <>
+                <div>
+                  <label className="input-label">Email *</label>
+                  <input required type="email" className="input" value={form.email} onChange={(e) => set('email', e.target.value)} />
+                </div>
+                <div>
+                  <label className="input-label">Password *</label>
+                  <input required type="password" minLength={8} className="input" value={form.password} onChange={(e) => set('password', e.target.value)} />
+                </div>
+              </>
+            )}
+            <div>
+              <label className="input-label">Phone</label>
+              <input className="input" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
+            </div>
+            <SearchableCombobox
+              label="Role *"
+              options={ROLE_OPTS}
+              value={form.role}
+              onChange={(v) => set('role', v)}
+              placeholder="Select role"
+            />
+            <SearchableCombobox
+              label="Location *"
+              options={locationOpts}
+              value={form.locationId}
+              onChange={(v) => set('locationId', v)}
+              placeholder="Select location"
+              clearable
+              clearLabel="No location"
+            />
+            {needs2fa && (
+              <div className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: 'var(--info-bg)', border: '1px solid var(--info-bg)' }}>
+                <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--info-fg)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                <span style={{ fontSize: '0.75rem', color: 'var(--info-fg)' }}>
+                  2FA required for {ROLE_LABEL[form.role]} role —
+                  {editing && user?.role === form.role ? ' user must enrol via Settings' : ' will be prompted on first login'}
+                </span>
+              </div>
+            )}
+            {err && <p style={{ fontSize: '0.75rem', color: 'var(--danger-fg)' }}>{err}</p>}
+            <div className="flex gap-3 pt-1">
+              <button type="button" onClick={onClose} className="btn btn-secondary" style={{ flex: 1 }}>Cancel</button>
+              <button type="submit" disabled={saving} className="btn btn-primary" style={{ flex: 1 }}>
+                {saving ? '…' : editing ? 'Save Changes' : 'Send Invite'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {editing && modalTab === 'permissions' && (
+          <UserPermissionsTab user={user!} />
+        )}
+        {editing && modalTab === 'schedule' && (
+          <UserScheduleTab userId={user!.id} />
+        )}
       </div>
     </div>
   );
@@ -326,11 +529,12 @@ function RolesPermissionsTab() {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function UsersPage() {
-  const [activeTab,    setActiveTab]    = useState<'users' | 'roles'>('users');
+  const [activeTab,    setActiveTab]    = useState<'users' | 'customers' | 'roles'>('users');
   const [search,       setSearch]       = useState('');
   const [roleFilter,   setRoleFilter]   = useState('');
   const [locFilter,    setLocFilter]    = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [custSearch,   setCustSearch]   = useState('');
   const [modalUser,    setModalUser]    = useState<User | null | 'new'>(null);
   const [toggling,     setToggling]     = useState<string | null>(null);
 
@@ -340,9 +544,11 @@ export default function UsersPage() {
   qs.set('limit', '200');
 
   const { data: res,       loading,   reload   } = useQuery<{ items?: User[]; data?: User[] } | User[]>(`/users?${qs}`);
-  const { data: locationsRaw }                   = useQuery<Location[]>('/locations');
+  const { data: custRes,   loading: custLoading } = useQuery<{ items?: User[]; data?: User[] } | User[]>('/users?role=CUSTOMER&limit=500');
+  const { data: locationsRaw }                    = useQuery<Location[]>('/locations');
 
   const allUsers: User[] = Array.isArray(res) ? res : (res as any)?.items ?? (res as any)?.data ?? [];
+  const allCustomers: User[] = Array.isArray(custRes) ? custRes : (custRes as any)?.items ?? (custRes as any)?.data ?? [];
 
   // Client-side search + location filter (API filters role/status)
   const users = useMemo(() => {
@@ -351,6 +557,12 @@ export default function UsersPage() {
     if (locFilter) list = list.filter((u) => u.location?.id === locFilter);
     return list;
   }, [allUsers, search, locFilter]);
+
+  const customers = useMemo(() => {
+    if (!custSearch) return allCustomers;
+    const q = custSearch.toLowerCase();
+    return allCustomers.filter((u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.phone?.includes(q));
+  }, [allCustomers, custSearch]);
 
   const locations = Array.isArray(locationsRaw) ? locationsRaw : [];
   const locationOpts = locations.map((l) => ({ value: l.id, label: l.name }));
@@ -391,6 +603,12 @@ export default function UsersPage() {
             Staff Accounts
             <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium" style={{ background: 'var(--surface-2)', color: 'var(--text-3)' }}>
               {users.length}
+            </span>
+          </button>
+          <button className={`tab ${activeTab === 'customers' ? 'active' : ''}`} onClick={() => setActiveTab('customers')}>
+            Customers
+            <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium" style={{ background: 'var(--surface-2)', color: 'var(--text-3)' }}>
+              {allCustomers.length}
             </span>
           </button>
           <button className={`tab ${activeTab === 'roles' ? 'active' : ''}`} onClick={() => setActiveTab('roles')}>
@@ -497,6 +715,74 @@ export default function UsersPage() {
                       <tr>
                         <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-3)' }}>
                           No users match the current filters.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
+
+        {activeTab === 'customers' && (
+          <>
+            <div className="flex flex-wrap items-end gap-3">
+              <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: 320 }}>
+                <svg className="w-4 h-4" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-3)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input className="input" style={{ paddingLeft: '2.25rem' }} placeholder="Search by name, email or phone…"
+                  value={custSearch} onChange={(e) => setCustSearch(e.target.value)} />
+              </div>
+            </div>
+            <div className="card overflow-hidden">
+              {custLoading && !allCustomers.length ? (
+                <div className="flex items-center justify-center py-12" style={{ color: 'var(--text-3)' }}>Loading…</div>
+              ) : (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Customer</th>
+                      <th>Phone</th>
+                      <th>Registered</th>
+                      <th>Last Login</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {customers.map((u) => (
+                      <tr key={u.id}>
+                        <td>
+                          <div className="flex items-center gap-3">
+                            <div className="avatar" style={{
+                              width: 34, height: 34, fontSize: '0.75rem',
+                              ...Object.fromEntries(avatarStyle(u.name).split(';').filter(Boolean).map((s) => s.split(':').map((p) => p.trim()) as [string, string])),
+                            }}>
+                              {initials(u.name)}
+                            </div>
+                            <div>
+                              <p style={{ fontWeight: 500, color: 'var(--text-1)', fontSize: '0.8125rem' }}>{u.name}</p>
+                              <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{u.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>{u.phone ?? '—'}</td>
+                        <td style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>
+                          {(u as any).createdAt ? new Date((u as any).createdAt).toLocaleDateString('en-EG', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}
+                        </td>
+                        <td style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>{timeAgo(u.lastLogin)}</td>
+                        <td>
+                          {u.isActive !== false
+                            ? <span className="badge badge-success">Active</span>
+                            : <span className="badge badge-neutral">Inactive</span>}
+                        </td>
+                      </tr>
+                    ))}
+                    {customers.length === 0 && !custLoading && (
+                      <tr>
+                        <td colSpan={5} style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-3)' }}>
+                          {custSearch ? 'No customers match your search.' : 'No registered customers yet.'}
                         </td>
                       </tr>
                     )}

@@ -8,19 +8,20 @@ interface Counts {
   draftInvoices: number;
   payableCommissions: number;
   overdueInstallments: number;
+  newLeads: number;
 }
 
 const POLL_MS = 60_000;
 
 export default function NotificationBell() {
-  const [counts, setCounts] = useState<Counts>({ draftInvoices: 0, payableCommissions: 0, overdueInstallments: 0 });
+  const [counts, setCounts] = useState<Counts>({ draftInvoices: 0, payableCommissions: 0, overdueInstallments: 0, newLeads: 0 });
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   const fetchCounts = useCallback(async () => {
     try {
       // ponytail: invoices returns raw array → use limit=200 for count; commissions returns {items,total}
-      const [invoices, commissions, installments] = await Promise.all([
+      const [invoices, commissions, installments, leads] = await Promise.all([
         apiFetch<unknown[]>('/finance/invoices?status=DRAFT&limit=200').then(
           (r) => (Array.isArray(r) ? r.length : 0),
           () => 0,
@@ -33,12 +34,17 @@ export default function NotificationBell() {
           (r) => r?.count ?? 0,
           () => 0,
         ),
+        apiFetch<{ total?: number }>('/leads?status=NEW&limit=1').then(
+          (r) => (r as any)?.total ?? 0,
+          () => 0,
+        ),
       ]);
 
       setCounts({
         draftInvoices: invoices as number,
         payableCommissions: commissions as number,
         overdueInstallments: installments as number,
+        newLeads: leads as number,
       });
     } catch {
       // silent — notification badge is best-effort
@@ -60,7 +66,7 @@ export default function NotificationBell() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const total = counts.draftInvoices + counts.payableCommissions + counts.overdueInstallments;
+  const total = counts.draftInvoices + counts.payableCommissions + counts.overdueInstallments + counts.newLeads;
 
   return (
     <div ref={ref} className="relative">
@@ -120,6 +126,18 @@ export default function NotificationBell() {
                 <span>Overdue Installments</span>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${counts.overdueInstallments > 0 ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-gray-500'}`}>
                   {counts.overdueInstallments}
+                </span>
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/crm?status=NEW"
+                onClick={() => setOpen(false)}
+                className="flex items-center justify-between px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition"
+              >
+                <span>New B2C Leads</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${counts.newLeads > 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-gray-500'}`}>
+                  {counts.newLeads}
                 </span>
               </Link>
             </li>

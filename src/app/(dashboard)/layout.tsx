@@ -4,9 +4,11 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import NotificationBell from '@/components/NotificationBell';
+import CommandPalette from '@/components/CommandPalette';
+import { LocationProvider, useLocation } from '@/lib/location-context';
 
 /* ─── Nav items ──────────────────────────────────────────────────────────── */
-const NAV = [
+const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[] }[] = [
   {
     href: '/',
     label: 'Dashboard',
@@ -33,6 +35,20 @@ const NAV = [
     ),
   },
   {
+    href: '/import',
+    label: 'Imports',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M1.5 11h13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+        <path d="M2.5 11V7.5L4 4.5h8l1.5 3V11" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+        <path d="M6 7h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+        <circle cx="5" cy="12.5" r="1" fill="currentColor"/>
+        <circle cx="11" cy="12.5" r="1" fill="currentColor"/>
+        <path d="M8 1v3.5M6.5 3l1.5-1.5 1.5 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    ),
+  },
+  {
     href: '/crm',
     label: 'Leads & CRM',
     icon: (
@@ -41,6 +57,17 @@ const NAV = [
         <path d="M1.5 13.5c0-2.485 2.015-4.5 4.5-4.5s4.5 2.015 4.5 4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
         <circle cx="11.5" cy="5.5" r="2" stroke="currentColor" strokeWidth="1.2"/>
         <path d="M13 10c1.1.5 1.5 1.5 1.5 2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/whatsapp',
+    label: 'WhatsApp',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <rect x="1.5" y="2" width="13" height="10" rx="2" stroke="currentColor" strokeWidth="1.2"/>
+        <path d="M4 13.5l1-2h6l1 2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M4.5 7h7M4.5 9.5h4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
       </svg>
     ),
   },
@@ -68,6 +95,61 @@ const NAV = [
     ),
   },
   {
+    href: '/service',
+    label: 'Service Center',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M10.5 2.5a4 4 0 0 1 0 5.657L5.657 13.1a2 2 0 1 1-2.828-2.828L7.672 5.43A4 4 0 0 1 10.5 2.5z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+        <circle cx="4.5" cy="11.5" r="1" fill="currentColor"/>
+        <path d="M12 2l2 2-1.5 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/parts',
+    label: 'Parts',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M8 1.5L14.5 5v6L8 14.5 1.5 11V5L8 1.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+        <path d="M8 1.5v13M1.5 5l6.5 3.5L14.5 5" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/transfers',
+    label: 'Transfers',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M2 8h12M10 5l4 3-4 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M14 5H2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity=".4"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/floor-plan',
+    label: 'Floor Plan',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <rect x="1.5" y="5" width="13" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
+        <path d="M4 5V3.5a1.5 1.5 0 013 0V5M9 5V3.5a1.5 1.5 0 013 0V5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+        <path d="M4.5 9.5h7M4.5 11.5h4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/petty-cash',
+    label: 'Petty Cash',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <rect x="1.5" y="4" width="13" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
+        <path d="M5 7.5h6M5 10h3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+        <path d="M1.5 6.5h13" stroke="currentColor" strokeWidth="1.2"/>
+        <circle cx="11.5" cy="2.5" r="1" fill="currentColor" opacity=".6"/>
+        <path d="M11.5 3.5v.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
     href: '/finance',
     label: 'Finance',
     icon: (
@@ -85,6 +167,27 @@ const NAV = [
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <path d="M2 12.5l3-4 2.5 2 3-5L13 9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
         <path d="M1.5 14h13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/reports/my-commissions',
+    label: 'My Commissions',
+    roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN'],
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M8 2L9.8 6H14l-3.4 2.5 1.3 4L8 10l-3.9 2.5 1.3-4L2 6h4.2z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/executive',
+    label: 'Executive View',
+    roles: ['MANAGER', 'ADMIN', 'SUPER_ADMIN'],
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M8 3C4.5 3 1.5 8 1.5 8s3 5 6.5 5 6.5-5 6.5-5-3-5-6.5-5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+        <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2"/>
       </svg>
     ),
   },
@@ -111,7 +214,55 @@ const NAV = [
   },
 ];
 
-/* ─── Topbar selectors (location / date) ─────────────────────────────────── */
+/* ─── Location dropdown ──────────────────────────────────────────────────── */
+function LocationDropdown() {
+  const { locationId, setLocationId, locations } = useLocation();
+  return (
+    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+      {/* pin icon */}
+      <span style={{ position: 'absolute', left: '0.625rem', pointerEvents: 'none', color: 'var(--text-2)', display: 'flex' }}>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M7 1.5A3.5 3.5 0 0 0 3.5 5c0 2.5 3.5 7 3.5 7S10.5 7.5 10.5 5A3.5 3.5 0 0 0 7 1.5z" stroke="currentColor" strokeWidth="1.2"/>
+          <circle cx="7" cy="5" r="1.2" fill="currentColor"/>
+        </svg>
+      </span>
+      <select
+        value={locationId}
+        onChange={(e) => setLocationId(e.target.value)}
+        style={{
+          appearance: 'none',
+          WebkitAppearance: 'none',
+          paddingLeft: '1.875rem',
+          paddingRight: '1.75rem',
+          paddingTop: '0.375rem',
+          paddingBottom: '0.375rem',
+          borderRadius: '0.375rem',
+          border: '1px solid var(--border)',
+          background: 'var(--surface)',
+          color: 'var(--text-2)',
+          fontSize: '0.75rem',
+          fontWeight: 500,
+          cursor: 'pointer',
+          outline: 'none',
+          minWidth: '9rem',
+        }}
+      >
+        <option value="">All Locations</option>
+        {locations.map(l => (
+          <option key={l.id} value={l.id}>{l.name}</option>
+        ))}
+      </select>
+      {/* chevron */}
+      <span style={{ position: 'absolute', right: '0.5rem', pointerEvents: 'none', color: 'var(--text-2)', opacity: 0.5, display: 'flex' }}>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d="M2.5 4l2.5 2.5L7.5 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+        </svg>
+      </span>
+    </div>
+  );
+}
+
+/* ─── Static topbar selector (date period) ───────────────────────────────── */
 function TopbarSelector({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-xs font-medium transition hover:bg-[var(--surface-2)]"
@@ -125,27 +276,8 @@ function TopbarSelector({ icon, label }: { icon: React.ReactNode; label: string 
   );
 }
 
-/* ─── Notification bell ──────────────────────────────────────────────────── */
-function Bell({ count = 0 }: { count?: number }) {
-  return (
-    <button className="relative p-2 rounded-md hover:bg-[var(--surface-2)] transition"
-      style={{ color: 'var(--text-2)' }} aria-label="Notifications">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <path d="M8 1.5a4.5 4.5 0 00-4.5 4.5c0 2.5-.5 3.5-1.5 4.5h12c-1-1-1.5-2-1.5-4.5A4.5 4.5 0 008 1.5z" stroke="currentColor" strokeWidth="1.2"/>
-        <path d="M6.5 10.5A1.5 1.5 0 009.5 10.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-      </svg>
-      {count > 0 && (
-        <span className="absolute top-1 right-1 w-4 h-4 rounded-full flex items-center justify-center text-white"
-          style={{ fontSize: '9px', fontWeight: 700, background: 'var(--danger)', lineHeight: 1 }}>
-          {count > 9 ? '9+' : count}
-        </span>
-      )}
-    </button>
-  );
-}
-
-/* ─── Layout ─────────────────────────────────────────────────────────────── */
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+/* ─── Inner shell (uses hooks + location context) ────────────────────────── */
+function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<{ name: string; role: string } | null>(null);
@@ -153,7 +285,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
     if (!token) { router.replace('/login'); return; }
-    // Decode role from cookie (set at login)
     const roleCookie = document.cookie.split('; ').find(c => c.startsWith('admin_role='));
     const role = roleCookie ? roleCookie.split('=')[1] : 'ADMIN';
     setUser({ name: 'Admin User', role });
@@ -173,7 +304,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.replace('/login');
   }
 
-  // Derive initials from user name
   const initials = user?.name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() ?? 'AD';
 
   return (
@@ -192,8 +322,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Nav */}
         <nav className="flex-1 px-2.5 py-3 space-y-0.5 overflow-y-auto">
-          {NAV.map(({ href, label, icon }) => {
-            // Match active: exact for root, startsWith for others
+          {NAV.filter(n => !n.roles || (user && n.roles.includes(user.role))).map(({ href, label, icon }) => {
             const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
             return (
               <Link key={href} href={href}
@@ -213,7 +342,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
-        {/* User info at bottom */}
+        {/* User info */}
         <div className="px-3 py-3" style={{ borderTop: '1px solid var(--sidebar-border)' }}>
           <div className="flex items-center gap-2.5">
             <span className="avatar w-7 h-7 text-[0.625rem]"
@@ -246,10 +375,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <header className="flex items-center justify-between px-5 py-2.5 flex-shrink-0"
           style={{ background: 'var(--topbar-bg)', borderBottom: '1px solid var(--topbar-border)' }}>
           <div className="flex items-center gap-2">
-            <TopbarSelector
-              icon={<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2"/><path d="M1 5h12" stroke="currentColor" strokeWidth="1.2"/><path d="M5 1v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/><path d="M9 1v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>}
-              label="All Locations"
-            />
+            <LocationDropdown />
             <TopbarSelector
               icon={<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2"/><path d="M1 5h12" stroke="currentColor" strokeWidth="1.2"/><path d="M5 1v4M9 1v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>}
               label="Jun 2026"
@@ -269,6 +395,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </main>
       </div>
+
+      {/* Global command palette */}
+      <CommandPalette />
     </div>
+  );
+}
+
+/* ─── Root layout export ─────────────────────────────────────────────────── */
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <LocationProvider>
+      <DashboardShell>{children}</DashboardShell>
+    </LocationProvider>
   );
 }

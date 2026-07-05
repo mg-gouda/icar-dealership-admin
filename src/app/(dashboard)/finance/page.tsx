@@ -224,12 +224,20 @@ function AgingTable() {
   );
 }
 
+interface PayableCommission {
+  id: string;
+  calculatedAmount: number;
+  user?: { name: string };
+  deal?: { id: string; vehicle?: { make: string; model: string } };
+}
+
 /* ─── Main page ───────────────────────────────────────────────────────────── */
 export default function FinanceDashboardPage() {
   const [summary, setSummary] = useState<FinanceSummary>(DEMO_SUMMARY);
   const [todos] = useState<TodoItem[]>(DEMO_TODOS);
-  const [monthly] = useState<MonthlyPoint[]>(DEMO_MONTHLY);
-  const [branches] = useState<BranchProfit[]>(DEMO_BRANCHES);
+  const [monthly, setMonthly] = useState<MonthlyPoint[]>(DEMO_MONTHLY);
+  const [branches, setBranches] = useState<BranchProfit[]>(DEMO_BRANCHES);
+  const [payableComms, setPayableComms] = useState<PayableCommission[]>([]);
 
   // Attempt real API fetch; fall back to demo on error
   useEffect(() => {
@@ -237,6 +245,18 @@ export default function FinanceDashboardPage() {
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (d) setSummary(d); })
       .catch(() => {/* use demo */});
+    fetch(`${API}/commissions?status=PAYABLE&limit=10`, { headers: authHeaders() })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.items) setPayableComms(d.items); })
+      .catch(() => {});
+    fetch(`${API}/reports/revenue-by-month`, { headers: authHeaders() })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.months) setMonthly(data.months); })
+      .catch(() => {});
+    fetch(`${API}/reports/branch-profit`, { headers: authHeaders() })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.branches) setBranches(data.branches); })
+      .catch(() => {});
   }, []);
 
   /* KPI cards */
@@ -369,6 +389,42 @@ export default function FinanceDashboardPage() {
             <AgingTable />
           </div>
         </div>
+
+        {/* ── Commissions Payable Queue (shown when there are items) ──────────── */}
+        {payableComms.length > 0 && (
+          <div className="card" style={{ overflow: 'hidden' }}>
+            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>Commissions Payable Queue</p>
+                <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 2 }}>
+                  {payableComms.length} commission{payableComms.length !== 1 ? 's' : ''} ready to pay out ·&nbsp;
+                  {fmtEGP(payableComms.reduce((s, c) => s + (c.calculatedAmount ?? 0), 0))} total
+                </p>
+              </div>
+              <Link href="/finance/commissions?status=PAYABLE" className="btn btn-primary btn-sm">Process Payouts →</Link>
+            </div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Sales Rep</th>
+                  <th>Deal</th>
+                  <th style={{ textAlign: 'right' }}>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payableComms.slice(0, 8).map((c) => (
+                  <tr key={c.id}>
+                    <td style={{ fontSize: '0.8125rem', color: 'var(--text-1)' }}>{c.user?.name ?? '—'}</td>
+                    <td style={{ fontSize: '0.8rem', color: 'var(--text-3)' }}>
+                      {c.deal?.vehicle ? `${c.deal.vehicle.make} ${c.deal.vehicle.model}` : c.id.slice(-8).toUpperCase()}
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-1)', fontSize: '0.8125rem' }}>{fmtEGP(c.calculatedAmount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* ── Row 3: Revenue vs Expenses Chart + Branch Profit + Quick Actions ─ */}
         <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1.2fr 0.8fr', gap: '0.875rem' }}>

@@ -283,6 +283,9 @@ export default function InvoiceDetailPage() {
 
   const [posting, setPosting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [reversing, setReversing] = useState(false);
+  const [submittingEta, setSubmittingEta] = useState(false);
+  const [etaResult, setEtaResult] = useState<{ status: string; submissionId?: string } | null>(null);
   const [showPayDialog, setShowPayDialog] = useState(false);
   const [showAddLine, setShowAddLine] = useState(false);
   const [actionErr, setActionErr] = useState('');
@@ -300,6 +303,23 @@ export default function InvoiceDetailPage() {
     try { await apiFetch(`/finance/invoices/${id}/cancel`, { method: 'PATCH' }); await reload(); }
     catch (e: unknown) { setActionErr(e instanceof Error ? e.message : 'Error'); }
     finally { setCancelling(false); }
+  }
+
+  async function reverse() {
+    if (!confirm('Reverse this invoice? A reversing journal entry will be created and the invoice marked Cancelled.')) return;
+    setReversing(true); setActionErr('');
+    try { await apiFetch(`/finance/invoices/${id}/reverse`, { method: 'PATCH' }); await reload(); }
+    catch (e: unknown) { setActionErr(e instanceof Error ? e.message : 'Error'); }
+    finally { setReversing(false); }
+  }
+
+  async function submitToEta() {
+    setSubmittingEta(true); setActionErr('');
+    try {
+      const r = await apiFetch<{ status: string; submissionId?: string }>(`/finance/eta/invoices/${id}/submit`, { method: 'POST' });
+      setEtaResult(r);
+    } catch (e: unknown) { setActionErr(e instanceof Error ? e.message : 'ETA submission failed'); }
+    finally { setSubmittingEta(false); }
   }
 
   function printPdf() {
@@ -347,6 +367,8 @@ export default function InvoiceDetailPage() {
   const isDraft = invoice.status === 'DRAFT';
   const isPosted = invoice.status === 'POSTED';
   const canPay = isPosted && Number(invoice.amountResidual) > 0;
+  const isCustomerInvoice = invoice.type === 'CUSTOMER_INVOICE' || invoice.type === 'out_invoice';
+  const etaSubmissionId = (invoice as any).etaSubmissionId as string | undefined;
 
   return (
     <div className="page-body" style={{ maxWidth: 1100 }}>
@@ -383,14 +405,42 @@ export default function InvoiceDetailPage() {
               + Register Payment
             </button>
           )}
-          {(isDraft || isPosted) && (
+          {isDraft && (
             <button className="btn btn-ghost btn-sm" onClick={cancel} disabled={cancelling}
               style={{ color: 'var(--danger)' }}>
               {cancelling ? '…' : 'Cancel'}
             </button>
           )}
+          {isPosted && isCustomerInvoice && (
+            <button
+              className="btn btn-sm"
+              onClick={submitToEta}
+              disabled={submittingEta}
+              title={etaSubmissionId ? `ETA ID: ${etaSubmissionId}` : 'Submit to ETA e-invoicing'}
+              style={{ borderColor: etaSubmissionId ? 'var(--success)' : 'var(--border)', color: etaSubmissionId ? 'var(--success)' : 'var(--text-2)' }}
+            >
+              {submittingEta ? 'Submitting…' : etaSubmissionId ? '✓ ETA Submitted' : '⇪ Submit to ETA'}
+            </button>
+          )}
+          {isPosted && (
+            <button className="btn btn-ghost btn-sm" onClick={reverse} disabled={reversing}
+              style={{ color: 'var(--danger)' }}>
+              {reversing ? '…' : 'Reverse'}
+            </button>
+          )}
         </div>
       </div>
+      {etaResult && (
+        <div className="mb-4 px-4 py-3 card" style={{
+          background: etaResult.status === 'SUBMITTED' ? 'var(--success-bg, #f0fdf4)' : 'var(--surface-2)',
+          borderColor: etaResult.status === 'SUBMITTED' ? 'var(--success)' : 'var(--border)',
+          fontSize: '0.875rem',
+        }}>
+          ETA: <strong>{etaResult.status}</strong>
+          {etaResult.submissionId && <> — ID: <code>{etaResult.submissionId}</code></>}
+          {etaResult.status === 'CREDENTIALS_NOT_CONFIGURED' && ' — Set ETA_CLIENT_ID + ETA_CLIENT_SECRET env vars to enable live submission.'}
+        </div>
+      )}
 
       {actionErr && (
         <div className="mb-4 px-4 py-3 card" style={{ background: 'var(--danger-bg)', borderColor: 'var(--danger)', color: 'var(--danger-fg)', fontSize: '0.875rem' }}>

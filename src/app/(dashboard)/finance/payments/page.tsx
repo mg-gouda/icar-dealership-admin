@@ -67,6 +67,7 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
     method: 'TRANSFER',
     reference: '',
     note: '',
+    whtCategoryId: '',
   });
   const [allocations, setAllocations] = useState<{ invoiceId: string; amount: string }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -76,6 +77,9 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
     tab === 'customer' ? '/partners?limit=200&type=CUSTOMER' : '/partners?limit=200&type=VENDOR',
   );
   const { data: journalsRaw } = useQuery<any[]>('/finance/journals?type=BANK&limit=50');
+  const { data: whtCatsRaw } = useQuery<{ data: { id: string; name: string; rate: number }[] }>(
+    tab === 'vendor' ? '/finance/wht-categories' : null,
+  );
   const { data: openInvoicesRaw } = useQuery<{ items: Invoice[] }>(
     form.partnerId
       ? `/finance/invoices?partnerId=${form.partnerId}&status=POSTED&limit=50&type=${tab === 'customer' ? 'CUSTOMER_INVOICE' : 'VENDOR_BILL'}`
@@ -85,6 +89,10 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
 
   const partnerOpts = (Array.isArray(partnersRaw) ? partnersRaw : []).map((p) => ({ value: p.id, label: p.name }));
   const journalOpts = (Array.isArray(journalsRaw) ? journalsRaw : []).map((j) => ({ value: j.id, label: `${j.code} — ${j.name}` }));
+  const whtOpts = [
+    { value: '', label: 'No WHT' },
+    ...((whtCatsRaw?.data ?? []).map((w) => ({ value: w.id, label: `${w.name} (${w.rate}%)` }))),
+  ];
   const openInvoices = openInvoicesRaw?.items ?? [];
 
   function toggleAllocation(inv: Invoice) {
@@ -120,6 +128,7 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
           ...(allocations.length > 0 && {
             allocations: allocations.map((a) => ({ invoiceId: a.invoiceId, amount: Number(a.amount) })),
           }),
+          ...(form.whtCategoryId && { whtCategoryId: form.whtCategoryId }),
         }),
       });
       onSuccess();
@@ -216,6 +225,30 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
               />
             </div>
           </div>
+
+          {/* WHT — vendor payments only */}
+          {tab === 'vendor' && whtOpts.length > 1 && (
+            <div>
+              <label className="input-label">Withholding Tax (WHT)</label>
+              <SearchableCombobox
+                options={whtOpts}
+                value={form.whtCategoryId}
+                onChange={(v) => setForm((p) => ({ ...p, whtCategoryId: v }))}
+                placeholder="No WHT"
+                clearable
+                clearLabel="No WHT"
+              />
+              {form.whtCategoryId && form.amount && (() => {
+                const cat = (whtCatsRaw?.data ?? []).find(w => w.id === form.whtCategoryId);
+                const whtAmt = cat ? Number(form.amount) * cat.rate / 100 : 0;
+                return (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-2)', marginTop: '0.375rem' }}>
+                    WHT deducted: <strong>EGP {whtAmt.toFixed(2)}</strong> · Net to bank: <strong>EGP {(Number(form.amount) - whtAmt).toFixed(2)}</strong>
+                  </p>
+                );
+              })()}
+            </div>
+          )}
 
           {/* Allocations */}
           {openInvoices.length > 0 && (
