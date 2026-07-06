@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation';
 const TABS = [
   { label: 'Overview',        href: '/finance' },
   { label: 'Invoices',        href: '/finance/invoices' },
+  { label: 'Vendors',         href: '/finance/vendors' },
+  { label: 'Vendor Bills',    href: '/finance/vendor-bills' },
   { label: 'GL Journal',      href: '/finance/gl' },
   { label: 'Payments',        href: '/finance/payments' },
   { label: 'Reconciliation',  href: '/finance/reconciliation' },
