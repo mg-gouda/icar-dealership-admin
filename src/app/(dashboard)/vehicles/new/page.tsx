@@ -58,7 +58,15 @@ const STEPS = [
   { n: 2, label: 'Specs & Features' },
   { n: 3, label: 'Pricing & Location' },
   { n: 4, label: 'Upload Photos' },
-  { n: 5, label: 'Review & Publish' },
+  { n: 5, label: 'Documents' },
+  { n: 6, label: 'Review & Publish' },
+];
+
+const DOC_SLOTS: { key: string; label: string; required: boolean }[] = [
+  { key: 'vehicle_title', label: 'Vehicle Title / Ownership Certificate', required: true },
+  { key: 'inspection_report', label: 'Inspection Report', required: false },
+  { key: 'import_customs', label: 'Import Customs Certificate', required: false },
+  { key: 'prev_registration', label: 'Previous Registration', required: false },
 ];
 
 const fmt = (n: number) => 'EGP ' + n.toLocaleString('en-EG', { maximumFractionDigits: 0 });
@@ -87,6 +95,7 @@ export default function NewVehiclePage() {
   const [showVinScanner, setShowVinScanner] = useState(false);
   const [err, setErr] = useState('');
   const [photoInput, setPhotoInput] = useState('');
+  const [docs, setDocs] = useState<Record<string, File>>({});
 
   const { data: locationsRaw } = useQuery<Location[]>('/locations');
   const locations: Location[] = Array.isArray(locationsRaw) ? locationsRaw : [];
@@ -128,7 +137,22 @@ export default function NewVehiclePage() {
       if (!form.salePrice || Number(form.salePrice) <= 0) return 'Listed Sale Price is required.';
       if (!form.locationId) return 'Location assignment is required.';
     }
+    if (s === 5) {
+      if (!docs['vehicle_title']) return 'Vehicle Title is required.';
+    }
     return '';
+  }
+
+  // ponytail: programmatic file picker avoids hidden input per slot
+  function pickDoc(slotKey: string) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf,.jpg,.jpeg,.png';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) setDocs((prev) => ({ ...prev, [slotKey]: file }));
+    };
+    input.click();
   }
 
   function next() {
@@ -147,6 +171,7 @@ export default function NewVehiclePage() {
   async function publish() {
     const e = validateStep(3);
     if (e) { setErr(e); return; }
+    console.log('Documents to upload:', Object.keys(docs));
     setSaving(true);
     setErr('');
     try {
@@ -759,8 +784,72 @@ export default function NewVehiclePage() {
               </div>
             )}
 
-            {/* STEP 5 — Review & Publish */}
+            {/* STEP 5 — Documents */}
             {step === 5 && (
+              <div className="card" style={{ padding: '1.5rem' }}>
+                <p className="section-label" style={{ marginBottom: '1rem' }}>Vehicle Documents</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {DOC_SLOTS.map((slot) => {
+                    const file = docs[slot.key];
+                    return (
+                      <div
+                        key={slot.key}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '0.875rem 1rem',
+                          borderRadius: '0.5rem',
+                          border: `1px solid ${file ? 'var(--success)' : 'var(--border)'}`,
+                          background: file ? 'var(--success-bg)' : 'var(--surface)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', minWidth: 0 }}>
+                          {file ? (
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: 'var(--success-fg)', flexShrink: 0 }}>
+                              <circle cx="8" cy="8" r="7" fill="currentColor" opacity="0.15"/>
+                              <path d="M4.5 8l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          ) : (
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: 'var(--text-3)', flexShrink: 0 }}>
+                              <path d="M4 2h6l4 4v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+                              <path d="M9 2v4h4" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+                            </svg>
+                          )}
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '0.8125rem', color: 'var(--text-1)', fontWeight: 500 }}>{slot.label}</span>
+                              {slot.required && (
+                                <span style={{
+                                  fontSize: '0.625rem', fontWeight: 700,
+                                  color: '#fff', background: 'var(--danger)',
+                                  padding: '0.1rem 0.375rem', borderRadius: '0.25rem',
+                                  textTransform: 'uppercase', letterSpacing: '0.04em',
+                                }}>Required</span>
+                              )}
+                            </div>
+                            <p style={{ fontSize: '0.75rem', color: file ? 'var(--success-fg)' : 'var(--text-3)', marginTop: '0.15rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '260px' }}>
+                              {file ? file.name : 'No file selected'}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => pickDoc(slot.key)}
+                          style={{ flexShrink: 0, fontSize: '0.8125rem' }}
+                        >
+                          {file ? 'Replace' : 'Upload'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* STEP 6 — Review & Publish */}
+            {step === 6 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {/* Identity review */}
                 <div className="card" style={{ padding: '1.25rem 1.5rem' }}>
@@ -868,6 +957,32 @@ export default function NewVehiclePage() {
                     </div>
                   </div>
                 )}
+
+                {/* Documents review */}
+                <div className="card" style={{ padding: '1.25rem 1.5rem' }}>
+                  <p className="section-label" style={{ marginBottom: '0.75rem' }}>Documents</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {DOC_SLOTS.map((slot) => {
+                      const file = docs[slot.key];
+                      return (
+                        <div key={slot.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: '1px solid var(--border)' }}>
+                          <span style={{ fontSize: '0.8125rem', color: 'var(--text-2)' }}>{slot.label}</span>
+                          {file ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style={{ color: 'var(--success-fg)' }}>
+                                <circle cx="8" cy="8" r="7" fill="currentColor" opacity="0.15"/>
+                                <path d="M4.5 8l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--success-fg)', fontWeight: 500, maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: '0.8125rem', color: 'var(--text-3)' }}>—</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -891,9 +1006,9 @@ export default function NewVehiclePage() {
                 )}
               </div>
               <div>
-                {step < 5 ? (
+                {step < 6 ? (
                   <button className="btn btn-primary" onClick={next}>
-                    {step === 4 ? 'Review →' : `Next: ${STEPS[step]?.label} →`}
+                    {step === 5 ? 'Review →' : `Next: ${STEPS[step]?.label} →`}
                   </button>
                 ) : (
                   <button
@@ -1031,6 +1146,13 @@ export default function NewVehiclePage() {
                   </>
                 )}
                 {step === 5 && (
+                  <>
+                    <li>Vehicle Title is required before proceeding.</li>
+                    <li>Accepted formats: PDF, JPG, PNG.</li>
+                    <li>Documents can be updated from the vehicle detail page.</li>
+                  </>
+                )}
+                {step === 6 && (
                   <>
                     <li>Review all details before publishing.</li>
                     <li>Vehicle status can be changed after publishing.</li>
