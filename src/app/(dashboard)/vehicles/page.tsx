@@ -15,14 +15,18 @@ interface Vehicle {
   year: number;
   color: string;
   salePrice: number;
-  price: number; // API may return either field name
+  price: number;
   acquisitionCost?: number;
   cost?: number;
   bodyType: string;
   condition: string;
   status: string;
   mileage: number;
+  fuelType?: string;
   daysInStock?: number;
+  createdAt?: string;
+  thumbnailUrl?: string;
+  stockNumber?: string;
   location?: { name: string };
 }
 
@@ -50,6 +54,19 @@ const PRICE_RANGE_OPTIONS = [
   { value: '2000000-', label: 'Above EGP 2M' },
 ];
 
+const FUEL_TYPE_OPTIONS = [
+  { value: 'Petrol', label: 'Petrol' },
+  { value: 'Diesel', label: 'Diesel' },
+  { value: 'Electric', label: 'Electric' },
+  { value: 'Hybrid', label: 'Hybrid' },
+];
+
+const AGING_OPTIONS = [
+  { value: '30', label: '> 30 days' },
+  { value: '60', label: '> 60 days' },
+  { value: '90', label: '> 90 days' },
+];
+
 const fmt = (n: number) =>
   'EGP ' + n.toLocaleString('en-EG', { maximumFractionDigits: 0 });
 
@@ -68,6 +85,23 @@ function statusLabel(status: string): string {
   return status.replace(/_/g, ' ');
 }
 
+// ponytail: daysInStock from API field first, fallback to createdAt diff
+function computeDaysInStock(v: Vehicle): number | null {
+  if (v.daysInStock != null) return v.daysInStock;
+  if (v.createdAt) {
+    const ms = Date.now() - new Date(v.createdAt).getTime();
+    return Math.floor(ms / 86_400_000);
+  }
+  return null;
+}
+
+function agingBadge(days: number | null): React.ReactNode {
+  if (days == null || days <= 60) return null;
+  const cls = days > 90 ? 'badge badge-danger' : 'badge badge-warning';
+  const label = days > 90 ? `${days}d (aged)` : `${days}d`;
+  return <span className={cls} style={{ fontSize: '0.625rem', marginLeft: '0.25rem' }}>{label}</span>;
+}
+
 const PAGE_SIZE = 25;
 
 export default function VehiclesPage() {
@@ -78,6 +112,9 @@ export default function VehiclesPage() {
   const [makeFilter, setMakeFilter] = useState('');
   const [bodyTypeFilter, setBodyTypeFilter] = useState('');
   const [priceRange, setPriceRange] = useState('');
+  const [fuelTypeFilter, setFuelTypeFilter] = useState('');
+  const [agingFilter, setAgingFilter] = useState('');
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [page, setPage] = useState(1);
 
   const params = new URLSearchParams({
@@ -85,6 +122,7 @@ export default function VehiclesPage() {
     ...(statusFilter && { status: statusFilter }),
     ...(makeFilter && { make: makeFilter }),
     ...(bodyTypeFilter && { bodyType: bodyTypeFilter }),
+    ...(fuelTypeFilter && { fuelType: fuelTypeFilter }),
     page: String(page),
     limit: String(PAGE_SIZE),
   });
@@ -94,7 +132,7 @@ export default function VehiclesPage() {
     total: number;
     page: number;
     limit: number;
-  }>(`/vehicles?${params}`, [search, statusFilter, makeFilter, bodyTypeFilter, page]);
+  }>(`/vehicles?${params}`, [search, statusFilter, makeFilter, bodyTypeFilter, fuelTypeFilter, page]);
 
   const { data: locationsRaw } = useQuery<{ id: string; name: string }[]>('/locations');
   const locationOptions = (Array.isArray(locationsRaw) ? locationsRaw : []).map((l) => ({
@@ -102,15 +140,22 @@ export default function VehiclesPage() {
     label: l.name,
   }));
 
-  const vehicles = res?.items ?? [];
+  const rawVehicles = res?.items ?? [];
   const total = res?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const showingFrom = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const showingTo = Math.min(page * PAGE_SIZE, total);
 
+  // ponytail: aging filter is client-side (API doesn't expose daysInStock filter)
+  const vehicles = agingFilter
+    ? rawVehicles.filter((v) => {
+        const days = computeDaysInStock(v);
+        return days != null && days > Number(agingFilter);
+      })
+    : rawVehicles;
+
   const canSeeCost = canViewField('Vehicle', 'cost');
 
-  // Bulk import
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{
@@ -146,10 +191,12 @@ export default function VehiclesPage() {
     setMakeFilter('');
     setBodyTypeFilter('');
     setPriceRange('');
+    setFuelTypeFilter('');
+    setAgingFilter('');
     setPage(1);
   }
 
-  const hasFilters = search || locationFilter || statusFilter || makeFilter || bodyTypeFilter || priceRange;
+  const hasFilters = search || locationFilter || statusFilter || makeFilter || bodyTypeFilter || priceRange || fuelTypeFilter || agingFilter;
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100%' }}>
@@ -160,6 +207,43 @@ export default function VehiclesPage() {
           <p className="page-subtitle">Manage all vehicles in stock</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          {/* View mode toggle */}
+          <div style={{
+            display: 'flex',
+            border: '1px solid var(--border)',
+            borderRadius: '0.5rem',
+            overflow: 'hidden',
+          }}>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setViewMode('table')}
+              title="Table view"
+              style={{
+                borderRadius: 0,
+                background: viewMode === 'table' ? 'var(--primary)' : undefined,
+                color: viewMode === 'table' ? 'var(--primary-fg)' : undefined,
+                border: 'none',
+                padding: '0.35rem 0.6rem',
+              }}
+            >
+              <TableIcon />
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setViewMode('grid')}
+              title="Grid view"
+              style={{
+                borderRadius: 0,
+                background: viewMode === 'grid' ? 'var(--primary)' : undefined,
+                color: viewMode === 'grid' ? 'var(--primary-fg)' : undefined,
+                border: 'none',
+                padding: '0.35rem 0.6rem',
+              }}
+            >
+              <GridIcon />
+            </button>
+          </div>
+
           <input
             ref={fileRef}
             type="file"
@@ -277,6 +361,28 @@ export default function VehiclesPage() {
             />
           </div>
 
+          <div style={{ minWidth: '130px' }}>
+            <SearchableCombobox
+              options={FUEL_TYPE_OPTIONS}
+              value={fuelTypeFilter}
+              onChange={(v) => { setFuelTypeFilter(v); setPage(1); }}
+              placeholder="Fuel Type"
+              clearable
+              clearLabel="All Fuels"
+            />
+          </div>
+
+          <div style={{ minWidth: '140px' }}>
+            <SearchableCombobox
+              options={AGING_OPTIONS}
+              value={agingFilter}
+              onChange={(v) => { setAgingFilter(v); setPage(1); }}
+              placeholder="Days in Stock"
+              clearable
+              clearLabel="All Ages"
+            />
+          </div>
+
           <div style={{ minWidth: '150px' }}>
             <SearchableCombobox
               options={PRICE_RANGE_OPTIONS}
@@ -295,21 +401,22 @@ export default function VehiclesPage() {
           )}
         </div>
 
-        {/* Table card */}
-        <div className="card" style={{ overflow: 'hidden' }}>
-          {loading && (
-            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8125rem' }}>
-              Loading vehicles…
-            </div>
-          )}
+        {/* Loading / error */}
+        {loading && (
+          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8125rem' }}>
+            Loading vehicles…
+          </div>
+        )}
 
-          {error && (
-            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--danger)', fontSize: '0.8125rem' }}>
-              {error}
-            </div>
-          )}
+        {error && (
+          <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--danger)', fontSize: '0.8125rem' }}>
+            {error}
+          </div>
+        )}
 
-          {!loading && !error && (
+        {/* ── Table view ─────────────────────────────────────────────── */}
+        {!loading && !error && viewMode === 'table' && (
+          <div className="card" style={{ overflow: 'hidden' }}>
             <table className="data-table">
               <thead>
                 <tr>
@@ -340,6 +447,7 @@ export default function VehiclesPage() {
                   vehicles.map((v) => {
                     const price = v.salePrice ?? v.price ?? 0;
                     const cost = v.acquisitionCost ?? v.cost;
+                    const days = computeDaysInStock(v);
                     return (
                       <tr
                         key={v.id}
@@ -369,7 +477,10 @@ export default function VehiclesPage() {
                             : <span style={{ letterSpacing: '0.15em', color: 'var(--text-3)' }}>···</span>}
                         </td>
                         <td style={{ textAlign: 'right', color: 'var(--text-2)' }}>
-                          {v.daysInStock != null ? v.daysInStock : '—'}
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                            {days != null ? days : '—'}
+                            {agingBadge(days)}
+                          </span>
                         </td>
                         <td style={{ color: 'var(--text-2)' }}>
                           {v.location?.name ?? '—'}
@@ -395,69 +506,277 @@ export default function VehiclesPage() {
                 )}
               </tbody>
             </table>
-          )}
 
-          {/* Pagination */}
-          {!loading && !error && total > 0 && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '0.75rem 1rem',
-              borderTop: '1px solid var(--border)',
-              fontSize: '0.8125rem',
-              color: 'var(--text-3)',
-            }}>
-              <span>
-                Showing {showingFrom}–{showingTo} of {total} vehicles
-              </span>
-              <div style={{ display: 'flex', gap: '0.25rem' }}>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  Previous
-                </button>
-                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                  let p: number;
-                  if (totalPages <= 7) {
-                    p = i + 1;
-                  } else if (page <= 4) {
-                    p = i + 1;
-                  } else if (page >= totalPages - 3) {
-                    p = totalPages - 6 + i;
-                  } else {
-                    p = page - 3 + i;
-                  }
+            {/* Pagination */}
+            {total > 0 && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.75rem 1rem',
+                borderTop: '1px solid var(--border)',
+                fontSize: '0.8125rem',
+                color: 'var(--text-3)',
+              }}>
+                <span>
+                  Showing {showingFrom}–{showingTo} of {total} vehicles
+                </span>
+                <div style={{ display: 'flex', gap: '0.25rem' }}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </button>
+                  {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                    let p: number;
+                    if (totalPages <= 7) {
+                      p = i + 1;
+                    } else if (page <= 4) {
+                      p = i + 1;
+                    } else if (page >= totalPages - 3) {
+                      p = totalPages - 6 + i;
+                    } else {
+                      p = page - 3 + i;
+                    }
+                    return (
+                      <button
+                        key={p}
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setPage(p)}
+                        style={{
+                          minWidth: '2rem',
+                          background: p === page ? 'var(--primary)' : undefined,
+                          color: p === page ? 'var(--primary-fg)' : undefined,
+                          fontWeight: p === page ? 600 : undefined,
+                        }}
+                      >
+                        {p}
+                      </button>
+                    );
+                  })}
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Grid view ──────────────────────────────────────────────── */}
+        {!loading && !error && viewMode === 'grid' && (
+          <>
+            {vehicles.length === 0 ? (
+              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8125rem' }}>
+                {hasFilters ? 'No vehicles match the current filters.' : 'No vehicles found. Add your first vehicle.'}
+              </div>
+            ) : (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '1rem',
+              }}
+                className="vehicles-grid"
+              >
+                {vehicles.map((v) => {
+                  const price = v.salePrice ?? v.price ?? 0;
+                  const days = computeDaysInStock(v);
                   return (
-                    <button
-                      key={p}
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => setPage(p)}
-                      style={{
-                        minWidth: '2rem',
-                        background: p === page ? 'var(--primary)' : undefined,
-                        color: p === page ? 'var(--primary-fg)' : undefined,
-                        fontWeight: p === page ? 600 : undefined,
-                      }}
-                    >
-                      {p}
-                    </button>
+                    <VehicleCard
+                      key={v.id}
+                      vehicle={v}
+                      price={price}
+                      days={days}
+                      onView={() => router.push(`/vehicles/${v.id}`)}
+                      onEdit={() => router.push(`/vehicles/${v.id}`)}
+                      onQuickSell={() => router.push(`/deals/new?vehicleId=${v.id}`)}
+                    />
                   );
                 })}
-                <button
-                  className="btn btn-ghost btn-sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  Next
-                </button>
               </div>
-            </div>
-          )}
+            )}
+
+            {/* Grid pagination */}
+            {total > 0 && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.75rem 0',
+                fontSize: '0.8125rem',
+                color: 'var(--text-3)',
+              }}>
+                <span>Showing {showingFrom}–{showingTo} of {total} vehicles</span>
+                <div style={{ display: 'flex', gap: '0.25rem' }}>
+                  <button className="btn btn-ghost btn-sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                    Previous
+                  </button>
+                  <button className="btn btn-ghost btn-sm" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <style>{`
+        @media (min-width: 1024px) { .vehicles-grid { grid-template-columns: repeat(3, 1fr) !important; } }
+        @media (min-width: 1280px) { .vehicles-grid { grid-template-columns: repeat(4, 1fr) !important; } }
+        .vehicle-card-actions { opacity: 0; pointer-events: none; transition: opacity 150ms; }
+        .vehicle-card:hover .vehicle-card-actions { opacity: 1; pointer-events: auto; }
+      `}</style>
+    </div>
+  );
+}
+
+/* ── Vehicle grid card ──────────────────────────────────────────────────── */
+function VehicleCard({
+  vehicle: v, price, days, onView, onEdit, onQuickSell,
+}: {
+  vehicle: Vehicle;
+  price: number;
+  days: number | null;
+  onView: () => void;
+  onEdit: () => void;
+  onQuickSell: () => void;
+}) {
+  return (
+    <div
+      className="card vehicle-card"
+      onClick={onView}
+      style={{ cursor: 'pointer', padding: 0, overflow: 'hidden', position: 'relative' }}
+    >
+      {/* Thumbnail */}
+      <div style={{
+        aspectRatio: '16/9',
+        background: 'var(--surface-2)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        position: 'relative',
+      }}>
+        {v.thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={v.thumbnailUrl}
+            alt={`${v.make} ${v.model}`}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        ) : (
+          <CarIcon />
+        )}
+
+        {/* Status badge overlay */}
+        <span
+          className={statusBadgeClass(v.status)}
+          style={{ position: 'absolute', top: '0.5rem', left: '0.5rem', fontSize: '0.625rem' }}
+        >
+          {statusLabel(v.status)}
+        </span>
+
+        {/* Aging badge overlay */}
+        {days != null && days > 60 && (
+          <span
+            className={days > 90 ? 'badge badge-danger' : 'badge badge-warning'}
+            style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', fontSize: '0.625rem' }}
+          >
+            {days}d
+          </span>
+        )}
+
+        {/* Hover quick-action overlay */}
+        <div
+          className="vehicle-card-actions"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(0,0,0,0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="btn btn-sm"
+            onClick={onView}
+            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(4px)' }}
+          >
+            View
+          </button>
+          <button
+            className="btn btn-sm"
+            onClick={onEdit}
+            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(4px)' }}
+          >
+            Edit
+          </button>
+          <button
+            className="btn btn-sm"
+            onClick={onQuickSell}
+            style={{ background: 'var(--primary)', color: 'var(--primary-fg)', border: 'none' }}
+          >
+            Quick-sell
+          </button>
         </div>
       </div>
+
+      {/* Card body */}
+      <div style={{ padding: '0.75rem 1rem' }}>
+        <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-1)', marginBottom: '0.2rem', lineHeight: 1.3 }}>
+          {v.year} {v.make} {v.model}
+        </p>
+        <p style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '0.4rem' }}>
+          {v.price != null || v.salePrice != null ? `EGP ${price.toLocaleString('en-EG', { maximumFractionDigits: 0 })}` : '—'}
+        </p>
+        <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', fontFamily: 'monospace', letterSpacing: '0.03em' }}>
+          {v.stockNumber ? `#${v.stockNumber} · ` : ''}{v.vin ? v.vin.slice(0, 12) + '…' : '—'}
+        </p>
+      </div>
     </div>
+  );
+}
+
+/* ── Icons ──────────────────────────────────────────────────────────────── */
+function TableIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="1" y="1" width="14" height="3" rx="1" stroke="currentColor" strokeWidth="1.3"/>
+      <rect x="1" y="6" width="14" height="3" rx="1" stroke="currentColor" strokeWidth="1.3"/>
+      <rect x="1" y="11" width="14" height="3" rx="1" stroke="currentColor" strokeWidth="1.3"/>
+    </svg>
+  );
+}
+
+function GridIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="1" y="1" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.3"/>
+      <rect x="9" y="1" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.3"/>
+      <rect x="1" y="9" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.3"/>
+      <rect x="9" y="9" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.3"/>
+    </svg>
+  );
+}
+
+function CarIcon() {
+  return (
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style={{ color: 'var(--text-3)' }}>
+      <path d="M8 30V22l4-10h24l4 10v8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      <rect x="6" y="28" width="36" height="10" rx="3" stroke="currentColor" strokeWidth="1.8"/>
+      <circle cx="13" cy="38" r="3" stroke="currentColor" strokeWidth="1.8"/>
+      <circle cx="35" cy="38" r="3" stroke="currentColor" strokeWidth="1.8"/>
+      <path d="M12 22h24" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+    </svg>
   );
 }
