@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import NotificationBell from '@/components/NotificationBell';
 import CommandPalette from '@/components/CommandPalette';
 import { LocationProvider, useLocation } from '@/lib/location-context';
+import { DateRangeProvider, useDateRange } from '@/lib/date-range-context';
 import SearchableCombobox from '@/components/ui/SearchableCombobox';
 
 /* ─── Nav items ──────────────────────────────────────────────────────────── */
@@ -58,6 +59,17 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
         <path d="M1.5 13.5c0-2.485 2.015-4.5 4.5-4.5s4.5 2.015 4.5 4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
         <circle cx="11.5" cy="5.5" r="2" stroke="currentColor" strokeWidth="1.2"/>
         <path d="M13 10c1.1.5 1.5 1.5 1.5 2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/reports',
+    label: 'Reports',
+    roles: ['MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN'],
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M2 12.5l3-4 2.5 2 3-5L13 9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M1.5 14h13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
       </svg>
     ),
   },
@@ -163,16 +175,6 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/reports',
-    label: 'Reports',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <path d="M2 12.5l3-4 2.5 2 3-5L13 9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M1.5 14h13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-      </svg>
-    ),
-  },
-  {
     href: '/reports/my-commissions',
     label: 'My Commissions',
     roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN'],
@@ -247,17 +249,74 @@ function LocationDropdown() {
   );
 }
 
-/* ─── Static topbar selector (date period) ───────────────────────────────── */
-function TopbarSelector({ icon, label }: { icon: React.ReactNode; label: string }) {
+/* ─── Interactive date range picker ─────────────────────────────────────── */
+function fmtMonthLabel(ym: string): string {
+  const [y, m] = ym.split('-');
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+function DateRangePicker() {
+  const { dateRange, setDateRange } = useDateRange();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const label = dateRange.from === dateRange.to
+    ? fmtMonthLabel(dateRange.from)
+    : `${fmtMonthLabel(dateRange.from)} – ${fmtMonthLabel(dateRange.to)}`;
+
   return (
-    <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-xs font-medium transition hover:bg-[var(--surface-2)]"
-      style={{ borderColor: 'var(--border)', color: 'var(--text-2)' }}>
-      {icon}
-      {label}
-      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ opacity: 0.5 }}>
-        <path d="M2.5 4l2.5 2.5L7.5 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-      </svg>
-    </button>
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-xs font-medium transition hover:bg-[var(--surface-2)]"
+        style={{ borderColor: open ? 'var(--primary)' : 'var(--border)', color: 'var(--text-2)' }}
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2"/>
+          <path d="M1 5h12" stroke="currentColor" strokeWidth="1.2"/>
+          <path d="M5 1v4M9 1v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+        </svg>
+        {label}
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ opacity: 0.5 }}>
+          <path d="M2.5 4l2.5 2.5L7.5 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          className="absolute z-50 top-full mt-1.5 left-0 rounded-xl shadow-xl shadow-black/30 p-4 space-y-3"
+          style={{ background: 'var(--surface)', border: '1px solid var(--border)', minWidth: 220 }}
+        >
+          <div>
+            <label className="input-label">From</label>
+            <input
+              type="month"
+              value={dateRange.from}
+              onChange={(e) => setDateRange({ ...dateRange, from: e.target.value })}
+              className="input w-full"
+            />
+          </div>
+          <div>
+            <label className="input-label">To</label>
+            <input
+              type="month"
+              value={dateRange.to}
+              onChange={(e) => setDateRange({ ...dateRange, to: e.target.value })}
+              className="input w-full"
+            />
+          </div>
+          <button onClick={() => setOpen(false)} className="btn btn-primary btn-sm w-full">Apply</button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -368,10 +427,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           style={{ background: 'var(--topbar-bg)', borderBottom: '1px solid var(--topbar-border)' }}>
           <div className="flex items-center gap-2">
             <LocationDropdown />
-            <TopbarSelector
-              icon={<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2"/><path d="M1 5h12" stroke="currentColor" strokeWidth="1.2"/><path d="M5 1v4M9 1v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>}
-              label="Jun 2026"
-            />
+            <DateRangePicker />
           </div>
           <div className="flex items-center gap-1">
             <NotificationBell />
@@ -398,7 +454,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <LocationProvider>
-      <DashboardShell>{children}</DashboardShell>
+      <DateRangeProvider>
+        <DashboardShell>{children}</DashboardShell>
+      </DateRangeProvider>
     </LocationProvider>
   );
 }
