@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import NotificationBell from '@/components/NotificationBell';
 import CommandPalette from '@/components/CommandPalette';
 import { LocationProvider, useLocation } from '@/lib/location-context';
+import SearchableCombobox from '@/components/ui/SearchableCombobox';
 
 /* ─── Nav items ──────────────────────────────────────────────────────────── */
 const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[] }[] = [
@@ -217,48 +218,18 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
 /* ─── Location dropdown ──────────────────────────────────────────────────── */
 function LocationDropdown() {
   const { locationId, setLocationId, locations } = useLocation();
+  const opts = [
+    { value: '', label: 'All Locations' },
+    ...locations.map((l) => ({ value: l.id, label: l.name })),
+  ];
   return (
-    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-      {/* pin icon */}
-      <span style={{ position: 'absolute', left: '0.625rem', pointerEvents: 'none', color: 'var(--text-2)', display: 'flex' }}>
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M7 1.5A3.5 3.5 0 0 0 3.5 5c0 2.5 3.5 7 3.5 7S10.5 7.5 10.5 5A3.5 3.5 0 0 0 7 1.5z" stroke="currentColor" strokeWidth="1.2"/>
-          <circle cx="7" cy="5" r="1.2" fill="currentColor"/>
-        </svg>
-      </span>
-      <select
-        value={locationId}
-        onChange={(e) => setLocationId(e.target.value)}
-        style={{
-          appearance: 'none',
-          WebkitAppearance: 'none',
-          paddingLeft: '1.875rem',
-          paddingRight: '1.75rem',
-          paddingTop: '0.375rem',
-          paddingBottom: '0.375rem',
-          borderRadius: '0.375rem',
-          border: '1px solid var(--border)',
-          background: 'var(--surface)',
-          color: 'var(--text-2)',
-          fontSize: '0.75rem',
-          fontWeight: 500,
-          cursor: 'pointer',
-          outline: 'none',
-          minWidth: '9rem',
-        }}
-      >
-        <option value="">All Locations</option>
-        {locations.map(l => (
-          <option key={l.id} value={l.id}>{l.name}</option>
-        ))}
-      </select>
-      {/* chevron */}
-      <span style={{ position: 'absolute', right: '0.5rem', pointerEvents: 'none', color: 'var(--text-2)', opacity: 0.5, display: 'flex' }}>
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-          <path d="M2.5 4l2.5 2.5L7.5 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-        </svg>
-      </span>
-    </div>
+    <SearchableCombobox
+      options={opts}
+      value={locationId}
+      onChange={setLocationId}
+      placeholder="All Locations"
+      className="w-44"
+    />
   );
 }
 

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
 const token = () => (typeof window !== 'undefined' ? localStorage.getItem('accessToken') ?? '' : '');
@@ -58,23 +59,102 @@ const AVATAR_COLORS = ['var(--primary)', 'var(--success)', 'var(--warning)', 'va
 function avatarColor(name: string) { const c = name.charCodeAt(0) + (name.charCodeAt(1) || 0); return AVATAR_COLORS[c % AVATAR_COLORS.length]; }
 function initials(name: string) { return name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase(); }
 
+const KANBAN_STAGES = [
+  { key: 'DRAFT',          label: 'Draft',          color: 'var(--text-3)' },
+  { key: 'PENDING_FINANCE',label: 'Pending Finance', color: 'var(--warning)' },
+  { key: 'APPROVED',       label: 'Approved',        color: 'var(--success)' },
+  { key: 'FINALIZED',      label: 'Finalized',       color: 'var(--primary)' },
+  { key: 'CANCELLED',      label: 'Cancelled',       color: 'var(--danger)' },
+];
+
+// Transitions allowed via Kanban drag — FINALIZED/CANCELLED need dedicated actions
+const DRAG_ALLOWED: Record<string, string[]> = {
+  DRAFT:           ['PENDING_FINANCE'],
+  PENDING_FINANCE: ['DRAFT', 'APPROVED'],
+  APPROVED:        ['PENDING_FINANCE'],
+};
+
+function DealCard({ deal, onDragStart, onDragEnd }: {
+  deal: Deal;
+  onDragStart: (e: React.DragEvent, id: string) => void;
+  onDragEnd: () => void;
+}) {
+  const router = useRouter();
+  const dragged = useRef(false);
+  const custName = deal.customer?.name ?? '—';
+  const m = deal.paymentMethod ?? deal.purchaseMethod ?? '';
+  return (
+    <div
+      draggable="true"
+      onDragStart={(e) => { dragged.current = true; onDragStart(e, deal.id); }}
+      onDragEnd={() => { onDragEnd(); setTimeout(() => { dragged.current = false; }, 50); }}
+      onClick={() => { if (dragged.current) return; router.push(`/deals/${deal.id}`); }}
+      style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.75rem', cursor: 'grab', marginBottom: '0.5rem' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.375rem' }}>
+        <span className="avatar" style={{ width: '1.5rem', height: '1.5rem', background: avatarColor(custName), color: '#fff', fontSize: '0.5625rem', flexShrink: 0 }}>
+          {initials(custName)}
+        </span>
+        <span style={{ fontWeight: 600, fontSize: '0.8125rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{custName}</span>
+        {m && <span className={`badge ${deal.purchaseMethod === 'BANK_FINANCING' ? 'badge-info' : deal.purchaseMethod === 'CASH' ? 'badge-success' : 'badge-purple'}`} style={{ fontSize: '0.625rem' }}>
+          {m === 'BANK_FINANCING' ? 'Bank' : m === 'CASH' ? 'Cash' : 'Install'}
+        </span>}
+      </div>
+      <p style={{ fontSize: '0.75rem', color: 'var(--text-2)', margin: '0 0 0.375rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {deal.vehicle ? `${deal.vehicle.year} ${deal.vehicle.make} ${deal.vehicle.model}` : '—'}
+      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontWeight: 700, fontSize: '0.8125rem', color: 'var(--primary)' }}>
+          {fmt(Number(deal.salePrice ?? 0))}
+        </span>
+        <span style={{ fontSize: '0.6875rem', color: 'var(--text-3)' }}>
+          {new Date(deal.createdAt).toLocaleDateString('en-EG', { day: 'numeric', month: 'short' })}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function KanbanIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <rect x="1" y="1" width="3" height="9" rx="1" fill="currentColor"/>
+      <rect x="5.5" y="1" width="3" height="6" rx="1" fill="currentColor"/>
+      <rect x="10" y="1" width="3" height="11" rx="1" fill="currentColor"/>
+    </svg>
+  );
+}
+
+function ListIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <rect x="1" y="2" width="12" height="2" rx="1" fill="currentColor"/>
+      <rect x="1" y="6" width="12" height="2" rx="1" fill="currentColor"/>
+      <rect x="1" y="10" width="12" height="2" rx="1" fill="currentColor"/>
+    </svg>
+  );
+}
+
 export default function DealsPage() {
   const router = useRouter();
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [activeTab, setActiveTab] = useState('');
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState<Record<string, number>>({});
-  // ponytail: bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [salesReps, setSalesReps] = useState<SalesRep[]>([]);
   const [toast, setToast] = useState('');
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
+  const draggingId = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const qs = new URLSearchParams({ limit: '200' });
-      if (activeTab) qs.set('status', activeTab);
+      // kanban always loads all statuses; list mode filters by active tab
+      if (activeTab && viewMode === 'list') qs.set('status', activeTab);
       const res = await fetch(`${API}/deals?${qs}`, { headers: authHeaders() });
       if (!res.ok) throw new Error('Failed');
       const json = await res.json();
@@ -107,6 +187,7 @@ export default function DealsPage() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadCounts(); }, [loadCounts]);
+  useEffect(() => { if (selectedIds.size > 0) loadReps(); }, [selectedIds.size, loadReps]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -154,6 +235,39 @@ export default function DealsPage() {
     });
   };
 
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    draggingId.current = id;
+    e.dataTransfer.effectAllowed = 'move';
+  };
+  const handleDragEnd = () => { draggingId.current = null; setDragOverStatus(null); };
+  const handleDrop = async (targetStatus: string) => {
+    const id = draggingId.current;
+    setDragOverStatus(null);
+    if (!id) return;
+    const deal = deals.find((d) => d.id === id);
+    if (!deal || deal.status === targetStatus) return;
+    const allowed = DRAG_ALLOWED[deal.status] ?? [];
+    if (!allowed.includes(targetStatus)) {
+      showToast(targetStatus === 'FINALIZED' || targetStatus === 'CANCELLED'
+        ? 'Use the Deal detail page for this action'
+        : `Cannot move from ${deal.status.replace(/_/g,' ')} to ${targetStatus.replace(/_/g,' ')}`);
+      return;
+    }
+    setDeals((prev) => prev.map((d) => d.id === id ? { ...d, status: targetStatus } : d));
+    try {
+      const res = await fetch(`${API}/deals/${id}`, {
+        method: 'PATCH', headers: authHeaders(),
+        body: JSON.stringify({ status: targetStatus }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      showToast('Status updated');
+      loadCounts();
+    } catch {
+      showToast('Status update failed');
+      load();
+    }
+  };
+
   const totalValue = deals.reduce((s, d) => s + Number(d.salePrice ?? 0), 0);
 
   function dealNumber(d: Deal): string {
@@ -164,7 +278,7 @@ export default function DealsPage() {
   const method = (d: Deal) => d.paymentMethod ?? d.purchaseMethod ?? '';
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: viewMode === 'kanban' ? 'calc(100vh - 4rem)' : 'auto' }}>
       {/* Page header */}
       <div className="page-header">
         <div>
@@ -173,20 +287,71 @@ export default function DealsPage() {
             {Object.values(counts).reduce((a, b) => a + b, 0)} deals · {fmt(totalValue)} total value
           </p>
         </div>
-        <Link href="/deals/new" className="btn btn-primary">+ New Deal</Link>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '6px', overflow: 'hidden' }}>
+            <button onClick={() => setViewMode('list')} title="Table view"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', padding: '0.4rem 0.75rem', border: 'none', cursor: 'pointer', fontSize: '0.8125rem', background: viewMode === 'list' ? 'var(--primary)' : 'transparent', color: viewMode === 'list' ? '#fff' : 'var(--text-2)', transition: 'background 150ms, color 150ms' }}>
+              <ListIcon /> Table
+            </button>
+            <button onClick={() => setViewMode('kanban')} title="Kanban view"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', padding: '0.4rem 0.75rem', border: 'none', cursor: 'pointer', fontSize: '0.8125rem', background: viewMode === 'kanban' ? 'var(--primary)' : 'transparent', color: viewMode === 'kanban' ? '#fff' : 'var(--text-2)', transition: 'background 150ms, color 150ms' }}>
+              <KanbanIcon /> Kanban
+            </button>
+          </div>
+          <Link href="/deals/new" className="btn btn-primary">+ New Deal</Link>
+        </div>
       </div>
 
-      {/* Filter tabs */}
+      {/* Kanban board */}
+      {viewMode === 'kanban' && (
+        <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', flex: 1, padding: '0.75rem 1.5rem 1.5rem' }}>
+          {KANBAN_STAGES.map((stage) => {
+            const colDeals = deals.filter((d) => d.status === stage.key);
+            const colValue = colDeals.reduce((s, d) => s + Number(d.salePrice ?? 0), 0);
+            const isDragOver = dragOverStatus === stage.key;
+            return (
+              <div key={stage.key}
+                onDragOver={(e) => { e.preventDefault(); setDragOverStatus(stage.key); }}
+                onDragLeave={() => setDragOverStatus(null)}
+                onDrop={() => handleDrop(stage.key)}
+                style={{ minWidth: '220px', flex: '1', display: 'flex', flexDirection: 'column', background: isDragOver ? 'color-mix(in srgb, var(--primary) 6%, var(--surface-2))' : 'var(--surface-2)', border: `2px solid ${isDragOver ? 'var(--primary)' : 'var(--border)'}`, borderRadius: '10px', overflow: 'hidden', transition: 'border-color 150ms, background 150ms' }}
+              >
+                <div style={{ padding: '0.75rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: stage.color, flexShrink: 0 }} />
+                    <span style={{ fontWeight: 600, fontSize: '0.8125rem' }}>{stage.label}</span>
+                  </div>
+                  <span style={{ fontSize: '0.6875rem', fontWeight: 600, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '0.1rem 0.4rem', color: 'var(--text-2)' }}>{colDeals.length}</span>
+                </div>
+                {colDeals.length > 0 && (
+                  <div style={{ padding: '0.375rem 0.75rem', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ fontSize: '0.6875rem', color: 'var(--text-3)' }}>{fmt(colValue)}</span>
+                  </div>
+                )}
+                <div style={{ padding: '0.625rem', flex: 1, overflowY: 'auto' }}>
+                  {colDeals.length === 0 ? (
+                    <div style={{ border: '1.5px dashed var(--border)', borderRadius: '6px', padding: '1.5rem 0.75rem', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.75rem', opacity: isDragOver ? 0.7 : 0.5 }}>
+                      {isDragOver ? 'Drop here' : 'No deals'}
+                    </div>
+                  ) : colDeals.map((deal) => (
+                    <DealCard key={deal.id} deal={deal} onDragStart={handleDragStart} onDragEnd={handleDragEnd} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Filter tabs + Table (list mode only) */}
+      {viewMode === 'list' && <>
       <div style={{ padding: '0 1.5rem' }}>
         <div className="tabs" style={{ marginTop: '1rem' }}>
           {STATUS_TABS.map((t) => {
             const count = t.key ? (counts[t.key] ?? 0) : Object.values(counts).reduce((a, b) => a + b, 0);
             return (
-              <button
-                key={t.key}
-                className={`tab ${activeTab === t.key ? 'active' : ''}`}
-                onClick={() => { setActiveTab(t.key); setSelectedIds(new Set()); }}
-              >
+              <button key={t.key} className={`tab ${activeTab === t.key ? 'active' : ''}`}
+                onClick={() => { setActiveTab(t.key); setSelectedIds(new Set()); }}>
                 {t.label}{count > 0 ? ` (${count})` : ''}
               </button>
             );
@@ -302,9 +467,10 @@ export default function DealsPage() {
           </div>
         )}
       </div>
+      </>}
 
-      {/* Floating bulk action bar */}
-      {selectedIds.size > 0 && (
+      {/* Floating bulk action bar (list mode only) */}
+      {selectedIds.size > 0 && viewMode === 'list' && (
         <div style={{
           position: 'fixed', bottom: '1.5rem', left: '50%', transform: 'translateX(-50%)',
           background: 'var(--surface-2)', border: '1px solid var(--border-2)',
@@ -318,16 +484,13 @@ export default function DealsPage() {
           </span>
           <div style={{ width: '1px', height: '1.25rem', background: 'var(--border)' }} />
           {/* Assign Rep */}
-          <select
-            className="input"
-            style={{ fontSize: '0.8125rem', padding: '0.3rem 0.6rem', height: 'auto' }}
+          <SearchableCombobox
+            options={salesReps.map((r) => ({ value: r.id, label: r.name }))}
             value=""
-            onFocus={loadReps}
-            onChange={(e) => { if (e.target.value) executeBulk('ASSIGN_REP', e.target.value); }}
-          >
-            <option value="" disabled>Assign Rep…</option>
-            {salesReps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
+            onChange={(v) => { if (v) executeBulk('ASSIGN_REP', v); }}
+            placeholder="Assign Rep…"
+            className="w-44"
+          />
           {/* Cancel */}
           <button
             className="btn btn-danger"

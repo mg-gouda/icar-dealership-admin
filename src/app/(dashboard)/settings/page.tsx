@@ -29,7 +29,7 @@ interface CompanySettings {
   fiscalYearStartMonth?: number;
 }
 
-const NAV_ITEMS = ['General', 'Locations', 'Branding', 'Notifications', 'Integrations', 'Security'] as const;
+const NAV_ITEMS = ['General', 'Locations', 'Branding', 'Notifications', 'Email Templates', 'Integrations', 'Security'] as const;
 type NavItem = typeof NAV_ITEMS[number];
 
 const MONTH_OPTS = [
@@ -471,6 +471,142 @@ function IntegrationsTab() {
   );
 }
 
+// ── Email Templates Tab ───────────────────────────────────────────────────────
+const EMAIL_TEMPLATES = [
+  { key: 'lead_notify',    label: 'Lead Assigned Notification',   desc: 'Sent to sales rep when a new lead is assigned to them',     vars: ['{{rep_name}}','{{customer_name}}','{{lead_source}}','{{lead_date}}'] },
+  { key: 'appt_reminder',  label: 'Appointment Reminder (24h)',   desc: 'Sent to customer 24 hours before a scheduled test drive',   vars: ['{{customer_name}}','{{vehicle}}','{{date}}','{{time}}','{{location}}','{{rep_name}}'] },
+  { key: 'appt_reminder1h',label: 'Appointment Reminder (1h)',    desc: 'Sent to customer 1 hour before the appointment',           vars: ['{{customer_name}}','{{vehicle}}','{{time}}','{{location}}'] },
+  { key: 'deal_finalized', label: 'Deal Finalized',               desc: 'Sent to customer when their deal is finalized',            vars: ['{{customer_name}}','{{vehicle}}','{{deal_number}}','{{sale_price}}','{{purchase_method}}'] },
+  { key: 'invoice_sent',   label: 'Invoice Sent',                 desc: 'Sent when a customer invoice is created and ready',        vars: ['{{customer_name}}','{{invoice_number}}','{{amount}}','{{due_date}}'] },
+  { key: 'payment_receipt',label: 'Payment Received',             desc: 'Sent to customer when a payment is recorded',              vars: ['{{customer_name}}','{{amount}}','{{payment_date}}','{{remaining_balance}}'] },
+  { key: 'password_reset', label: 'Password Reset',               desc: 'Sent when a staff member or customer requests a reset',   vars: ['{{user_name}}','{{reset_code}}','{{expiry_time}}'] },
+];
+
+const DEFAULT_SUBJECTS: Record<string, string> = {
+  lead_notify:     'New lead assigned to you — {{customer_name}}',
+  appt_reminder:   'Reminder: Your test drive tomorrow at {{time}} — {{vehicle}}',
+  appt_reminder1h: 'Your test drive starts in 1 hour — {{vehicle}}',
+  deal_finalized:  'Congratulations! Your deal is finalized — {{deal_number}}',
+  invoice_sent:    'Invoice #{{invoice_number}} is ready — EGP {{amount}}',
+  payment_receipt: 'Payment received — EGP {{amount}} | {{payment_date}}',
+  password_reset:  'Your password reset code: {{reset_code}}',
+};
+
+const DEFAULT_BODY: Record<string, string> = {
+  lead_notify:     'Hi {{rep_name}},\n\nA new lead has been assigned to you.\n\nCustomer: {{customer_name}}\nSource: {{lead_source}}\nDate: {{lead_date}}\n\nLog in to the dashboard to follow up.',
+  appt_reminder:   'Hi {{customer_name}},\n\nThis is a reminder that your test drive is scheduled for:\n\nVehicle: {{vehicle}}\nDate: {{date}} at {{time}}\nLocation: {{location}}\nSales Rep: {{rep_name}}\n\nWe look forward to seeing you!',
+  appt_reminder1h: 'Hi {{customer_name}},\n\nYour test drive for {{vehicle}} starts in 1 hour at {{time}} — {{location}}.\n\nSee you soon!',
+  deal_finalized:  'Hi {{customer_name}},\n\nCongratulations! Your deal for the {{vehicle}} has been finalized.\n\nDeal #: {{deal_number}}\nPurchase Method: {{purchase_method}}\nSale Price: EGP {{sale_price}}\n\nOur team will be in touch with next steps.',
+  invoice_sent:    'Hi {{customer_name}},\n\nYour invoice is ready.\n\nInvoice #: {{invoice_number}}\nAmount Due: EGP {{amount}}\nDue Date: {{due_date}}\n\nPlease contact us if you have any questions.',
+  payment_receipt: 'Hi {{customer_name}},\n\nWe have received your payment.\n\nAmount: EGP {{amount}}\nDate: {{payment_date}}\nRemaining Balance: EGP {{remaining_balance}}\n\nThank you!',
+  password_reset:  'Hi {{user_name}},\n\nYour password reset code is:\n\n{{reset_code}}\n\nThis code expires in {{expiry_time}}.\n\nIf you did not request this, please contact support immediately.',
+};
+
+function EmailTemplatesTab() {
+  const [selected, setSelected] = useState<string>(EMAIL_TEMPLATES[0].key);
+  const [subjects, setSubjects] = useState<Record<string, string>>({ ...DEFAULT_SUBJECTS });
+  const [bodies, setBodies] = useState<Record<string, string>>({ ...DEFAULT_BODY });
+  const [saved, setSaved] = useState(false);
+
+  const tmpl = EMAIL_TEMPLATES.find((t) => t.key === selected)!;
+
+  function save(e: React.FormEvent) {
+    e.preventDefault();
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
+      {/* Template list */}
+      <div style={{ width: '240px', flexShrink: 0 }}>
+        <p className="section-label" style={{ marginBottom: '0.5rem' }}>Templates</p>
+        {EMAIL_TEMPLATES.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setSelected(t.key)}
+            style={{
+              display: 'block', width: '100%', textAlign: 'left',
+              padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none',
+              cursor: 'pointer', fontSize: '0.8125rem',
+              background: selected === t.key ? 'color-mix(in srgb, var(--primary) 12%, var(--surface-2))' : 'transparent',
+              color: selected === t.key ? 'var(--primary)' : 'var(--text-2)',
+              fontWeight: selected === t.key ? 600 : 400,
+              marginBottom: '0.125rem',
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Editor */}
+      <form onSubmit={save} style={{ flex: 1 }}>
+        <div className="card p-5" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div>
+            <p style={{ fontWeight: 600, fontSize: '0.9375rem', color: 'var(--text-1)' }}>{tmpl.label}</p>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginTop: '0.125rem' }}>{tmpl.desc}</p>
+          </div>
+
+          <div>
+            <label className="input-label">Subject Line</label>
+            <input
+              className="input"
+              value={subjects[selected] ?? ''}
+              onChange={(e) => setSubjects((p) => ({ ...p, [selected]: e.target.value }))}
+              placeholder="Email subject…"
+            />
+          </div>
+
+          <div>
+            <label className="input-label">Body</label>
+            <textarea
+              className="input"
+              rows={10}
+              style={{ fontFamily: 'monospace', fontSize: '0.8125rem', resize: 'vertical' }}
+              value={bodies[selected] ?? ''}
+              onChange={(e) => setBodies((p) => ({ ...p, [selected]: e.target.value }))}
+              placeholder="Email body…"
+            />
+          </div>
+
+          {/* Variable palette */}
+          <div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginBottom: '0.375rem' }}>Available variables:</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem' }}>
+              {tmpl.vars.map((v) => (
+                <code
+                  key={v}
+                  onClick={() => {
+                    setBodies((p) => ({ ...p, [selected]: (p[selected] ?? '') + v }));
+                  }}
+                  style={{ fontSize: '0.75rem', padding: '0.125rem 0.375rem', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', color: 'var(--primary)', userSelect: 'none' }}
+                  title="Click to append"
+                >
+                  {v}
+                </code>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <button type="submit" className="btn btn-primary">Save Template</button>
+            <button type="button" className="btn btn-secondary"
+              onClick={() => {
+                setSubjects((p) => ({ ...p, [selected]: DEFAULT_SUBJECTS[selected] }));
+                setBodies((p) => ({ ...p, [selected]: DEFAULT_BODY[selected] }));
+              }}
+            >
+              Reset to Default
+            </button>
+            {saved && <span style={{ fontSize: '0.875rem', color: 'var(--success)' }}>✓ Saved</span>}
+          </div>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // ── Security Tab ──────────────────────────────────────────────────────────────
 function SecurityTab() {
   const [policy, setPolicy] = useState({
@@ -601,12 +737,13 @@ export default function SettingsPage() {
 
           {/* Content */}
           <main style={{ flex: 1, minWidth: 0 }}>
-            {activeNav === 'General'       && <GeneralTab />}
-            {activeNav === 'Locations'     && <LocationsTab />}
-            {activeNav === 'Branding'      && <BrandingTab />}
-            {activeNav === 'Notifications' && <NotificationsTab />}
-            {activeNav === 'Integrations'  && <IntegrationsTab />}
-            {activeNav === 'Security'      && <SecurityTab />}
+            {activeNav === 'General'         && <GeneralTab />}
+            {activeNav === 'Locations'       && <LocationsTab />}
+            {activeNav === 'Branding'        && <BrandingTab />}
+            {activeNav === 'Notifications'   && <NotificationsTab />}
+            {activeNav === 'Email Templates' && <EmailTemplatesTab />}
+            {activeNav === 'Integrations'    && <IntegrationsTab />}
+            {activeNav === 'Security'        && <SecurityTab />}
           </main>
         </div>
       </div>

@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { apiFetch } from '../../../../lib/useApi';
+import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type ReportTab = 'pl' | 'balance-sheet' | 'trial-balance' | 'cash-flow' | 'ar-aging' | 'ap-aging' | 'tax';
+type ReportTab = 'pl' | 'balance-sheet' | 'trial-balance' | 'cash-flow' | 'ar-aging' | 'ap-aging';
 
 interface ReportLine {
   label: string;
@@ -33,36 +34,31 @@ interface PLData {
   previousNetIncome?: number;
 }
 
-// ─── Static placeholder P&L (matches screenshot 26 exactly) ─────────────────
+interface BSSection { label: string; amount: number; }
+interface BalanceSheetData {
+  assets: BSSection[];
+  totalAssets: number;
+  liabilities: BSSection[];
+  totalLiabilities: number;
+  equity: BSSection[];
+  totalEquity: number;
+}
 
-const PLACEHOLDER_PL: PLData = {
-  revenue: [
-    { label: 'Vehicle Sales — New', current: 3240000, previous: 2610000 },
-    { label: 'Vehicle Sales — Used', current: 980000, previous: 1140000 },
-    { label: 'Finance & Insurance Income', current: 145000, previous: 98000 },
-    { label: 'Service Income', current: 210000, previous: 190000 },
-  ],
-  totalRevenue: 4575000,
-  cogs: [
-    { label: 'COGS — Vehicle Sales', current: 2650000, previous: 2290000 },
-  ],
-  totalCogs: 2650000,
-  grossProfit: 1925000,
-  opex: [
-    { label: 'Salaries & Commissions', current: 480000, previous: 420000 },
-    { label: 'Marketing', current: 125000, previous: 86000 },
-    { label: 'Rent & Utilities', current: 258000, previous: 260000 },
-    { label: 'Admin Expenses', current: 95000, previous: 89000 },
-    { label: 'Depreciation Expense', current: 48000, previous: 42000 },
-  ],
-  totalOpex: 906000,
-  netIncome: 1019000,
-  previousRevenue: 4038000,
-  previousCogs: 2290000,
-  previousGrossProfit: 1748000,
-  previousOpex: 897000,
-  previousNetIncome: 851000,
-};
+interface TrialBalanceLine { code: string; name: string; debit: number; credit: number; }
+interface TrialBalanceData {
+  items: TrialBalanceLine[];
+  totalDebit: number;
+  totalCredit: number;
+}
+
+interface GLDetailLine { date: string; journal: string; entryRef: string; description: string; debit: number; credit: number; }
+interface GLDetailData { items: GLDetailLine[]; }
+
+interface AgedLine { party: string; current: number; d30: number; d60: number; d90p: number; total: number; }
+interface AgedData { items: AgedLine[]; totals: AgedLine; }
+
+interface TaxLine { taxName: string; taxableAmount: number; taxAmount: number; }
+interface TaxReportData { items: TaxLine[]; totalTaxable: number; totalTax: number; }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -91,6 +87,37 @@ const TABS: { key: ReportTab; label: string }[] = [
   { key: 'ar-aging', label: 'Aged AR' },
   { key: 'ap-aging', label: 'Tax Report' },
 ];
+
+// ─── Spinner ─────────────────────────────────────────────────────────────────
+
+function Spinner() {
+  return (
+    <div className="flex items-center gap-3 p-10 justify-center text-[--text-3] text-sm">
+      <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+      </svg>
+      Generating report…
+    </div>
+  );
+}
+
+function ErrorMsg({ msg }: { msg: string }) {
+  return (
+    <div className="mx-6 mt-4 rounded-lg bg-danger-bg border border-danger px-4 py-3">
+      <p className="text-xs text-danger-fg">{msg}</p>
+    </div>
+  );
+}
+
+function EmptyState({ onGenerate }: { onGenerate: () => void }) {
+  return (
+    <div className="px-6 py-12 text-center">
+      <p className="text-[--text-3] text-sm mb-4">Click Generate Report to load data for the selected period.</p>
+      <button onClick={onGenerate} className="btn btn-primary btn-sm">Generate Report</button>
+    </div>
+  );
+}
 
 // ─── P&L Table Component ─────────────────────────────────────────────────────
 
@@ -171,9 +198,35 @@ export default function ReportsPage() {
   const [locationId, setLocationId] = useState('');
   const [comparePrev, setComparePrev] = useState(true);
 
-  const [plData, setPlData] = useState<PLData>(PLACEHOLDER_PL);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  // P&L state
+  const [plData, setPlData] = useState<PLData | null>(null);
+  const [plLoading, setPlLoading] = useState(false);
+  const [plError, setPlError] = useState('');
+
+  // Balance Sheet state
+  const [bsData, setBsData] = useState<BalanceSheetData | null>(null);
+  const [bsLoading, setBsLoading] = useState(false);
+  const [bsError, setBsError] = useState('');
+
+  // Trial Balance state
+  const [tbData, setTbData] = useState<TrialBalanceData | null>(null);
+  const [tbLoading, setTbLoading] = useState(false);
+  const [tbError, setTbError] = useState('');
+
+  // GL Detail state
+  const [glData, setGlData] = useState<GLDetailData | null>(null);
+  const [glLoading, setGlLoading] = useState(false);
+  const [glError, setGlError] = useState('');
+
+  // Aged AR state
+  const [arData, setArData] = useState<AgedData | null>(null);
+  const [arLoading, setArLoading] = useState(false);
+  const [arError, setArError] = useState('');
+
+  // Tax Report state
+  const [taxData, setTaxData] = useState<TaxReportData | null>(null);
+  const [taxLoading, setTaxLoading] = useState(false);
+  const [taxError, setTaxError] = useState('');
 
   function periodRange(): { from: string; to: string } {
     const y = now.getFullYear();
@@ -203,33 +256,83 @@ export default function ReportsPage() {
     return { from: dateFrom, to: dateTo };
   }
 
-  function periodLabel() {
-    const { from, to } = periodRange();
-    const fmt = (d: string) => new Date(d).toLocaleDateString('en-EG', { day: '2-digit', month: 'short', year: 'numeric' });
-    return `${fmt(from)} to ${fmt(to)}`;
-  }
+  const locQs = locationId ? `&locationId=${locationId}` : '';
 
   async function generate() {
-    if (tab !== 'pl') { setError('Only P&L generation is implemented in this view.'); return; }
     const { from, to } = periodRange();
-    setLoading(true); setError('');
-    try {
-      const data = await apiFetch<PLData>(
-        `/finance/reports/profit-loss?from=${from}&to=${to}${locationId ? `&locationId=${locationId}` : ''}`,
-      );
-      setPlData(data);
-    } catch {
-      // Keep placeholder data on error — real data not yet available
-    } finally {
-      setLoading(false);
+
+    if (tab === 'pl') {
+      setPlLoading(true); setPlError('');
+      try {
+        const data = await apiFetch<PLData>(
+          `/finance/reports/profit-loss?from=${from}&to=${to}${locQs}`,
+        );
+        setPlData(data);
+      } catch (e: unknown) {
+        setPlError(e instanceof Error ? e.message : 'Failed to load P&L report.');
+      } finally { setPlLoading(false); }
+
+    } else if (tab === 'balance-sheet') {
+      setBsLoading(true); setBsError('');
+      try {
+        const data = await apiFetch<BalanceSheetData>(
+          `/finance/reports/balance-sheet?dateFrom=${from}&dateTo=${to}${locQs}`,
+        );
+        setBsData(data);
+      } catch (e: unknown) {
+        setBsError(e instanceof Error ? e.message : 'Failed to load Balance Sheet.');
+      } finally { setBsLoading(false); }
+
+    } else if (tab === 'trial-balance') {
+      setTbLoading(true); setTbError('');
+      try {
+        const data = await apiFetch<TrialBalanceData>(
+          `/finance/reports/trial-balance?dateFrom=${from}&dateTo=${to}${locQs}`,
+        );
+        setTbData(data);
+      } catch (e: unknown) {
+        setTbError(e instanceof Error ? e.message : 'Failed to load Trial Balance.');
+      } finally { setTbLoading(false); }
+
+    } else if (tab === 'cash-flow') {
+      setGlLoading(true); setGlError('');
+      try {
+        const data = await apiFetch<GLDetailData>(
+          `/finance/reports/gl-detail?dateFrom=${from}&dateTo=${to}${locQs}`,
+        );
+        setGlData(data);
+      } catch (e: unknown) {
+        setGlError(e instanceof Error ? e.message : 'Failed to load GL Detail.');
+      } finally { setGlLoading(false); }
+
+    } else if (tab === 'ar-aging') {
+      setArLoading(true); setArError('');
+      try {
+        const data = await apiFetch<AgedData>(
+          `/finance/reports/aged-receivables?asOf=${to}${locQs}`,
+        );
+        setArData(data);
+      } catch (e: unknown) {
+        setArError(e instanceof Error ? e.message : 'Failed to load Aged AR report.');
+      } finally { setArLoading(false); }
+
+    } else if (tab === 'ap-aging') {
+      setTaxLoading(true); setTaxError('');
+      try {
+        const data = await apiFetch<TaxReportData>(
+          `/finance/reports/tax-report?dateFrom=${from}&dateTo=${to}${locQs}`,
+        );
+        setTaxData(data);
+      } catch (e: unknown) {
+        setTaxError(e instanceof Error ? e.message : 'Failed to load Tax Report.');
+      } finally { setTaxLoading(false); }
     }
   }
 
-  function exportPdf() {
-    window.print();
-  }
+  function exportPdf() { window.print(); }
 
   function exportExcel() {
+    if (!plData) return;
     const rows: Record<string, string>[] = [];
     const add = (label: string, curr: number, prev?: number) => {
       const row: Record<string, string> = { Account: label, 'Current Period': `EGP ${curr}` };
@@ -271,17 +374,22 @@ export default function ReportsPage() {
 
   const colCount = comparePrev ? 5 : 2;
 
+  const fmtDate = (d: string) =>
+    new Date(d).toLocaleDateString('en-EG', { day: '2-digit', month: 'short', year: 'numeric' });
+
   return (
     <div className="min-h-screen bg-[--bg]">
       {/* Page header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Profit &amp; Loss Statement</h1>
-          <p className="page-subtitle">Jan–Jun 2026 vs Jan–Jun 2025</p>
+          <h1 className="page-title">Financial Reports</h1>
+          <p className="page-subtitle">Select a report type and generate</p>
         </div>
         <div className="flex gap-2 items-center">
           <button onClick={exportPdf} className="btn btn-secondary btn-sm">Export PDF</button>
-          <button onClick={exportExcel} className="btn btn-secondary btn-sm">Export Excel</button>
+          {tab === 'pl' && plData && (
+            <button onClick={exportExcel} className="btn btn-secondary btn-sm">Export Excel</button>
+          )}
         </div>
       </div>
 
@@ -305,15 +413,12 @@ export default function ReportsPage() {
         {/* Period */}
         <div>
           <label className="input-label">Period</label>
-          <select
+          <SearchableCombobox
+            options={PERIOD_OPTS}
             value={period}
-            onChange={(e) => setPeriod(e.target.value)}
-            className="select-input w-44"
-          >
-            {PERIOD_OPTS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+            onChange={setPeriod}
+            className="w-44"
+          />
         </div>
 
         {period === 'custom' && (
@@ -332,182 +437,336 @@ export default function ReportsPage() {
         {/* Location */}
         <div>
           <label className="input-label">Location</label>
-          <select
+          <SearchableCombobox
+            options={[{ value: '', label: 'All Locations' }]}
             value={locationId}
-            onChange={(e) => setLocationId(e.target.value)}
-            className="select-input w-40"
-          >
-            <option value="">All Locations</option>
-          </select>
+            onChange={setLocationId}
+            placeholder="All Locations"
+            className="w-40"
+          />
         </div>
 
-        {/* Compare toggle */}
-        <label className="flex items-center gap-2 cursor-pointer pb-1">
-          <span className="relative inline-block w-9 h-5">
-            <input
-              type="checkbox"
-              checked={comparePrev}
-              onChange={(e) => setComparePrev(e.target.checked)}
-              className="sr-only"
-            />
-            <span className={`block w-9 h-5 rounded-full transition ${comparePrev ? 'bg-[--primary]' : 'bg-[--border-strong]'}`} />
-            <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${comparePrev ? 'translate-x-4' : ''}`} />
-          </span>
-          <span className="text-xs text-[--text-2]">Compare to Previous Period</span>
-        </label>
+        {/* Compare toggle — P&L only */}
+        {tab === 'pl' && (
+          <label className="flex items-center gap-2 cursor-pointer pb-1">
+            <span className="relative inline-block w-9 h-5">
+              <input
+                type="checkbox"
+                checked={comparePrev}
+                onChange={(e) => setComparePrev(e.target.checked)}
+                className="sr-only"
+              />
+              <span className={`block w-9 h-5 rounded-full transition ${comparePrev ? 'bg-[--primary]' : 'bg-[--border-strong]'}`} />
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${comparePrev ? 'translate-x-4' : ''}`} />
+            </span>
+            <span className="text-xs text-[--text-2]">Compare to Previous Period</span>
+          </label>
+        )}
 
         <button
           onClick={generate}
-          disabled={loading}
+          disabled={plLoading || bsLoading || tbLoading || glLoading || arLoading || taxLoading}
           className="btn btn-primary btn-sm ml-auto"
         >
-          {loading ? 'Generating…' : 'Generate Report'}
+          {(plLoading || bsLoading || tbLoading || glLoading || arLoading || taxLoading) ? 'Generating…' : 'Generate Report'}
         </button>
       </div>
 
-      {error && (
-        <div className="mx-6 mt-4 rounded-lg bg-warning-bg border border-warning px-4 py-3">
-          <p className="text-xs text-warning-fg">{error}</p>
-        </div>
-      )}
-
-      {/* P&L Report */}
+      {/* ── P&L Report ─────────────────────────────────────────────────── */}
       {tab === 'pl' && (
         <div className="px-6 py-5">
-          <div className="card overflow-hidden">
-            {/* Report header row */}
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[--border-strong] bg-[--surface-2]">
-                  <th className="px-5 py-3 text-left font-semibold text-[--text-1] text-sm">Account</th>
-                  <th className="px-5 py-3 text-right font-semibold text-[--text-1] text-sm">
-                    Jan–Jun 2026
-                  </th>
-                  {comparePrev && (
-                    <>
-                      <th className="px-5 py-3 text-right font-semibold text-[--text-2] text-sm">
-                        Jan–Jun 2025
-                      </th>
-                      <th className="px-5 py-3 text-right font-semibold text-[--text-2] text-sm">
-                        Variance
-                      </th>
-                      <th className="px-5 py-3 text-right font-semibold text-[--text-2] text-sm">
-                        %
-                      </th>
-                    </>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {/* REVENUE section label */}
-                <tr className="border-b border-[--border]">
-                  <td
-                    colSpan={colCount}
-                    className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]"
-                  >
-                    Revenue
-                  </td>
-                </tr>
-
-                {plData.revenue.map((r) => (
-                  <PLRow key={r.label} {...r} comparePrev={comparePrev} indent />
-                ))}
-
-                <PLRow
-                  label="TOTAL REVENUE"
-                  current={plData.totalRevenue}
-                  previous={plData.previousRevenue}
-                  subtotal
-                  bold
-                  comparePrev={comparePrev}
-                />
-
-                {/* COST OF REVENUE */}
-                <tr className="border-b border-[--border]">
-                  <td
-                    colSpan={colCount}
-                    className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]"
-                  >
-                    Cost of Revenue
-                  </td>
-                </tr>
-
-                {plData.cogs.map((r) => (
-                  <PLRow key={r.label} {...r} comparePrev={comparePrev} indent />
-                ))}
-
-                <PLRow
-                  label="Total COGS"
-                  current={plData.totalCogs}
-                  previous={plData.previousCogs}
-                  subtotal
-                  bold
-                  comparePrev={comparePrev}
-                />
-
-                {/* GROSS PROFIT */}
-                <PLRow
-                  label="GROSS PROFIT"
-                  current={plData.grossProfit}
-                  previous={plData.previousGrossProfit}
-                  bold
-                  highlight="blue"
-                  comparePrev={comparePrev}
-                />
-
-                {/* OPERATING EXPENSES */}
-                <tr className="border-b border-[--border]">
-                  <td
-                    colSpan={colCount}
-                    className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]"
-                  >
-                    Operating Expenses
-                  </td>
-                </tr>
-
-                {plData.opex.map((r) => (
-                  <PLRow key={r.label} {...r} comparePrev={comparePrev} indent />
-                ))}
-
-                <PLRow
-                  label="TOTAL EXPENSES"
-                  current={plData.totalOpex}
-                  previous={plData.previousOpex}
-                  subtotal
-                  bold
-                  comparePrev={comparePrev}
-                />
-
-                {/* NET INCOME */}
-                <PLRow
-                  label="NET PROFIT"
-                  current={plData.netIncome}
-                  previous={plData.previousNetIncome}
-                  bold
-                  highlight={plData.netIncome >= 0 ? 'profit' : 'loss'}
-                  comparePrev={comparePrev}
-                />
-              </tbody>
-            </table>
-          </div>
-
-          {/* Footer note */}
-          <p className="text-xs text-[--text-3] mt-3 flex items-center gap-1.5">
-            <span className="text-warning">💡</span>
-            Click any row to drill down to the underlying journal entries and transactions.
-          </p>
+          {plLoading && <Spinner />}
+          {plError && <ErrorMsg msg={plError} />}
+          {!plLoading && !plError && !plData && <EmptyState onGenerate={generate} />}
+          {!plLoading && plData && (
+            <div className="card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[--border-strong] bg-[--surface-2]">
+                    <th className="px-5 py-3 text-left font-semibold text-[--text-1] text-sm">Account</th>
+                    <th className="px-5 py-3 text-right font-semibold text-[--text-1] text-sm">Current Period</th>
+                    {comparePrev && (
+                      <>
+                        <th className="px-5 py-3 text-right font-semibold text-[--text-2] text-sm">Previous Period</th>
+                        <th className="px-5 py-3 text-right font-semibold text-[--text-2] text-sm">Variance</th>
+                        <th className="px-5 py-3 text-right font-semibold text-[--text-2] text-sm">%</th>
+                      </>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-[--border]">
+                    <td colSpan={colCount} className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]">Revenue</td>
+                  </tr>
+                  {plData.revenue.map((r) => (
+                    <PLRow key={r.label} {...r} comparePrev={comparePrev} indent />
+                  ))}
+                  <PLRow label="TOTAL REVENUE" current={plData.totalRevenue} previous={plData.previousRevenue} subtotal bold comparePrev={comparePrev} />
+                  <tr className="border-b border-[--border]">
+                    <td colSpan={colCount} className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]">Cost of Revenue</td>
+                  </tr>
+                  {plData.cogs.map((r) => (
+                    <PLRow key={r.label} {...r} comparePrev={comparePrev} indent />
+                  ))}
+                  <PLRow label="Total COGS" current={plData.totalCogs} previous={plData.previousCogs} subtotal bold comparePrev={comparePrev} />
+                  <PLRow label="GROSS PROFIT" current={plData.grossProfit} previous={plData.previousGrossProfit} bold highlight="blue" comparePrev={comparePrev} />
+                  <tr className="border-b border-[--border]">
+                    <td colSpan={colCount} className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]">Operating Expenses</td>
+                  </tr>
+                  {plData.opex.map((r) => (
+                    <PLRow key={r.label} {...r} comparePrev={comparePrev} indent />
+                  ))}
+                  <PLRow label="TOTAL EXPENSES" current={plData.totalOpex} previous={plData.previousOpex} subtotal bold comparePrev={comparePrev} />
+                  <PLRow label="NET PROFIT" current={plData.netIncome} previous={plData.previousNetIncome} bold highlight={plData.netIncome >= 0 ? 'profit' : 'loss'} comparePrev={comparePrev} />
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Placeholder for other report types */}
-      {tab !== 'pl' && (
-        <div className="px-6 py-12 text-center">
-          <p className="text-[--text-3] text-sm">
-            Select &ldquo;Profit &amp; Loss&rdquo; tab to view the P&L report, or generate another report type.
-          </p>
-          <button onClick={() => setTab('pl')} className="btn btn-secondary btn-sm mt-4">
-            View Profit &amp; Loss
-          </button>
+      {/* ── Balance Sheet ───────────────────────────────────────────────── */}
+      {tab === 'balance-sheet' && (
+        <div className="px-6 py-5">
+          {bsLoading && <Spinner />}
+          {bsError && <ErrorMsg msg={bsError} />}
+          {!bsLoading && !bsError && !bsData && <EmptyState onGenerate={generate} />}
+          {!bsLoading && bsData && (
+            <div className="grid grid-cols-2 gap-5">
+              {/* Assets */}
+              <div className="card overflow-hidden">
+                <div className="px-5 py-3 bg-[--surface-2] border-b border-[--border]">
+                  <p className="text-xs font-bold uppercase tracking-widest text-[--text-3]">Assets</p>
+                </div>
+                <table className="w-full text-sm">
+                  <tbody>
+                    {bsData.assets.map((a) => (
+                      <tr key={a.label} className="border-b border-[--border] hover:bg-[--surface-2]">
+                        <td className="px-5 py-2.5 text-[--text-2] pl-8">{a.label}</td>
+                        <td className="px-5 py-2.5 text-right tabular-nums text-[--text-1]">{egp(a.amount)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-[--surface-2]">
+                      <td className="px-5 py-3 font-semibold text-[--text-1]">TOTAL ASSETS</td>
+                      <td className="px-5 py-3 text-right tabular-nums font-bold text-[--primary]">{egp(bsData.totalAssets)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              {/* Liabilities + Equity */}
+              <div className="card overflow-hidden">
+                <div className="px-5 py-3 bg-[--surface-2] border-b border-[--border]">
+                  <p className="text-xs font-bold uppercase tracking-widest text-[--text-3]">Liabilities &amp; Equity</p>
+                </div>
+                <table className="w-full text-sm">
+                  <tbody>
+                    <tr className="border-b border-[--border]">
+                      <td colSpan={2} className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]">Liabilities</td>
+                    </tr>
+                    {bsData.liabilities.map((l) => (
+                      <tr key={l.label} className="border-b border-[--border] hover:bg-[--surface-2]">
+                        <td className="px-5 py-2.5 text-[--text-2] pl-8">{l.label}</td>
+                        <td className="px-5 py-2.5 text-right tabular-nums text-[--text-1]">{egp(l.amount)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-[--surface-2]">
+                      <td className="px-5 py-2.5 font-semibold text-[--text-1]">Total Liabilities</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums font-semibold text-[--primary]">{egp(bsData.totalLiabilities)}</td>
+                    </tr>
+                    <tr className="border-b border-[--border]">
+                      <td colSpan={2} className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]">Equity</td>
+                    </tr>
+                    {bsData.equity.map((e) => (
+                      <tr key={e.label} className="border-b border-[--border] hover:bg-[--surface-2]">
+                        <td className="px-5 py-2.5 text-[--text-2] pl-8">{e.label}</td>
+                        <td className="px-5 py-2.5 text-right tabular-nums text-[--text-1]">{egp(e.amount)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-[--surface-2]">
+                      <td className="px-5 py-2.5 font-semibold text-[--text-1]">Total Equity</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums font-semibold text-[--primary]">{egp(bsData.totalEquity)}</td>
+                    </tr>
+                    <tr className="bg-info-bg">
+                      <td className="px-5 py-3 font-bold text-[--text-1]">TOTAL LIABILITIES + EQUITY</td>
+                      <td className="px-5 py-3 text-right tabular-nums font-bold text-[--primary] text-base">{egp(bsData.totalLiabilities + bsData.totalEquity)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Trial Balance ───────────────────────────────────────────────── */}
+      {tab === 'trial-balance' && (
+        <div className="px-6 py-5">
+          {tbLoading && <Spinner />}
+          {tbError && <ErrorMsg msg={tbError} />}
+          {!tbLoading && !tbError && !tbData && <EmptyState onGenerate={generate} />}
+          {!tbLoading && tbData && (
+            <div className="card overflow-hidden">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Account Name</th>
+                    <th className="text-right">Debit</th>
+                    <th className="text-right">Credit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tbData.items.map((row) => (
+                    <tr key={row.code}>
+                      <td className="font-mono text-xs text-[--text-3]">{row.code}</td>
+                      <td className="text-[--text-1]">{row.name}</td>
+                      <td className="text-right tabular-nums">{row.debit > 0 ? egp(row.debit) : '—'}</td>
+                      <td className="text-right tabular-nums">{row.credit > 0 ? egp(row.credit) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-[--surface-2] font-semibold">
+                    <td colSpan={2} className="px-4 py-3 text-[--text-1]">TOTALS</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(tbData.totalDebit)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(tbData.totalCredit)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── General Ledger Detail ───────────────────────────────────────── */}
+      {tab === 'cash-flow' && (
+        <div className="px-6 py-5">
+          {glLoading && <Spinner />}
+          {glError && <ErrorMsg msg={glError} />}
+          {!glLoading && !glError && !glData && <EmptyState onGenerate={generate} />}
+          {!glLoading && glData && (
+            <div className="card overflow-hidden">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Journal</th>
+                    <th>Entry Ref</th>
+                    <th>Description</th>
+                    <th className="text-right">Debit</th>
+                    <th className="text-right">Credit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {glData.items.map((row, i) => (
+                    <tr key={i}>
+                      <td className="text-[--text-3] whitespace-nowrap">{fmtDate(row.date)}</td>
+                      <td className="text-[--text-2]">{row.journal}</td>
+                      <td className="font-mono text-xs text-[--text-3]">{row.entryRef}</td>
+                      <td className="text-[--text-1]">{row.description || '—'}</td>
+                      <td className="text-right tabular-nums">{row.debit > 0 ? egp(row.debit) : '—'}</td>
+                      <td className="text-right tabular-nums">{row.credit > 0 ? egp(row.credit) : '—'}</td>
+                    </tr>
+                  ))}
+                  {glData.items.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="text-center py-8 text-[--text-3]">No entries for this period.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Aged Receivables ────────────────────────────────────────────── */}
+      {tab === 'ar-aging' && (
+        <div className="px-6 py-5">
+          {arLoading && <Spinner />}
+          {arError && <ErrorMsg msg={arError} />}
+          {!arLoading && !arError && !arData && <EmptyState onGenerate={generate} />}
+          {!arLoading && arData && (
+            <div className="card overflow-hidden">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Customer</th>
+                    <th className="text-right">Current</th>
+                    <th className="text-right">0–30 days</th>
+                    <th className="text-right">31–60 days</th>
+                    <th className="text-right" style={{ color: 'var(--danger-fg)' }}>61–90+ days</th>
+                    <th className="text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {arData.items.map((row) => (
+                    <tr key={row.party}>
+                      <td className="text-[--text-1] font-medium">{row.party}</td>
+                      <td className="text-right tabular-nums">{egp(row.current)}</td>
+                      <td className="text-right tabular-nums">{egp(row.d30)}</td>
+                      <td className="text-right tabular-nums">{egp(row.d60)}</td>
+                      <td className="text-right tabular-nums text-danger-fg font-medium">{egp(row.d90p)}</td>
+                      <td className="text-right tabular-nums font-semibold text-[--text-1]">{egp(row.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-[--surface-2] font-semibold">
+                    <td className="px-4 py-3 text-[--text-1]">TOTALS</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(arData.totals.current)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(arData.totals.d30)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(arData.totals.d60)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-danger-fg">{egp(arData.totals.d90p)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(arData.totals.total)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tax Report ──────────────────────────────────────────────────── */}
+      {tab === 'ap-aging' && (
+        <div className="px-6 py-5">
+          {taxLoading && <Spinner />}
+          {taxError && <ErrorMsg msg={taxError} />}
+          {!taxLoading && !taxError && !taxData && <EmptyState onGenerate={generate} />}
+          {!taxLoading && taxData && (
+            <div className="card overflow-hidden">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Tax Name</th>
+                    <th className="text-right">Taxable Amount</th>
+                    <th className="text-right">Tax Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {taxData.items.map((row) => (
+                    <tr key={row.taxName}>
+                      <td className="text-[--text-1] font-medium">{row.taxName}</td>
+                      <td className="text-right tabular-nums">{egp(row.taxableAmount)}</td>
+                      <td className="text-right tabular-nums font-semibold text-[--text-1]">{egp(row.taxAmount)}</td>
+                    </tr>
+                  ))}
+                  {taxData.items.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="text-center py-8 text-[--text-3]">No tax data for this period.</td>
+                    </tr>
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-[--surface-2] font-semibold">
+                    <td className="px-4 py-3 text-[--text-1]">TOTALS</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(taxData.totalTaxable)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(taxData.totalTax)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>

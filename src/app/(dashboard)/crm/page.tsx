@@ -201,6 +201,8 @@ export default function CrmPage() {
   }, [salesReps.length]);
 
   useEffect(() => { load(); }, [load]);
+  // ponytail: pre-load reps when bulk bar becomes visible
+  useEffect(() => { if (selectedIds.size > 0) loadReps(); }, [selectedIds.size, loadReps]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -556,26 +558,21 @@ export default function CrmPage() {
           </span>
           <div style={{ width: '1px', height: '1.25rem', background: 'var(--border)' }} />
           {/* Assign Rep */}
-          <select
-            className="input"
-            style={{ fontSize: '0.8125rem', padding: '0.3rem 0.6rem', height: 'auto' }}
+          <SearchableCombobox
+            options={salesReps.map((r) => ({ value: r.id, label: r.name }))}
             value=""
-            onFocus={loadReps}
-            onChange={(e) => { if (e.target.value) executeBulk('ASSIGN_REP', e.target.value); }}
-          >
-            <option value="" disabled>Assign Rep…</option>
-            {salesReps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
+            onChange={(v) => { if (v) executeBulk('ASSIGN_REP', v); }}
+            placeholder="Assign Rep…"
+            className="w-44"
+          />
           {/* Change Status */}
-          <select
-            className="input"
-            style={{ fontSize: '0.8125rem', padding: '0.3rem 0.6rem', height: 'auto' }}
+          <SearchableCombobox
+            options={COLUMNS.map((c) => ({ value: c.status, label: c.label }))}
             value=""
-            onChange={(e) => { if (e.target.value) executeBulk('CHANGE_STATUS', e.target.value); }}
-          >
-            <option value="" disabled>Change Status…</option>
-            {COLUMNS.map((c) => <option key={c.status} value={c.status}>{c.label}</option>)}
-          </select>
+            onChange={(v) => { if (v) executeBulk('CHANGE_STATUS', v); }}
+            placeholder="Change Status…"
+            className="w-44"
+          />
           {/* Close Lost */}
           <button
             className="btn btn-danger"

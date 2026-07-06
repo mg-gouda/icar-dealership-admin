@@ -39,42 +39,6 @@ interface BranchProfit {
   gross: number;
 }
 
-/* ─── Demo data ───────────────────────────────────────────────────────────── */
-const DEMO_SUMMARY: FinanceSummary = {
-  arOutstanding: 1_240_000,
-  arInvoiceCount: 12,
-  apOutstanding: 680_000,
-  apBillCount: 3,
-  cashBalance: 2_180_000,
-  bankAccountCount: 3,
-  overdueInstallmentCount: 7,
-  overdueInstallmentAmount: 27_800,
-};
-
-const DEMO_TODOS: TodoItem[] = [
-  { id: '1', description: 'Post invoice INV-2026-0041 for Omar Hassan', type: 'Invoice', href: '/finance/invoices' },
-  { id: '2', description: 'Close daily shift — Cairo Branch 18 Jun', type: 'Shift',   href: '/finance/gl' },
-  { id: '3', description: 'Register monthly depreciation — Jun 2026', type: 'Assets',  href: '/finance/assets' },
-  { id: '4', description: 'Process June payroll commission payouts', type: 'Payroll',  href: '/finance/commissions' },
-  { id: '5', description: 'Post invoice INV-2026-0042 for Nour Ibrahim', type: 'Invoice', href: '/finance/invoices' },
-  { id: '6', description: 'Reconcile Bank Al-Ahli — Jun 2026', type: 'Shift',   href: '/finance/reconciliation' },
-];
-
-const DEMO_MONTHLY: MonthlyPoint[] = [
-  { month: 'Jan', revenue: 3_200_000, expenses: 2_150_000 },
-  { month: 'Feb', revenue: 2_800_000, expenses: 1_980_000 },
-  { month: 'Mar', revenue: 4_100_000, expenses: 2_700_000 },
-  { month: 'Apr', revenue: 3_600_000, expenses: 2_400_000 },
-  { month: 'May', revenue: 3_900_000, expenses: 2_550_000 },
-  { month: 'Jun', revenue: 4_400_000, expenses: 2_820_000 },
-];
-
-const DEMO_BRANCHES: BranchProfit[] = [
-  { branch: 'Cairo', gross: 1_580_000 },
-  { branch: 'Alexandria', gross: 960_000 },
-  { branch: 'Giza', gross: 720_000 },
-  { branch: 'Sharm El Sheikh', gross: 340_000 },
-];
 
 /* ─── Formatters ──────────────────────────────────────────────────────────── */
 function fmtEGP(n: number): string {
@@ -233,18 +197,22 @@ interface PayableCommission {
 
 /* ─── Main page ───────────────────────────────────────────────────────────── */
 export default function FinanceDashboardPage() {
-  const [summary, setSummary] = useState<FinanceSummary>(DEMO_SUMMARY);
-  const [todos] = useState<TodoItem[]>(DEMO_TODOS);
-  const [monthly, setMonthly] = useState<MonthlyPoint[]>(DEMO_MONTHLY);
-  const [branches, setBranches] = useState<BranchProfit[]>(DEMO_BRANCHES);
+  const [summary, setSummary] = useState<FinanceSummary | null>(null);
+  const [summaryError, setSummaryError] = useState(false);
+  const [todos, setTodos] = useState<TodoItem[]>([]);
+  const [monthly, setMonthly] = useState<MonthlyPoint[]>([]);
+  const [branches, setBranches] = useState<BranchProfit[]>([]);
   const [payableComms, setPayableComms] = useState<PayableCommission[]>([]);
 
-  // Attempt real API fetch; fall back to demo on error
   useEffect(() => {
     fetch(`${API}/finance/summary`, { headers: authHeaders() })
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d) => setSummary(d))
+      .catch(() => setSummaryError(true));
+    fetch(`${API}/finance/todos`, { headers: authHeaders() })
       .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d) setSummary(d); })
-      .catch(() => {/* use demo */});
+      .then((d) => { if (Array.isArray(d)) setTodos(d); else if (d?.items) setTodos(d.items); })
+      .catch(() => {});
     fetch(`${API}/commissions?status=PAYABLE&limit=10`, { headers: authHeaders() })
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (d?.items) setPayableComms(d.items); })
@@ -259,8 +227,8 @@ export default function FinanceDashboardPage() {
       .catch(() => {});
   }, []);
 
-  /* KPI cards */
-  const KPI_CARDS = [
+  /* KPI cards — only when summary loaded */
+  const KPI_CARDS = summary ? [
     {
       label: 'AR OUTSTANDING',
       value: fmtEGP(summary.arOutstanding),
@@ -305,7 +273,7 @@ export default function FinanceDashboardPage() {
         </svg>
       ),
     },
-  ];
+  ] : [];
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
@@ -324,28 +292,40 @@ export default function FinanceDashboardPage() {
       <div className="page-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
         {/* ── KPI Row ────────────────────────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.875rem' }}>
-          {KPI_CARDS.map((k) => (
-            <div key={k.label} className="card" style={{ padding: '1.125rem 1.25rem', display: 'flex', alignItems: 'flex-start', gap: '0.875rem' }}>
-              <div style={{
-                width: 40, height: 40, borderRadius: '0.5rem', flexShrink: 0,
-                background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: k.color,
-              }}>
-                {k.icon}
+        {summaryError ? (
+          <div style={{ padding: '2rem', textAlign: 'center', color: '#ef4444' }}>
+            Failed to load finance summary. Please refresh or contact support.
+          </div>
+        ) : !summary ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.875rem' }}>
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="card" style={{ padding: '1.125rem 1.25rem', height: 80, background: 'var(--surface-2)', opacity: 0.5 }} />
+            ))}
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.875rem' }}>
+            {KPI_CARDS.map((k) => (
+              <div key={k.label} className="card" style={{ padding: '1.125rem 1.25rem', display: 'flex', alignItems: 'flex-start', gap: '0.875rem' }}>
+                <div style={{
+                  width: 40, height: 40, borderRadius: '0.5rem', flexShrink: 0,
+                  background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: k.color,
+                }}>
+                  {k.icon}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-3)', marginBottom: 4 }}>
+                    {k.label}
+                  </p>
+                  <p style={{ fontSize: '1.3rem', fontWeight: 700, color: k.color, lineHeight: 1.15, letterSpacing: '-0.01em' }}>
+                    {k.value}
+                  </p>
+                  <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 3 }}>{k.sub}</p>
+                </div>
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-3)', marginBottom: 4 }}>
-                  {k.label}
-                </p>
-                <p style={{ fontSize: '1.3rem', fontWeight: 700, color: k.color, lineHeight: 1.15, letterSpacing: '-0.01em' }}>
-                  {k.value}
-                </p>
-                <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 3 }}>{k.sub}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* ── Row 2: To-Do Queue + AR/AP Aging ─────────────────────────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: '0.875rem' }}>

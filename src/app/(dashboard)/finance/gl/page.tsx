@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
+import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 
 interface JournalEntry {
   id: string; number?: string; date: string; description?: string;
@@ -115,15 +116,11 @@ export default function GlPage() {
           {/* Journal filter */}
           <div className="w-40">
             <label className="input-label">Journal</label>
-            <select
+            <SearchableCombobox
+              options={JOURNAL_FILTER_OPTS}
               value={journalFilter}
-              onChange={(e) => setJournalFilter(e.target.value)}
-              className="select-input"
-            >
-              {JOURNAL_FILTER_OPTS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+              onChange={setJournalFilter}
+            />
           </div>
 
           {/* Date range */}
@@ -139,15 +136,11 @@ export default function GlPage() {
           {/* Status filter */}
           <div className="w-36">
             <label className="input-label">Status</label>
-            <select
+            <SearchableCombobox
+              options={STATUS_FILTER_OPTS}
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="select-input"
-            >
-              {STATUS_FILTER_OPTS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+              onChange={setStatusFilter}
+            />
           </div>
         </div>
       </div>

@@ -294,17 +294,13 @@ function ShipmentDetailModal({ shipmentId, onClose, onChanged }: {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             {ship && (
-              <select
-                className="input"
-                style={{ width: 'auto', fontSize: '0.75rem', padding: '0.3rem 0.6rem', height: 'auto' }}
+              <SearchableCombobox
+                options={STATUS_OPTIONS}
                 value={ship.status}
+                onChange={updateStatus}
                 disabled={statusSaving}
-                onChange={(e) => updateStatus(e.target.value)}
-              >
-                {STATUS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+                className="w-44"
+              />
             )}
             <button onClick={onClose} className="btn btn-ghost btn-sm"
               style={{ padding: '0.2rem 0.5rem', fontSize: '1.1rem', lineHeight: 1 }}>

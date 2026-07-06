@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../../lib/useApi';
+import SearchableCombobox from '../../../../../components/ui/SearchableCombobox';
 
 interface Account { id: string; code: string; name: string; }
 interface Journal { id: string; code: string; name: string; }
@@ -208,19 +209,12 @@ export default function NewJournalEntryPage() {
             {/* Journal */}
             <div>
               <label className="input-label">Journal</label>
-              <select
+              <SearchableCombobox
+                options={journals.map((j) => ({ value: j.id, label: j.name }))}
                 value={form.journalId}
-                onChange={(e) => setForm({ ...form, journalId: e.target.value })}
-                className="select-input"
-              >
-                <option value="">Select journal…</option>
-                {journals.map((j) => (
-                  <option key={j.id} value={j.id}>{j.name}</option>
-                ))}
-                {journals.length === 0 && (
-                  <option value="" disabled>General / Miscellaneous</option>
-                )}
-              </select>
+                onChange={(v) => setForm({ ...form, journalId: v })}
+                placeholder="Select journal…"
+              />
             </div>
 
             {/* Date */}
@@ -249,15 +243,11 @@ export default function NewJournalEntryPage() {
             {/* Currency */}
             <div>
               <label className="input-label">Currency</label>
-              <select
+              <SearchableCombobox
+                options={CURRENCY_OPTS}
                 value={form.currency}
-                onChange={(e) => setForm({ ...form, currency: e.target.value })}
-                className="select-input"
-              >
-                {CURRENCY_OPTS.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
+                onChange={(v) => setForm({ ...form, currency: v })}
+              />
             </div>
           </div>
         </div>

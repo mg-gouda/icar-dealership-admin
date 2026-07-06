@@ -929,11 +929,11 @@ export default function CommissionsPage() {
                                   onChange={e => setTierRows(r => r.map((t, j) => j === i ? { ...t, maxValue: e.target.value } : t))} />
                               </td>
                               <td className="px-2 py-1">
-                                <select className="input py-0.5 px-1 text-xs" value={tier.rateType}
-                                  onChange={e => setTierRows(r => r.map((t, j) => j === i ? { ...t, rateType: e.target.value } : t))}>
-                                  <option value="PERCENT">%</option>
-                                  <option value="FLAT">Flat</option>
-                                </select>
+                                <SearchableCombobox
+                                  options={[{ value: 'PERCENT', label: '%' }, { value: 'FLAT', label: 'Flat' }]}
+                                  value={tier.rateType}
+                                  onChange={(v) => setTierRows(r => r.map((t, j) => j === i ? { ...t, rateType: v } : t))}
+                                />
                               </td>
                               <td className="px-2 py-1">
                                 <input type="number" min="0" step="0.01" className="input py-0.5 px-1 text-xs" style={{ minWidth: 60 }}
