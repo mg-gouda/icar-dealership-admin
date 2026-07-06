@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { useQuery, apiFetch } from '../../../lib/useApi';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
+import ScannerModal, { PART_FORMATS } from '../../../components/ScannerModal';
 
 const fmt = (n: number) =>
   'EGP ' + n.toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -47,6 +48,7 @@ export default function PartsPage() {
   const [partForm, setPartForm] = useState({ ...EMPTY_PART_FORM });
   const [partErr, setPartErr] = useState('');
   const [partSaving, setPartSaving] = useState(false);
+  const [scanTarget, setScanTarget] = useState<'addPart' | 'adjust' | null>(null);
 
   const qs = new URLSearchParams({
     page: String(page),
@@ -142,6 +144,7 @@ export default function PartsPage() {
   }, [partForm, reload]);
 
   return (
+    <>
     <div>
       {/* Page header */}
       <div className="page-header">
@@ -149,7 +152,17 @@ export default function PartsPage() {
           <h1 className="page-title">Parts &amp; Accessories</h1>
           <p className="page-subtitle">{total} parts</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowAddPart(true)}>+ Add Part</button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={() => setScanTarget('adjust')}
+            title="Scan barcode to find and adjust a part"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}
+          >
+            <CameraIcon /> Scan to Adjust
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowAddPart(true)}>+ Add Part</button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -404,12 +417,28 @@ export default function PartsPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: '1rem' }}>
                   <div>
                     <label className="input-label">Part Number *</label>
-                    <input
-                      className="input"
-                      value={partForm.partNumber}
-                      onChange={(e) => setPF('partNumber', e.target.value)}
-                      required
-                    />
+                    <div style={{ display: 'flex', gap: '0.375rem' }}>
+                      <input
+                        className="input"
+                        value={partForm.partNumber}
+                        onChange={(e) => setPF('partNumber', e.target.value)}
+                        required
+                        style={{ flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        title="Scan barcode"
+                        onClick={() => setScanTarget('addPart')}
+                        style={{
+                          flexShrink: 0, width: 36, height: 38, borderRadius: 8,
+                          border: '1px solid var(--border)', background: 'var(--surface-2)',
+                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: 'var(--text-2)',
+                        }}
+                      >
+                        <CameraIcon />
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="input-label">OEM Number</label>
@@ -552,5 +581,45 @@ export default function PartsPage() {
         </div>
       )}
     </div>
+
+    {/* Scanner — addPart: fills part number field; adjust: finds part and opens adjust modal */}
+    {scanTarget && (
+      <ScannerModal
+        formats={PART_FORMATS}
+        title={scanTarget === 'addPart' ? 'Scan Part Barcode' : 'Scan to Adjust Stock'}
+        hint="Point camera at the barcode or QR code on the part or packaging"
+        onScan={async (value) => {
+          setScanTarget(null);
+          if (scanTarget === 'addPart') {
+            setPF('partNumber', value);
+          } else {
+            // Lookup part by scanned code, open adjust modal
+            try {
+              const part = await apiFetch<Part | null>(`/parts/by-scan?code=${encodeURIComponent(value)}`);
+              if (part) {
+                setAdjustPart(part);
+                setAdjustQty('');
+                setAdjustReason('');
+              } else {
+                alert(`No part found for code: ${value}\nEnter manually.`);
+              }
+            } catch {
+              alert('Lookup failed — enter part number manually.');
+            }
+          }
+        }}
+        onClose={() => setScanTarget(null)}
+      />
+    )}
+    </>
+  );
+}
+
+function CameraIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+      <path d="M1.5 5.5A1 1 0 0 1 2.5 4.5h1l1-2h5l1 2h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-6z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+      <circle cx="8" cy="9" r="2" stroke="currentColor" strokeWidth="1.2"/>
+    </svg>
   );
 }

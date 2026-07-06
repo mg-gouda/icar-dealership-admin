@@ -5,6 +5,7 @@ import { useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import ScannerModal, { PART_FORMATS } from '../../../../components/ScannerModal';
 
 const fmt = (n: number) => 'EGP ' + n.toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -73,6 +74,8 @@ export default function ServiceOrderDetailPage() {
 
   const [showAddLine, setShowAddLine] = useState(false);
   const [lineForm, setLineForm] = useState({ lineType: 'LABOR', description: '', qty: '1', unitPrice: '' });
+  const [showPartScanner, setShowPartScanner] = useState(false);
+  const [scanningPart, setScanningPart] = useState(false);
   const [lineErr, setLineErr] = useState('');
   const [lineSaving, setLineSaving] = useState(false);
 
@@ -139,6 +142,7 @@ export default function ServiceOrderDetailPage() {
   const orderNum = order.orderNumber ? `#${order.orderNumber}` : `#${order.id.slice(-6).toUpperCase()}`;
 
   return (
+    <>
     <div>
       {/* Page header */}
       <div className="page-header">
@@ -299,13 +303,37 @@ export default function ServiceOrderDetailPage() {
                   </div>
                   <div style={{ flex: '1 1 200px' }}>
                     <label className="input-label">Description *</label>
-                    <input
-                      className="input"
-                      placeholder="Description…"
-                      value={lineForm.description}
-                      onChange={(e) => setLineForm({ ...lineForm, description: e.target.value })}
-                      required
-                    />
+                    <div style={{ display: 'flex', gap: '0.375rem' }}>
+                      <input
+                        className="input"
+                        placeholder="Description…"
+                        value={lineForm.description}
+                        onChange={(e) => setLineForm({ ...lineForm, description: e.target.value })}
+                        required
+                        style={{ flex: 1 }}
+                      />
+                      {lineForm.lineType === 'PART' && (
+                        <button
+                          type="button"
+                          title="Scan part barcode"
+                          disabled={scanningPart}
+                          onClick={() => setShowPartScanner(true)}
+                          style={{
+                            flexShrink: 0, width: 36, height: 38, borderRadius: 8,
+                            border: '1px solid var(--border)', background: 'var(--surface)',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: 'var(--primary)',
+                          }}
+                        >
+                          {scanningPart ? '…' : (
+                            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                              <path d="M1.5 5.5A1 1 0 0 1 2.5 4.5h1l1-2h5l1 2h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-6z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+                              <circle cx="8" cy="9" r="2" stroke="currentColor" strokeWidth="1.2"/>
+                            </svg>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div style={{ width: 80 }}>
                     <label className="input-label">Qty</label>
@@ -417,5 +445,38 @@ export default function ServiceOrderDetailPage() {
         </div>
       </div>
     </div>
+
+    {showPartScanner && (
+      <ScannerModal
+        formats={PART_FORMATS}
+        title="Scan Part"
+        hint="Scan the barcode or QR on the spare part or its packaging"
+        onScan={async (code) => {
+          setShowPartScanner(false);
+          setScanningPart(true);
+          try {
+            const part = await apiFetch<any>(`/parts/by-scan?code=${encodeURIComponent(code)}`);
+            if (part) {
+              setLineForm(f => ({
+                ...f,
+                lineType: 'PART',
+                description: `${part.partNumber} — ${part.name}`,
+                unitPrice: String(Number(part.salePrice ?? 0)),
+              }));
+            } else {
+              setLineForm(f => ({ ...f, lineType: 'PART', description: code }));
+              setLineErr(`Part "${code}" not in inventory — enter details manually.`);
+            }
+          } catch {
+            setLineForm(f => ({ ...f, lineType: 'PART', description: code }));
+            setLineErr('Lookup failed — filled code, verify manually.');
+          } finally {
+            setScanningPart(false);
+          }
+        }}
+        onClose={() => setShowPartScanner(false)}
+      />
+    )}
+    </>
   );
 }

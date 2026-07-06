@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import ScannerModal, { VIN_FORMATS } from '../../../../components/ScannerModal';
 
 interface Location {
   id: string;
@@ -83,6 +84,7 @@ export default function NewVehiclePage() {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(initForm());
   const [saving, setSaving] = useState(false);
+  const [showVinScanner, setShowVinScanner] = useState(false);
   const [err, setErr] = useState('');
   const [photoInput, setPhotoInput] = useState('');
 
@@ -192,6 +194,7 @@ export default function NewVehiclePage() {
 
   /* ─── Render ──────────────────────────────────────────────────────── */
   return (
+    <>
     <div style={{ background: 'var(--bg)', minHeight: '100%' }}>
       {/* Page header */}
       <div className="page-header">
@@ -273,14 +276,31 @@ export default function NewVehiclePage() {
                   {/* VIN */}
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label className="input-label">VIN Number <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <input
-                      className="input"
-                      value={form.vin}
-                      onChange={(e) => set('vin', e.target.value.toUpperCase().slice(0, 17))}
-                      placeholder="17-character VIN"
-                      maxLength={17}
-                      style={{ fontFamily: 'monospace', letterSpacing: '0.05em' }}
-                    />
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <input
+                        className="input"
+                        value={form.vin}
+                        onChange={(e) => set('vin', e.target.value.toUpperCase().slice(0, 17))}
+                        placeholder="17-character VIN"
+                        maxLength={17}
+                        style={{ fontFamily: 'monospace', letterSpacing: '0.05em', flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        title="Scan VIN barcode with camera"
+                        onClick={() => setShowVinScanner(true)}
+                        style={{
+                          flexShrink: 0, padding: '0 0.875rem', height: 38,
+                          borderRadius: 8, border: '1px solid var(--border)',
+                          background: 'var(--surface-2)', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', gap: '0.375rem',
+                          fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-2)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <CameraIcon /> Scan VIN
+                      </button>
+                    </div>
                     <p style={{ fontSize: '0.6875rem', color: form.vin.length === 17 ? 'var(--success-fg)' : 'var(--text-3)', marginTop: '0.25rem' }}>
                       {form.vin.length}/17 characters
                     </p>
@@ -1023,5 +1043,28 @@ export default function NewVehiclePage() {
         </div>
       </div>
     </div>
+
+    {showVinScanner && (
+      <ScannerModal
+        formats={VIN_FORMATS}
+        title="Scan VIN Barcode"
+        hint="Point at the VIN barcode on the chassis sticker or driver-door jamb"
+        onScan={(value) => {
+          set('vin', value.toUpperCase().slice(0, 17));
+          setShowVinScanner(false);
+        }}
+        onClose={() => setShowVinScanner(false)}
+      />
+    )}
+    </>
+  );
+}
+
+function CameraIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+      <path d="M1.5 5.5A1 1 0 0 1 2.5 4.5h1l1-2h5l1 2h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-6z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+      <circle cx="8" cy="9" r="2" stroke="currentColor" strokeWidth="1.2"/>
+    </svg>
   );
 }
