@@ -6,7 +6,7 @@ import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type ReportTab = 'pl' | 'balance-sheet' | 'trial-balance' | 'cash-flow' | 'ar-aging' | 'ap-aging';
+type ReportTab = 'pl' | 'balance-sheet' | 'trial-balance' | 'cash-flow' | 'ar-aging' | 'ap-aging' | 'tax-report';
 
 interface ReportLine {
   label: string;
@@ -85,7 +85,8 @@ const TABS: { key: ReportTab; label: string }[] = [
   { key: 'trial-balance', label: 'Trial Balance' },
   { key: 'cash-flow', label: 'General Ledger' },
   { key: 'ar-aging', label: 'Aged AR' },
-  { key: 'ap-aging', label: 'Tax Report' },
+  { key: 'ap-aging', label: 'Aged AP' },
+  { key: 'tax-report', label: 'Tax Report' },
 ];
 
 // ─── Spinner ─────────────────────────────────────────────────────────────────
@@ -223,6 +224,11 @@ export default function ReportsPage() {
   const [arLoading, setArLoading] = useState(false);
   const [arError, setArError] = useState('');
 
+  // Aged AP state
+  const [apData, setApData] = useState<AgedData | null>(null);
+  const [apLoading, setApLoading] = useState(false);
+  const [apError, setApError] = useState('');
+
   // Tax Report state
   const [taxData, setTaxData] = useState<TaxReportData | null>(null);
   const [taxLoading, setTaxLoading] = useState(false);
@@ -317,6 +323,17 @@ export default function ReportsPage() {
       } finally { setArLoading(false); }
 
     } else if (tab === 'ap-aging') {
+      setApLoading(true); setApError('');
+      try {
+        const data = await apiFetch<AgedData>(
+          `/finance/reports/aged-ap?locationId=${locationId}&asOf=${to}`,
+        );
+        setApData(data);
+      } catch (e: unknown) {
+        setApError(e instanceof Error ? e.message : 'Failed to load Aged AP report.');
+      } finally { setApLoading(false); }
+
+    } else if (tab === 'tax-report') {
       setTaxLoading(true); setTaxError('');
       try {
         const data = await apiFetch<TaxReportData>(
@@ -465,10 +482,10 @@ export default function ReportsPage() {
 
         <button
           onClick={generate}
-          disabled={plLoading || bsLoading || tbLoading || glLoading || arLoading || taxLoading}
+          disabled={plLoading || bsLoading || tbLoading || glLoading || arLoading || apLoading || taxLoading}
           className="btn btn-primary btn-sm ml-auto"
         >
-          {(plLoading || bsLoading || tbLoading || glLoading || arLoading || taxLoading) ? 'Generating…' : 'Generate Report'}
+          {(plLoading || bsLoading || tbLoading || glLoading || arLoading || apLoading || taxLoading) ? 'Generating…' : 'Generate Report'}
         </button>
       </div>
 
@@ -727,8 +744,55 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {/* ── Tax Report ──────────────────────────────────────────────────── */}
+      {/* ── Aged Payables ───────────────────────────────────────────────── */}
       {tab === 'ap-aging' && (
+        <div className="px-6 py-5">
+          {apLoading && <Spinner />}
+          {apError && <ErrorMsg msg={apError} />}
+          {!apLoading && !apError && !apData && <EmptyState onGenerate={generate} />}
+          {!apLoading && apData && (
+            <div className="card overflow-hidden">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Vendor</th>
+                    <th className="text-right">Total</th>
+                    <th className="text-right">0–30 days</th>
+                    <th className="text-right">31–60 days</th>
+                    <th className="text-right">61–90 days</th>
+                    <th className="text-right" style={{ color: 'var(--danger-fg)' }}>90+ days</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {apData.items.map((row) => (
+                    <tr key={row.party}>
+                      <td className="text-[--text-1] font-medium">{row.party}</td>
+                      <td className="text-right tabular-nums font-semibold text-[--text-1]">{egp(row.total)}</td>
+                      <td className="text-right tabular-nums">{egp(row.current)}</td>
+                      <td className="text-right tabular-nums">{egp(row.d30)}</td>
+                      <td className="text-right tabular-nums">{egp(row.d60)}</td>
+                      <td className="text-right tabular-nums text-danger-fg font-medium">{egp(row.d90p)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-[--surface-2] font-semibold">
+                    <td className="px-4 py-3 text-[--text-1]">TOTALS</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(apData.totals.total)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(apData.totals.current)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(apData.totals.d30)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(apData.totals.d60)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-danger-fg">{egp(apData.totals.d90p)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tax Report ──────────────────────────────────────────────────── */}
+      {tab === 'tax-report' && (
         <div className="px-6 py-5">
           {taxLoading && <Spinner />}
           {taxError && <ErrorMsg msg={taxError} />}

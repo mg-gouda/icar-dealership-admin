@@ -19,20 +19,9 @@ const egp = (n: number) =>
 const fmtDate = (d: string) =>
   new Date(d).toLocaleDateString('en-EG', { day: '2-digit', month: 'short', year: 'numeric' });
 
-// Placeholder data — shown while API loads / no data yet
-const PLACEHOLDER_STATEMENT: StatementLine[] = [
-  { id: 's1', date: '2026-06-14', description: 'Payment from Sara Rashed', amount: 500220, matched: true, matchedTo: 'b1' },
-  { id: 's2', date: '2026-06-13', description: 'Bank Transfer — Cairo Auto Parts', amount: -365000, matched: true, matchedTo: 'b2' },
-  { id: 's3', date: '2026-06-12', description: 'Cash Deposit', amount: 95000, matched: true, matchedTo: 'b3' },
-  { id: 's4', date: '2026-06-14', description: 'Bank Charges', amount: -450, matched: false },
-  { id: 's5', date: '2026-06-13', description: 'Bank Disbursement — Khaled Deal', amount: -388000, matched: false },
-  { id: 's6', date: '2026-06-12', description: 'Interest Income', amount: 720, matched: false },
-];
-const PLACEHOLDER_BOOK: BookEntry[] = [
-  { id: 'b1', date: '2026-06-14', description: 'INV-1042 — Sara Rashed Payment', reference: 'INV-1042', amount: 500220, matched: true },
-  { id: 'b2', date: '2026-06-13', description: 'PO-0042 — Cairo Auto Parts', reference: 'PO-0042', amount: -365000, matched: true },
-  { id: 'b3', date: '2026-06-12', description: 'CASH-DEP-034 — Cash Deposit', reference: 'CASH-DEP-034', amount: 95000, matched: true },
-];
+// ponytail: empty — real data comes from API once account is selected
+const PLACEHOLDER_STATEMENT: StatementLine[] = [];
+const PLACEHOLDER_BOOK: BookEntry[] = [];
 
 export default function ReconciliationPage() {
   const { data: accountsRaw, loading: accLoading } = useQuery<{ items: BankAccount[] }>('/finance/bank-accounts?limit=50');
@@ -83,7 +72,7 @@ export default function ReconciliationPage() {
   const outstandingWithdrawals = stmtLines
     .filter((l) => !l.matched && l.amount < 0)
     .reduce((s, l) => s + Math.abs(l.amount), 0);
-  const stmtBalance = endingBalance ? Number(endingBalance.replace(/,/g, '')) : 2183150;
+  const stmtBalance = endingBalance ? Number(endingBalance.replace(/,/g, '')) : 0;
   const bookBalance = stmtBalance - outstandingDeposits + outstandingWithdrawals;
   const diff = stmtBalance - bookBalance - outstandingDeposits + outstandingWithdrawals;
   const balanced = Math.abs(diff) < 0.01;
@@ -235,7 +224,20 @@ export default function ReconciliationPage() {
         </div>
       </div>
 
+      {/* Empty state — no account selected */}
+      {!accountId && (
+        <div className="px-6 py-16 text-center">
+          <svg className="w-10 h-10 mx-auto mb-3 text-[--text-3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+          </svg>
+          <p className="text-sm font-medium text-[--text-2]">Select a bank account to begin</p>
+          <p className="text-xs text-[--text-3] mt-1">Choose an account and statement period above to start reconciling.</p>
+        </div>
+      )}
+
       {/* Main reconciliation area */}
+      {accountId && (
+      <>
       <div className="px-6">
         <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-start">
 
@@ -369,18 +371,6 @@ export default function ReconciliationPage() {
                   </div>
                 )}
 
-                {bookEntries.length === 0 && !accountId && (
-                  <div className="px-4 py-4 border-2 border-dashed border-warning m-3 rounded-lg bg-warning-bg">
-                    <p className="text-xs text-warning-fg font-medium mb-1">Unmatched Statement Line</p>
-                    <p className="text-[11px] text-warning-fg/70">
-                      Bank Charges — EGP 450 — No matching entry
-                    </p>
-                    <div className="flex gap-2 mt-3">
-                      <button className="btn btn-sm btn-ghost text-[11px]">Find Entry</button>
-                      <button className="btn btn-sm btn-primary text-[11px]">+ Create Entry</button>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -419,6 +409,8 @@ export default function ReconciliationPage() {
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

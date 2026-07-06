@@ -86,12 +86,20 @@ export default function GlPage() {
           <h1 className="page-title">Journal Entries</h1>
           <p className="page-subtitle">General Ledger — Manual & Automatic Postings</p>
         </div>
-        <button
-          onClick={() => router.push('/finance/gl/new')}
-          className="btn btn-primary"
-        >
-          + New Entry
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => router.push('/finance/gl/recurring')}
+            className="btn btn-secondary"
+          >
+            Recurring Templates
+          </button>
+          <button
+            onClick={() => router.push('/finance/gl/new')}
+            className="btn btn-primary"
+          >
+            + New Entry
+          </button>
+        </div>
       </div>
 
       {/* Toolbar */}

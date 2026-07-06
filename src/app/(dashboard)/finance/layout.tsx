@@ -4,16 +4,23 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const TABS = [
-  { label: 'Overview',        href: '/finance' },
-  { label: 'Invoices',        href: '/finance/invoices' },
-  { label: 'Vendors',         href: '/finance/vendors' },
-  { label: 'Vendor Bills',    href: '/finance/vendor-bills' },
-  { label: 'GL Journal',      href: '/finance/gl' },
-  { label: 'Payments',        href: '/finance/payments' },
-  { label: 'Reconciliation',  href: '/finance/reconciliation' },
-  { label: 'Assets',          href: '/finance/assets' },
-  { label: 'Reports',         href: '/finance/reports' },
-  { label: 'Commissions',     href: '/finance/commissions' },
+  { label: 'Overview',          href: '/finance' },
+  { label: 'Invoices',          href: '/finance/invoices' },
+  { label: 'Vendors',           href: '/finance/vendors' },
+  { label: 'Vendor Bills',      href: '/finance/vendor-bills' },
+  { label: 'GL Journal',        href: '/finance/gl' },
+  { label: 'Payments',          href: '/finance/payments' },
+  { label: 'Reconciliation',    href: '/finance/reconciliation' },
+  { label: 'Bank Statements',   href: '/finance/bank-statements' },
+  { label: 'Assets',            href: '/finance/assets' },
+  { label: 'Reports',           href: '/finance/reports' },
+  { label: 'Commissions',       href: '/finance/commissions' },
+  { label: 'Accounts',          href: '/finance/accounts' },
+  { label: 'Journals',          href: '/finance/journals' },
+  { label: 'Taxes',             href: '/finance/taxes' },
+  { label: 'Currencies',        href: '/finance/currencies' },
+  { label: 'Fiscal Years',      href: '/finance/fiscal-years' },
+  { label: 'Commission Plans',  href: '/finance/commission-plans' },
 ];
 
 export default function FinanceLayout({ children }: { children: React.ReactNode }) {

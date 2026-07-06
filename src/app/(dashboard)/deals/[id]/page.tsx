@@ -17,6 +17,7 @@ async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
 }
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
+interface Note { id: string; type: 'NOTE' | 'CALL' | 'EMAIL'; body: string; author?: { name: string }; createdAt: string; }
 interface InstallmentLine { id: string; dueDate: string; amount: number; principalPart?: number; interestPart?: number; status: string; sequence: number; }
 interface Document { id: string; documentType: string; status: string; fileUrl?: string; }
 interface BankApproval { approvalReferenceNumber: string; approvedAmount: number; approvalDate: string; expiryDate?: string; notes?: string; }
@@ -89,6 +90,8 @@ const BFS_OPTS = [
 
 const CALC_METHOD_OPTS = [{ value: 'FLAT_RATE', label: 'Flat Rate' }, { value: 'REDUCING_BALANCE', label: 'Amortizing' }];
 const DURATION_OPTIONS = [12, 24, 36, 48, 60];
+const NOTE_TYPE_OPTS = [{ value: 'NOTE', label: 'Note' }, { value: 'CALL', label: 'Call' }, { value: 'EMAIL', label: 'Email' }];
+const NOTE_BADGE: Record<string, string> = { NOTE: 'badge-neutral', CALL: 'badge-success', EMAIL: 'badge-info' };
 
 function defaultStartDate(): string {
   const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString().slice(0, 10);
@@ -126,6 +129,12 @@ export default function DealDetailPage() {
   const [finalizeError, setFinalizeError] = useState('');
   const [disbursingBank, setDisbursingBank] = useState(false);
 
+  // Activity / notes
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [noteType, setNoteType] = useState('NOTE');
+  const [noteBody, setNoteBody] = useState('');
+  const [postingNote, setPostingNote] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -137,7 +146,17 @@ export default function DealDetailPage() {
     finally { setLoading(false); }
   }, [id]);
 
+  const loadNotes = useCallback(async () => {
+    try {
+      const data = await apiFetch<Note[]>(`/deals/${id}/notes`);
+      setNotes(data);
+    } catch {
+      setNotes([]); // ponytail: mock empty if API not ready
+    }
+  }, [id]);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (id) loadNotes(); }, [loadNotes]);
 
   async function action(path: string, method = 'POST', body?: object) {
     await apiFetch(`/deals/${id}/${path}`, { method, body: body ? JSON.stringify(body) : undefined });
@@ -250,6 +269,21 @@ export default function DealDetailPage() {
     try { await apiFetch(`/deals/${id}/bank-disbursement`, { method: 'POST' }); load(); }
     catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
     finally { setDisbursingBank(false); }
+  }
+
+  async function addNote(e: React.FormEvent) {
+    e.preventDefault();
+    if (!noteBody.trim()) return;
+    setPostingNote(true);
+    try {
+      await apiFetch(`/deals/${id}/notes`, { method: 'POST', body: JSON.stringify({ type: noteType, body: noteBody }) });
+      setNoteBody('');
+      loadNotes();
+    } catch {
+      // ponytail: mock — log locally if API not ready
+      console.log('Note (mock):', { type: noteType, body: noteBody });
+      setNoteBody('');
+    } finally { setPostingNote(false); }
   }
 
   if (loading) return <div style={{ padding: '2rem', color: 'var(--text-3)' }}>Loading…</div>;
@@ -733,6 +767,62 @@ export default function DealDetailPage() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Activity Timeline ───────────────────────────────────────────── */}
+      <div style={{ marginTop: '1.5rem' }}>
+        <p className="section-label" style={{ marginBottom: '1rem' }}>Activity</p>
+
+        {/* Add Note form */}
+        <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
+          <form onSubmit={addNote} style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end' }}>
+              <div style={{ width: 160 }}>
+                <label className="input-label">Type</label>
+                <SearchableCombobox options={NOTE_TYPE_OPTS} value={noteType} onChange={setNoteType} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label className="input-label">Note</label>
+                <textarea
+                  value={noteBody}
+                  onChange={(e) => setNoteBody(e.target.value)}
+                  placeholder="Log a call, add a note, or record an email…"
+                  rows={2}
+                  className="input"
+                  style={{ resize: 'vertical', width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+              <button type="submit" disabled={postingNote || !noteBody.trim()} className="btn btn-primary btn-sm" style={{ flexShrink: 0, marginBottom: '2px' }}>
+                {postingNote ? '…' : 'Add'}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Timeline */}
+        <div className="card" style={{ overflow: 'hidden' }}>
+          {notes.length === 0 ? (
+            <p style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.875rem' }}>
+              No activity yet.
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {notes.map((note, idx) => (
+                <div key={note.id} style={{ padding: '0.875rem 1rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start', borderBottom: idx < notes.length - 1 ? '1px solid var(--border)' : undefined }}>
+                  <span className={`badge ${NOTE_BADGE[note.type] ?? 'badge-neutral'}`} style={{ fontSize: '0.6875rem', flexShrink: 0, marginTop: '0.1rem' }}>
+                    {note.type}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-1)', wordBreak: 'break-word' }}>{note.body}</p>
+                    <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', marginTop: '0.2rem' }}>
+                      {note.author?.name ?? 'Staff'} · {new Date(note.createdAt).toLocaleString('en-EG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

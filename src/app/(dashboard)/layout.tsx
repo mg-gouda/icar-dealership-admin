@@ -153,6 +153,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
   {
     href: '/finance',
     label: 'Finance',
+    roles: ['FINANCE', 'ADMIN', 'SUPER_ADMIN'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.2"/>
@@ -195,11 +196,24 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
   {
     href: '/settings/users',
     label: 'Users & Locations',
+    roles: ['ADMIN', 'SUPER_ADMIN'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <circle cx="5.5" cy="5" r="2" stroke="currentColor" strokeWidth="1.2"/>
         <path d="M2 12.5c0-1.933 1.567-3.5 3.5-3.5s3.5 1.567 3.5 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
         <path d="M12 4.5v5M9.5 7H14" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/audit-log',
+    label: 'Audit Log',
+    roles: ['ADMIN', 'SUPER_ADMIN'],
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M2.5 4h11M2.5 7.5h11M2.5 11h6.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+        <circle cx="12" cy="12" r="2.5" stroke="currentColor" strokeWidth="1.2"/>
+        <path d="M13.8 13.8l1.2 1.2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
       </svg>
     ),
   },
@@ -254,11 +268,18 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<{ name: string; role: string } | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    if (!token) { router.replace('/login'); return; }
-    const roleCookie = document.cookie.split('; ').find(c => c.startsWith('admin_role='));
-    const role = roleCookie ? roleCookie.split('=')[1] : 'ADMIN';
-    setUser({ name: 'Admin User', role });
+    const tk = localStorage.getItem('accessToken');
+    if (!tk) { router.replace('/login'); return; }
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+    fetch(`${apiBase}/auth/me`, { headers: { Authorization: `Bearer ${tk}` } })
+      .then(r => r.ok ? r.json() : Promise.reject('not ok'))
+      .then(data => setUser({ name: data.name ?? data.email ?? 'Admin', role: data.role ?? 'ADMIN' }))
+      .catch(() => {
+        // ponytail: fallback to cookie role on fetch failure
+        const roleCookie = document.cookie.split('; ').find(c => c.startsWith('admin_role='));
+        const role = roleCookie ? roleCookie.split('=')[1] : 'ADMIN';
+        setUser({ name: '—', role });
+      });
   }, [router]);
 
   function logout() {
