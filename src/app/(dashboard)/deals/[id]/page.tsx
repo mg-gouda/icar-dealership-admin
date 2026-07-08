@@ -4,6 +4,9 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import { useLang } from '@/lib/lang-context';
+import { fmtDate, fmtDateTime } from '@/lib/fmt';
+import jsPDF from 'jspdf';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
 const token = () => (typeof window !== 'undefined' ? localStorage.getItem('accessToken') ?? '' : '');
@@ -75,32 +78,163 @@ const DOC_TYPES = [
   'EMPLOYER_LETTER', 'CAR_LICENSE_BAYAN', 'INSURANCE_CERTIFICATE', 'DOWN_PAYMENT_RECEIPT', 'OTHER',
 ].map((v) => ({ value: v, label: v.replace(/_/g, ' ') }));
 
-const DOC_STATUS_OPTS = [
-  { value: 'PENDING', label: 'Pending' }, { value: 'SUBMITTED', label: 'Submitted' },
-  { value: 'VERIFIED', label: 'Verified' }, { value: 'REJECTED', label: 'Rejected' },
-];
-
-const BFS_OPTS = [
-  { value: 'DOCUMENTS_PENDING', label: 'Documents Pending' },
-  { value: 'SUBMITTED', label: 'Submitted to Bank' },
-  { value: 'UNDER_REVIEW', label: 'Under Review' },
-  { value: 'APPROVED', label: 'Approved' },
-  { value: 'REJECTED', label: 'Rejected' },
-];
-
-const CALC_METHOD_OPTS = [{ value: 'FLAT_RATE', label: 'Flat Rate' }, { value: 'REDUCING_BALANCE', label: 'Amortizing' }];
 const DURATION_OPTIONS = [12, 24, 36, 48, 60];
-const NOTE_TYPE_OPTS = [{ value: 'NOTE', label: 'Note' }, { value: 'CALL', label: 'Call' }, { value: 'EMAIL', label: 'Email' }];
 const NOTE_BADGE: Record<string, string> = { NOTE: 'badge-neutral', CALL: 'badge-success', EMAIL: 'badge-info' };
 
 function defaultStartDate(): string {
   const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString().slice(0, 10);
 }
 
+/* ── PDF ─────────────────────────────────────────────────────────────────── */
+function generatePurchaseAgreementPDF(deal: Deal) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  const fmtN = (n: number) => 'EGP ' + Number(n).toLocaleString('en-EG', { maximumFractionDigits: 0 });
+  const today = new Date().toLocaleDateString('en-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  // Header
+  doc.setFillColor(30, 41, 59);
+  doc.rect(0, 0, W, 28, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+  doc.text('PURCHASE AGREEMENT', W / 2, 12, { align: 'center' });
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+  doc.text('iCar Dealership', W / 2, 19, { align: 'center' });
+  doc.text(`Date: ${today}`, W / 2, 24, { align: 'center' });
+
+  doc.setTextColor(15, 23, 42);
+
+  // Deal reference
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+  doc.text(`Deal Ref: ${deal.id.toUpperCase()}`, 14, 36);
+  doc.text(`Status: ${deal.status.replace(/_/g, ' ')}`, W - 14, 36, { align: 'right' });
+
+  doc.setDrawColor(226, 232, 240);
+  doc.line(14, 39, W - 14, 39);
+
+  let y = 46;
+  const col2 = W / 2 + 4;
+  const labelColor: [number, number, number] = [100, 116, 139];
+
+  function section(title: string) {
+    doc.setFillColor(241, 245, 249);
+    doc.rect(14, y - 4, W - 28, 8, 'F');
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text(title, 16, y + 1);
+    y += 10;
+    doc.setFont('helvetica', 'normal');
+  }
+
+  function row(label: string, value: string, x = 14, colW = W - 28) {
+    doc.setFontSize(7.5); doc.setTextColor(...labelColor);
+    doc.text(label, x, y);
+    doc.setTextColor(15, 23, 42);
+    doc.text(value || '—', x + colW * 0.45, y);
+    y += 6;
+  }
+
+  // Vehicle
+  section('VEHICLE DETAILS');
+  const v = deal.vehicle;
+  row('Make / Model', v ? `${v.make} ${v.model}` : '—');
+  row('Year', v?.year?.toString() ?? '—');
+  row('VIN', v?.vin ?? '—');
+
+  y += 2;
+
+  // Customer
+  section('BUYER INFORMATION');
+  row('Name', deal.customer?.name ?? '—');
+  row('Phone', deal.customer?.phone ?? '—');
+  row('Email', deal.customer?.email ?? '—');
+
+  y += 2;
+
+  // Financial
+  section('FINANCIAL TERMS');
+  row('Purchase Method', deal.purchaseMethod.replace(/_/g, ' '));
+  row('Sale Price', fmtN(Number(deal.salePrice ?? 0)));
+  if (deal.adminFee) row('Admin Fee', fmtN(Number(deal.adminFee)));
+  if (deal.insuranceFee) row('Compulsory Insurance', fmtN(Number(deal.insuranceFee)));
+  const vat = Math.round(Number(deal.salePrice ?? 0) * 0.14 * 100) / 100;
+  row('VAT (14%)', fmtN(vat));
+  const total = Number(deal.salePrice ?? 0) + vat + Number(deal.adminFee ?? 0) + Number(deal.insuranceFee ?? 0);
+  doc.setFont('helvetica', 'bold');
+  row('TOTAL DUE', fmtN(total));
+  doc.setFont('helvetica', 'normal');
+
+  if (deal.purchaseMethod === 'DEALERSHIP_INSTALLMENT' && deal.installmentPlan) {
+    y += 2;
+    section('INSTALLMENT PLAN');
+    row('Down Payment', fmtN(Number(deal.installmentPlan.downPayment)));
+    row('Monthly Installment', fmtN(Number(deal.installmentPlan.installmentAmount)));
+    row('Duration', `${deal.installmentPlan.durationMonths} months`);
+    row('Interest Rate', `${deal.installmentPlan.interestRate ?? 0}%`);
+  }
+
+  if (deal.tradeIn && deal.tradeIn.make) {
+    y += 2;
+    section('TRADE-IN VEHICLE');
+    row('Make / Model', `${deal.tradeIn.make} ${deal.tradeIn.model ?? ''}`);
+    row('Year', deal.tradeIn.year?.toString() ?? '—');
+    row('Agreed Value', fmtN(Number(deal.tradeIn.agreedValue ?? 0)));
+  }
+
+  // Signatures
+  y = Math.max(y + 10, 220);
+  doc.setDrawColor(200, 213, 225);
+  doc.line(14, y, 80, y);
+  doc.line(W / 2 + 10, y, W - 14, y);
+  doc.setFontSize(7.5); doc.setTextColor(...labelColor);
+  doc.text('Buyer Signature & Date', 14, y + 5);
+  doc.text('Authorized Dealer Signature & Date', W / 2 + 10, y + 5);
+
+  // Footer
+  const pageH = doc.internal.pageSize.getHeight();
+  doc.setFillColor(241, 245, 249);
+  doc.rect(0, pageH - 14, W, 14, 'F');
+  doc.setFontSize(7); doc.setTextColor(100, 116, 139);
+  doc.text('This document is computer-generated and constitutes a legally binding purchase agreement.', W / 2, pageH - 7, { align: 'center' });
+
+  doc.save(`purchase-agreement-${deal.id}.pdf`);
+}
+
 /* ── Component ───────────────────────────────────────────────────────────── */
 export default function DealDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { isAr } = useLang();
+  const DOC_STATUS_OPTS = isAr ? [
+    { value: 'PENDING', label: 'قيد الانتظار' }, { value: 'SUBMITTED', label: 'مقدم' },
+    { value: 'VERIFIED', label: 'موثق' }, { value: 'REJECTED', label: 'مرفوض' },
+  ] : [
+    { value: 'PENDING', label: 'Pending' }, { value: 'SUBMITTED', label: 'Submitted' },
+    { value: 'VERIFIED', label: 'Verified' }, { value: 'REJECTED', label: 'Rejected' },
+  ];
+  const BFS_OPTS = isAr ? [
+    { value: 'DOCUMENTS_PENDING', label: 'وثائق قيد الانتظار' },
+    { value: 'SUBMITTED', label: 'مقدم للبنك' },
+    { value: 'UNDER_REVIEW', label: 'قيد المراجعة' },
+    { value: 'APPROVED', label: 'موافق عليه' },
+    { value: 'REJECTED', label: 'مرفوض' },
+  ] : [
+    { value: 'DOCUMENTS_PENDING', label: 'Documents Pending' },
+    { value: 'SUBMITTED', label: 'Submitted to Bank' },
+    { value: 'UNDER_REVIEW', label: 'Under Review' },
+    { value: 'APPROVED', label: 'Approved' },
+    { value: 'REJECTED', label: 'Rejected' },
+  ];
+  const CALC_METHOD_OPTS = isAr ? [
+    { value: 'FLAT_RATE', label: 'سعر ثابت' }, { value: 'REDUCING_BALANCE', label: 'إطفاء' },
+  ] : [
+    { value: 'FLAT_RATE', label: 'Flat Rate' }, { value: 'REDUCING_BALANCE', label: 'Amortizing' },
+  ];
+  const NOTE_TYPE_OPTS = isAr ? [
+    { value: 'NOTE', label: 'ملاحظة' }, { value: 'CALL', label: 'مكالمة' }, { value: 'EMAIL', label: 'بريد' },
+  ] : [
+    { value: 'NOTE', label: 'Note' }, { value: 'CALL', label: 'Call' }, { value: 'EMAIL', label: 'Email' },
+  ];
   const [deal, setDeal] = useState<Deal | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -249,7 +383,7 @@ export default function DealDetailPage() {
   }
 
   async function collectInstallment(lineId: string) {
-    if (!confirm('Mark as collected and post GL entry?')) return;
+    if (!confirm(isAr ? 'تسجيل القسط كمحصّل وترحيل القيد المحاسبي؟' : 'Mark as collected and post GL entry?')) return;
     setCollectingLine(lineId);
     try { await apiFetch(`/deals/${id}/installment-plan/lines/${lineId}/collect`, { method: 'POST' }); load(); }
     catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
@@ -264,7 +398,7 @@ export default function DealDetailPage() {
   }
 
   async function postBankDisbursement() {
-    if (!confirm('Post bank disbursement GL entry?')) return;
+    if (!confirm(isAr ? 'ترحيل قيد صرف البنك؟' : 'Post bank disbursement GL entry?')) return;
     setDisbursingBank(true);
     try { await apiFetch(`/deals/${id}/bank-disbursement`, { method: 'POST' }); load(); }
     catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
@@ -280,13 +414,11 @@ export default function DealDetailPage() {
       setNoteBody('');
       loadNotes();
     } catch {
-      // ponytail: mock — log locally if API not ready
-      console.log('Note (mock):', { type: noteType, body: noteBody });
       setNoteBody('');
     } finally { setPostingNote(false); }
   }
 
-  if (loading) return <div style={{ padding: '2rem', color: 'var(--text-3)' }}>Loading…</div>;
+  if (loading) return <div style={{ padding: '2rem', color: 'var(--text-3)' }}>{isAr ? 'جاري التحميل…' : 'Loading…'}</div>;
   if (error) return <div style={{ padding: '2rem', color: 'var(--danger-fg)' }}>{error}</div>;
   if (!deal) return null;
 
@@ -297,7 +429,9 @@ export default function DealDetailPage() {
   const repName = deal.salesRep?.name ?? '';
   const dealNum = deal.dealNumber ? `#${deal.dealNumber}` : `#${deal.id.slice(-4).toUpperCase()}`;
 
-  const BFS_STEPS = ['Documents Sent', 'Under Review', 'Bank Approved', 'Disbursed'];
+  const BFS_STEPS = isAr
+    ? ['تم إرسال المستندات', 'قيد المراجعة', 'موافقة البنك', 'تم الصرف']
+    : ['Documents Sent', 'Under Review', 'Bank Approved', 'Disbursed'];
   const bfsStepIdx = (() => {
     const s = fa?.bankFinancingStatus ?? '';
     if (s === 'APPROVED') return 2;
@@ -314,34 +448,34 @@ export default function DealDetailPage() {
     <div style={{ padding: '1.25rem 1.5rem' }}>
       {/* Breadcrumb */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--text-3)', marginBottom: '1rem' }}>
-        <Link href="/deals" style={{ color: 'var(--text-3)', textDecoration: 'none' }}>Deals</Link>
+        <Link href="/deals" style={{ color: 'var(--text-3)', textDecoration: 'none' }}>{isAr ? 'الصفقات' : 'Deals'}</Link>
         <span>›</span>
-        <span style={{ color: 'var(--text-1)' }}>Deal {dealNum}</span>
+        <span style={{ color: 'var(--text-1)' }}>{isAr ? `الصفقة ${dealNum}` : `Deal ${dealNum}`}</span>
       </div>
 
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.25rem' }}>
         <div>
-          <h1 className="page-title">Deal {dealNum} — {custName}</h1>
+          <h1 className="page-title">{isAr ? `الصفقة ${dealNum} — ${custName}` : `Deal ${dealNum} — ${custName}`}</h1>
           <p className="page-subtitle" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
             <span>{deal.vehicle ? `${deal.vehicle.year} ${deal.vehicle.make} ${deal.vehicle.model}` : '—'}</span>
             {deal.location?.name && <span>· {deal.location.name}</span>}
             <span>·</span>
             <span className={`badge ${statusBadgeClass(deal.status)}`} style={{ fontSize: '0.625rem' }}>
-              {STEP_LABEL[deal.status] ?? deal.status}
+              {isAr ? ({ DRAFT: 'مسودة', PENDING_FINANCE: 'قيد المراجعة', APPROVED: 'موافق عليها', FINALIZED: 'مكتملة', CANCELLED: 'ملغاة' } as Record<string,string>)[deal.status] ?? deal.status : STEP_LABEL[deal.status] ?? deal.status}
             </span>
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
           {canFinalize && (
             <button className="btn btn-primary btn-sm" onClick={() => { setShowFinalize(true); setFinalizeError(''); }}>
-              Finalize Deal
+              {isAr ? 'إتمام الصفقة' : 'Finalize Deal'}
             </button>
           )}
           {canCancel && (
             <button className="btn btn-secondary btn-sm" style={{ color: 'var(--danger-fg)', borderColor: 'var(--danger)' }}
-              onClick={() => { if (confirm('Cancel this deal?')) action('cancel'); }}>
-              Cancel
+              onClick={() => { if (confirm(isAr ? 'هل أنت متأكد من إلغاء هذه الصفقة؟' : 'Cancel this deal?')) action('cancel'); }}>
+              {isAr ? 'إلغاء الصفقة' : 'Cancel Deal'}
             </button>
           )}
         </div>
@@ -360,7 +494,7 @@ export default function DealDetailPage() {
                   <div className={`step-circle${isDone ? ' done' : isActive ? ' active' : ''}`}>
                     {isDone ? '✓' : i + 1}
                   </div>
-                  <span className={`step-label${isActive ? ' active' : ''}`}>{STEP_LABEL[s]}</span>
+                  <span className={`step-label${isActive ? ' active' : ''}`}>{isAr ? ({ DRAFT: 'مسودة', PENDING_FINANCE: 'قيد المراجعة', APPROVED: 'موافق عليها', FINALIZED: 'مكتملة', CANCELLED: 'ملغاة' } as Record<string,string>)[s] ?? s : STEP_LABEL[s]}</span>
                 </div>
               );
             })}
@@ -371,9 +505,9 @@ export default function DealDetailPage() {
       {/* Payment method tabs */}
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
         {[
-          { key: 'CASH' as const, label: '💵 Cash' },
-          { key: 'BANK_FINANCING' as const, label: '🏦 Bank Financing' },
-          { key: 'DEALERSHIP_INSTALLMENT' as const, label: '📋 Installment Plan' },
+          { key: 'CASH' as const, label: isAr ? '💵 كاش' : '💵 Cash' },
+          { key: 'BANK_FINANCING' as const, label: isAr ? '🏦 تمويل بنكي' : '🏦 Bank Financing' },
+          { key: 'DEALERSHIP_INSTALLMENT' as const, label: isAr ? '📋 خطة التقسيط' : '📋 Installment Plan' },
         ].map((t) => (
           <button
             key={t.key}
@@ -399,16 +533,16 @@ export default function DealDetailPage() {
 
           {/* Pricing breakdown */}
           <div className="card" style={{ padding: '1.25rem' }}>
-            <p className="section-label" style={{ marginBottom: '0.875rem' }}>Pricing Breakdown</p>
+            <p className="section-label" style={{ marginBottom: '0.875rem' }}>{isAr ? 'تفاصيل التسعير' : 'Pricing Breakdown'}</p>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <tbody>
-                <PricingRow label="Vehicle Sale Price" value={fmt(salePrice)} />
-                {tradeInCredit > 0 && <PricingRow label="Trade-In Credit" value={`- ${fmt(tradeInCredit)}`} valueColor="var(--success-fg)" />}
-                {adminFee > 0 && <PricingRow label="Administration Fee" value={fmt(adminFee)} />}
-                {insurance > 0 && <PricingRow label="Compulsory Insurance" value={fmt(insurance)} />}
-                <PricingRow label="Sales Tax (14%)" value={fmt(vat)} />
+                <PricingRow label={isAr ? 'سعر البيع' : 'Vehicle Sale Price'} value={fmt(salePrice)} />
+                {tradeInCredit > 0 && <PricingRow label={isAr ? 'خصم المقايضة' : 'Trade-In Credit'} value={`- ${fmt(tradeInCredit)}`} valueColor="var(--success-fg)" />}
+                {adminFee > 0 && <PricingRow label={isAr ? 'الرسوم الإدارية' : 'Administration Fee'} value={fmt(adminFee)} />}
+                {insurance > 0 && <PricingRow label={isAr ? 'التأمين الإلزامي' : 'Compulsory Insurance'} value={fmt(insurance)} />}
+                <PricingRow label={isAr ? 'ضريبة المبيعات (14%)' : 'Sales Tax (14%)'} value={fmt(vat)} />
                 <tr>
-                  <td style={{ padding: '0.75rem 0 0', borderTop: '2px solid var(--border-strong)', fontWeight: 700, color: 'var(--text-1)', fontSize: '1rem' }}>Total Due</td>
+                  <td style={{ padding: '0.75rem 0 0', borderTop: '2px solid var(--border-strong)', fontWeight: 700, color: 'var(--text-1)', fontSize: '1rem' }}>{isAr ? 'الإجمالي المستحق' : 'Total Due'}</td>
                   <td style={{ padding: '0.75rem 0 0', borderTop: '2px solid var(--border-strong)', textAlign: 'right', fontWeight: 700, color: 'var(--primary)', fontSize: '1rem' }}>{fmt(totalDue)}</td>
                 </tr>
               </tbody>
@@ -417,7 +551,7 @@ export default function DealDetailPage() {
             {payTab === 'CASH' && canFinalize && (
               <button className="btn btn-primary" style={{ width: '100%', marginTop: '1.25rem', padding: '0.7rem', fontSize: '0.9375rem' }}
                 onClick={() => { setShowFinalize(true); setFinalizeError(''); }}>
-                💵 Record Full Payment &amp; Finalize Deal
+                {isAr ? '💵 تسجيل الدفع الكامل وإتمام الصفقة' : '💵 Record Full Payment & Finalize Deal'}
               </button>
             )}
           </div>
@@ -425,13 +559,13 @@ export default function DealDetailPage() {
           {/* Trade-In */}
           {deal.tradeIn && (
             <div className="card" style={{ padding: '1.25rem' }}>
-              <p className="section-label" style={{ marginBottom: '0.875rem' }}>Trade-In Vehicle</p>
+              <p className="section-label" style={{ marginBottom: '0.875rem' }}>{isAr ? 'مركبة المقايضة' : 'Trade-In Vehicle'}</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 {deal.tradeIn.vin && <InfoField label="VIN" value={deal.tradeIn.vin} />}
-                {(deal.tradeIn.make || deal.tradeIn.model) && <InfoField label="Make / Model" value={`${deal.tradeIn.make ?? ''} ${deal.tradeIn.model ?? ''} ${deal.tradeIn.year ?? ''}`} />}
-                {deal.tradeIn.mileage !== undefined && <InfoField label="Mileage" value={`${Number(deal.tradeIn.mileage).toLocaleString('en-EG')} km`} />}
-                {deal.tradeIn.condition && <InfoField label="Condition" value={deal.tradeIn.condition} />}
-                {deal.tradeIn.agreedValue !== undefined && <InfoField label="Agreed Trade-In Value" value={fmt(Number(deal.tradeIn.agreedValue))} />}
+                {(deal.tradeIn.make || deal.tradeIn.model) && <InfoField label={isAr ? 'الماركة / الموديل' : 'Make / Model'} value={`${deal.tradeIn.make ?? ''} ${deal.tradeIn.model ?? ''} ${deal.tradeIn.year ?? ''}`} />}
+                {deal.tradeIn.mileage !== undefined && <InfoField label={isAr ? 'عداد الكيلومترات' : 'Mileage'} value={`${Number(deal.tradeIn.mileage).toLocaleString('en-EG')} km`} />}
+                {deal.tradeIn.condition && <InfoField label={isAr ? 'الحالة' : 'Condition'} value={deal.tradeIn.condition} />}
+                {deal.tradeIn.agreedValue !== undefined && <InfoField label={isAr ? 'قيمة المقايضة المتفق عليها' : 'Agreed Trade-In Value'} value={fmt(Number(deal.tradeIn.agreedValue))} />}
               </div>
             </div>
           )}
@@ -440,21 +574,21 @@ export default function DealDetailPage() {
           <div style={{ display: payTab === 'BANK_FINANCING' ? 'block' : 'none' }}>
             <div className="card" style={{ padding: '1.25rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                <p className="section-label" style={{ margin: 0 }}>🏦 Bank Financing Application</p>
+                <p className="section-label" style={{ margin: 0 }}>{isAr ? '🏦 طلب التمويل البنكي' : '🏦 Bank Financing Application'}</p>
                 {!fa && (
-                  <button className="btn btn-secondary btn-sm" onClick={() => setShowFACreate(true)}>+ Create Application</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setShowFACreate(true)}>{isAr ? '+ إنشاء طلب' : '+ Create Application'}</button>
                 )}
               </div>
 
               {!fa ? (
-                <p style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>No finance application yet.</p>
+                <p style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>{isAr ? 'لا يوجد طلب تمويل بعد.' : 'No finance application yet.'}</p>
               ) : (
                 <>
                   {/* Bank + status */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
                     <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-1)' }}>{fa.bankName ?? 'Bank'}</span>
                     <div style={{ width: '200px' }}>
-                      <SearchableCombobox options={BFS_OPTS} value={fa.bankFinancingStatus} onChange={updateBFS} placeholder="Update status…" />
+                      <SearchableCombobox options={BFS_OPTS} value={fa.bankFinancingStatus} onChange={updateBFS} placeholder={isAr ? 'تحديث الحالة…' : 'Update status…'} />
                     </div>
                   </div>
 
@@ -471,11 +605,11 @@ export default function DealDetailPage() {
                   </div>
 
                   {/* Documents */}
-                  <p className="section-label" style={{ marginBottom: '0.75rem' }}>Required Documents</p>
+                  <p className="section-label" style={{ marginBottom: '0.75rem' }}>{isAr ? 'المستندات المطلوبة' : 'Required Documents'}</p>
                   <input ref={docFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }} onChange={handleDocFileChange} />
                   <div style={{ border: '1px solid var(--border)', borderRadius: '0.5rem', overflow: 'hidden', marginBottom: '0.875rem' }}>
                     <table className="data-table">
-                      <thead><tr><th>Document</th><th>Status</th><th>Action</th></tr></thead>
+                      <thead><tr><th>{isAr ? 'المستند' : 'Document'}</th><th>{isAr ? 'الحالة' : 'Status'}</th><th>{isAr ? 'إجراء' : 'Action'}</th></tr></thead>
                       <tbody>
                         {fa.requiredDocuments.map((doc) => (
                           <tr key={doc.id}>
@@ -485,14 +619,14 @@ export default function DealDetailPage() {
                               <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                                 <div style={{ width: '130px' }}>
                                   <SearchableCombobox options={DOC_STATUS_OPTS} value={doc.status}
-                                    onChange={(s) => updateDoc(doc.id, { status: s })} placeholder="Status" />
+                                    onChange={(s) => updateDoc(doc.id, { status: s })} placeholder={isAr ? 'الحالة' : 'Status'} />
                                 </div>
                                 {doc.fileUrl && (
-                                  <a href={doc.fileUrl} target="_blank" rel="noopener" className="btn btn-ghost btn-sm">View ↗</a>
+                                  <a href={doc.fileUrl} target="_blank" rel="noopener" className="btn btn-ghost btn-sm">{isAr ? 'عرض ↗' : 'View ↗'}</a>
                                 )}
                                 <button className="btn btn-secondary btn-sm" disabled={uploadingDocId === doc.id}
                                   onClick={() => triggerDocUpload(doc.id)}>
-                                  {uploadingDocId === doc.id ? '…' : doc.fileUrl ? 'Replace' : 'Upload'}
+                                  {uploadingDocId === doc.id ? '…' : doc.fileUrl ? (isAr ? 'استبدال' : 'Replace') : (isAr ? 'رفع' : 'Upload')}
                                 </button>
                               </div>
                             </td>
@@ -503,10 +637,10 @@ export default function DealDetailPage() {
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <div style={{ flex: 1 }}>
-                      <SearchableCombobox options={DOC_TYPES} value={newDocType} onChange={setNewDocType} placeholder="Add document type…" />
+                      <SearchableCombobox options={DOC_TYPES} value={newDocType} onChange={setNewDocType} placeholder={isAr ? 'إضافة نوع مستند…' : 'Add document type…'} />
                     </div>
                     <button className="btn btn-secondary btn-sm" disabled={addingDoc || !newDocType} onClick={addDoc}>
-                      {addingDoc ? '…' : 'Add'}
+                      {addingDoc ? '…' : (isAr ? 'إضافة' : 'Add')}
                     </button>
                   </div>
 
@@ -516,30 +650,30 @@ export default function DealDetailPage() {
                       <div style={{ background: 'var(--success-bg)', border: '1px solid var(--success)', borderRadius: '0.5rem', padding: '1rem' }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem' }}>
                           <div>
-                            <p style={{ fontWeight: 600, color: 'var(--success-fg)', fontSize: '0.8125rem', marginBottom: '0.35rem' }}>Bank Approval Received</p>
-                            <p style={{ fontSize: '0.8125rem', color: 'var(--text-1)' }}>Ref: <strong>{fa.bankApproval.approvalReferenceNumber}</strong></p>
-                            <p style={{ fontSize: '0.8125rem', color: 'var(--text-1)' }}>Approved: <strong>{fmt(Number(fa.bankApproval.approvedAmount))}</strong></p>
+                            <p style={{ fontWeight: 600, color: 'var(--success-fg)', fontSize: '0.8125rem', marginBottom: '0.35rem' }}>{isAr ? 'تمت الموافقة البنكية' : 'Bank Approval Received'}</p>
+                            <p style={{ fontSize: '0.8125rem', color: 'var(--text-1)' }}>{isAr ? 'المرجع:' : 'Ref:'} <strong>{fa.bankApproval.approvalReferenceNumber}</strong></p>
+                            <p style={{ fontSize: '0.8125rem', color: 'var(--text-1)' }}>{isAr ? 'المبلغ المعتمد:' : 'Approved:'} <strong>{fmt(Number(fa.bankApproval.approvedAmount))}</strong></p>
                             <p style={{ fontSize: '0.75rem', color: 'var(--text-2)' }}>
-                              {new Date(fa.bankApproval.approvalDate).toLocaleDateString('en-EG')}
-                              {fa.bankApproval.expiryDate ? ` · Expires ${new Date(fa.bankApproval.expiryDate).toLocaleDateString('en-EG')}` : ''}
+                              {fmtDate(fa.bankApproval.approvalDate, isAr)}
+                              {fa.bankApproval.expiryDate ? (isAr ? ` · تنتهي ${fmtDate(fa.bankApproval.expiryDate, isAr)}` : ` · Expires ${fmtDate(fa.bankApproval.expiryDate, isAr)}`) : ''}
                             </p>
                           </div>
                           {deal.status === 'FINALIZED' && (
                             <button className="btn btn-primary btn-sm" disabled={disbursingBank} onClick={postBankDisbursement} style={{ flexShrink: 0 }}>
-                              {disbursingBank ? '…' : 'Post Disbursement'}
+                              {disbursingBank ? '…' : (isAr ? 'ترحيل الصرف' : 'Post Disbursement')}
                             </button>
                           )}
                         </div>
                       </div>
                     ) : (
-                      <button className="btn btn-secondary btn-sm" onClick={() => setShowApproval(true)}>+ Record Bank Approval</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => setShowApproval(true)}>{isAr ? '+ تسجيل موافقة بنكية' : '+ Record Bank Approval'}</button>
                     )}
                   </div>
 
                   {canFinalize && fa.bankApproval && (
                     <button className="btn btn-primary" style={{ width: '100%', marginTop: '1rem', padding: '0.7rem', fontSize: '0.875rem' }}
                       onClick={() => { setShowFinalize(true); setFinalizeError(''); }}>
-                      🏦 Record Bank Disbursement &amp; Finalize
+                      {isAr ? '🏦 تسجيل صرف البنك وإتمام الصفقة' : '🏦 Record Bank Disbursement & Finalize'}
                     </button>
                   )}
                 </>
@@ -551,24 +685,24 @@ export default function DealDetailPage() {
           <div style={{ display: payTab === 'DEALERSHIP_INSTALLMENT' ? 'block' : 'none' }}>
           {!deal.installmentPlan && (
             <div className="card" style={{ padding: '1.25rem' }}>
-              <p className="section-label" style={{ marginBottom: '1rem' }}>Installment Plan Setup</p>
+              <p className="section-label" style={{ marginBottom: '1rem' }}>{isAr ? 'إعداد خطة التقسيط' : 'Installment Plan Setup'}</p>
               <form onSubmit={generatePlan}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.875rem' }}>
                   <div>
-                    <label className="input-label">Down Payment (EGP)</label>
+                    <label className="input-label">{isAr ? 'الدفعة الأولى (جنيه)' : 'Down Payment (EGP)'}</label>
                     <input type="number" min="0" step="1000" className="input"
                       value={ipForm.downPayment}
                       onChange={(e) => setIpForm((p) => ({ ...p, downPayment: Number(e.target.value) }))} />
                   </div>
                   <div>
-                    <label className="input-label">Annual Interest Rate (%)</label>
+                    <label className="input-label">{isAr ? 'معدل الفائدة السنوي (%)' : 'Annual Interest Rate (%)'}</label>
                     <input type="number" min="0" step="0.1" className="input"
                       value={ipForm.interestRate}
                       onChange={(e) => setIpForm((p) => ({ ...p, interestRate: Number(e.target.value) }))} />
                   </div>
                 </div>
                 <div style={{ marginBottom: '0.875rem' }}>
-                  <label className="input-label">Duration</label>
+                  <label className="input-label">{isAr ? 'المدة' : 'Duration'}</label>
                   <div style={{ display: 'flex', gap: '0.375rem' }}>
                     {DURATION_OPTIONS.map((m) => (
                       <button key={m} type="button"
@@ -580,13 +714,13 @@ export default function DealDetailPage() {
                           borderColor: ipForm.durationMonths === m ? 'var(--primary)' : 'var(--border)',
                         }}
                         onClick={() => setIpForm((p) => ({ ...p, durationMonths: m }))}>
-                        {m}mo
+                        {isAr ? `${m} شهر` : `${m}mo`}
                       </button>
                     ))}
                   </div>
                 </div>
                 <div style={{ marginBottom: '0.875rem' }}>
-                  <label className="input-label">Calculation Method</label>
+                  <label className="input-label">{isAr ? 'طريقة الاحتساب' : 'Calculation Method'}</label>
                   <div style={{ display: 'flex', gap: '0.375rem' }}>
                     {CALC_METHOD_OPTS.map((o) => (
                       <button key={o.value} type="button"
@@ -604,7 +738,7 @@ export default function DealDetailPage() {
                   </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', marginBottom: '1rem' }}>
-                  {[['Principal', fmt(principal)], ['Total Payable', fmt(totalPayable)], ['Monthly', fmt(monthly)]].map(([l, v]) => (
+                  {(isAr ? [['أصل المبلغ', fmt(principal)], ['إجمالي المدفوع', fmt(totalPayable)], ['القسط الشهري', fmt(monthly)]] : [['Principal', fmt(principal)], ['Total Payable', fmt(totalPayable)], ['Monthly', fmt(monthly)]]).map(([l, v]) => (
                     <div key={l} style={{ background: 'var(--surface-2)', borderRadius: '0.375rem', padding: '0.625rem 0.875rem', border: '1px solid var(--border)' }}>
                       <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', marginBottom: '0.2rem' }}>{l}</p>
                       <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-1)' }}>{v}</p>
@@ -612,7 +746,7 @@ export default function DealDetailPage() {
                   ))}
                 </div>
                 <button type="submit" disabled={generatingPlan} className="btn btn-primary">
-                  {generatingPlan ? '…' : 'Generate Schedule'}
+                  {generatingPlan ? '…' : (isAr ? 'إنشاء الجدول' : 'Generate Schedule')}
                 </button>
               </form>
             </div>
@@ -620,16 +754,16 @@ export default function DealDetailPage() {
 
           {deal.installmentPlan && (
             <div className="card" style={{ padding: '1.25rem' }}>
-              <p className="section-label" style={{ marginBottom: '0.875rem' }}>Payment Schedule</p>
+              <p className="section-label" style={{ marginBottom: '0.875rem' }}>{isAr ? 'جدول السداد' : 'Payment Schedule'}</p>
               <div style={{ border: '1px solid var(--border)', borderRadius: '0.5rem', overflow: 'hidden' }}>
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>#</th><th>Due Date</th>
-                      <th style={{ textAlign: 'right' }}>Principal</th>
-                      <th style={{ textAlign: 'right' }}>Interest</th>
-                      <th style={{ textAlign: 'right' }}>Total Due</th>
-                      <th>Status</th><th>Action</th>
+                      <th>#</th><th>{isAr ? 'تاريخ الاستحقاق' : 'Due Date'}</th>
+                      <th style={{ textAlign: 'right' }}>{isAr ? 'أصل' : 'Principal'}</th>
+                      <th style={{ textAlign: 'right' }}>{isAr ? 'فائدة' : 'Interest'}</th>
+                      <th style={{ textAlign: 'right' }}>{isAr ? 'الإجمالي' : 'Total Due'}</th>
+                      <th>{isAr ? 'الحالة' : 'Status'}</th><th>{isAr ? 'إجراء' : 'Action'}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -637,17 +771,17 @@ export default function DealDetailPage() {
                       <tr key={l.id} style={{ background: l.status === 'OVERDUE' ? 'var(--danger-bg)' : undefined }}>
                         <td>{l.sequence}</td>
                         <td style={{ color: l.status === 'OVERDUE' ? 'var(--danger-fg)' : undefined, fontWeight: l.status === 'OVERDUE' ? 600 : undefined }}>
-                          {new Date(l.dueDate).toLocaleDateString('en-EG', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {fmtDate(l.dueDate, isAr, { day: 'numeric', month: 'short', year: 'numeric' })}
                         </td>
                         <td style={{ textAlign: 'right' }}>{l.principalPart !== undefined ? fmt(l.principalPart) : '—'}</td>
                         <td style={{ textAlign: 'right' }}>{l.interestPart !== undefined ? fmt(l.interestPart) : '—'}</td>
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(Number(l.amount))}</td>
-                        <td><span className={`badge ${installmentStatusClass(l.status)}`}>{l.status}</span></td>
+                        <td><span className={`badge ${installmentStatusClass(l.status)}`}>{isAr ? ({ PAID: 'مدفوع', PARTIAL: 'جزئي', PENDING: 'قيد الانتظار', OVERDUE: 'متأخر' } as Record<string,string>)[l.status] ?? l.status : l.status}</span></td>
                         <td>
                           {['PENDING', 'OVERDUE', 'UPCOMING'].includes(l.status) && deal.status === 'FINALIZED' && (
                             <button className="btn btn-ghost btn-sm" style={{ color: 'var(--success-fg)', fontSize: '0.75rem' }}
                               disabled={collectingLine === l.id} onClick={() => collectInstallment(l.id)}>
-                              {collectingLine === l.id ? '…' : 'Record Payment'}
+                              {collectingLine === l.id ? '…' : (isAr ? 'تسجيل الدفع' : 'Record Payment')}
                             </button>
                           )}
                         </td>
@@ -666,7 +800,7 @@ export default function DealDetailPage() {
 
           {/* Customer */}
           <div className="card" style={{ padding: '1rem' }}>
-            <p className="section-label">Customer</p>
+            <p className="section-label">{isAr ? 'العميل' : 'Customer'}</p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
               <span className="avatar" style={{ width: '2.25rem', height: '2.25rem', background: avatarColor(custName), color: '#fff', fontSize: '0.75rem' }}>
                 {initials(custName)}
@@ -681,7 +815,7 @@ export default function DealDetailPage() {
 
           {/* Vehicle */}
           <div className="card" style={{ padding: '1rem' }}>
-            <p className="section-label">Vehicle</p>
+            <p className="section-label">{isAr ? 'السيارة' : 'Vehicle'}</p>
             <div style={{ width: '100%', height: '88px', background: 'var(--surface-2)', borderRadius: '0.375rem', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem', border: '1px solid var(--border)' }}>
               <span style={{ fontSize: '2.5rem' }}>🚗</span>
             </div>
@@ -690,13 +824,13 @@ export default function DealDetailPage() {
                 <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-1)', marginBottom: '0.2rem' }}>
                   {deal.vehicle.year} {deal.vehicle.make} {deal.vehicle.model}
                 </p>
-                {deal.vehicle.vin && <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', fontFamily: 'monospace' }}>VIN: {deal.vehicle.vin}</p>}
+                {deal.vehicle.vin && <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', fontFamily: 'monospace' }}>{isAr ? 'الشاسيه' : 'VIN'}: {deal.vehicle.vin}</p>}
                 <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span className="badge badge-warning" style={{ fontSize: '0.625rem' }}>
-                    {deal.vehicle.status === 'SOLD' ? 'Sold' : 'Available → Reserved'}
+                    {deal.vehicle.status === 'SOLD' ? (isAr ? 'مباع' : 'Sold') : (isAr ? 'متوفر ← محجوز' : 'Available → Reserved')}
                   </span>
                   <Link href={`/vehicles/${deal.vehicle.id}`} style={{ fontSize: '0.75rem', color: 'var(--primary)', textDecoration: 'none' }}>
-                    View →
+                    {isAr ? 'عرض' : 'View →'}
                   </Link>
                 </div>
               </>
@@ -705,14 +839,22 @@ export default function DealDetailPage() {
 
           {/* Documents */}
           <div className="card" style={{ padding: '1rem' }}>
-            <p className="section-label">Documents</p>
-            {[{ label: 'Purchase Agreement', status: 'Pending E-Signature' }, { label: 'Bill of Sale', status: 'Not Generated' }].map((doc) => (
-              <div key={doc.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.625rem' }}>
+            <p className="section-label">{isAr ? 'المستندات' : 'Documents'}</p>
+            {[
+              { key: 'pa', label: isAr ? 'عقد الشراء' : 'Purchase Agreement', status: isAr ? 'بانتظار التوقيع' : 'Pending E-Signature' },
+              { key: 'bs', label: isAr ? 'فاتورة البيع' : 'Bill of Sale', status: isAr ? 'لم يُنشأ بعد' : 'Not Generated' },
+            ].map((doc) => (
+              <div key={doc.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.625rem' }}>
                 <div>
                   <p style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-1)' }}>{doc.label}</p>
                   <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)' }}>{doc.status}</p>
                 </div>
-                <button className="btn btn-secondary btn-sm">Generate</button>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => deal && generatePurchaseAgreementPDF(deal)}
+                >
+                  {isAr ? 'إنشاء' : 'Generate'}
+                </button>
               </div>
             ))}
           </div>
@@ -720,7 +862,7 @@ export default function DealDetailPage() {
           {/* Sales rep */}
           {repName && (
             <div className="card" style={{ padding: '1rem' }}>
-              <p className="section-label">Sales Rep</p>
+              <p className="section-label">{isAr ? 'مندوب المبيعات' : 'Sales Rep'}</p>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
                 <span className="avatar" style={{ width: '2rem', height: '2rem', background: avatarColor(repName), color: '#fff', fontSize: '0.625rem' }}>
                   {initials(repName)}
@@ -729,7 +871,7 @@ export default function DealDetailPage() {
                   <p style={{ fontWeight: 500, fontSize: '0.8125rem', color: 'var(--text-1)' }}>{repName}</p>
                   {(deal.commissions?.length ?? 0) > 0 && (
                     <p style={{ fontSize: '0.75rem', color: 'var(--success-fg)', fontWeight: 600 }}>
-                      Commission: {fmt(deal.commissions!.reduce((s, c) => s + Number(c.calculatedAmount), 0))}
+                      {isAr ? 'العمولة:' : 'Commission:'} {fmt(deal.commissions!.reduce((s, c) => s + Number(c.calculatedAmount), 0))}
                     </p>
                   )}
                 </div>
@@ -740,10 +882,10 @@ export default function DealDetailPage() {
           {/* Payment progress (installment) */}
           {payTab === 'DEALERSHIP_INSTALLMENT' && deal.installmentPlan && totalCount > 0 && (
             <div className="card" style={{ padding: '1rem' }}>
-              <p className="section-label">Payment Progress</p>
+              <p className="section-label">{isAr ? 'تقدم السداد' : 'Payment Progress'}</p>
               <div style={{ marginBottom: '0.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-2)', marginBottom: '0.35rem' }}>
-                  <span>{paidCount} of {totalCount} paid</span>
+                  <span>{isAr ? `${paidCount} من ${totalCount} مسدد` : `${paidCount} of ${totalCount} paid`}</span>
                   <span>{Math.round((paidCount / totalCount) * 100)}%</span>
                 </div>
                 <div style={{ height: '6px', background: 'var(--border)', borderRadius: '9999px', overflow: 'hidden' }}>
@@ -752,17 +894,17 @@ export default function DealDetailPage() {
               </div>
               {nextDue && (
                 <div style={{ marginTop: '0.875rem', padding: '0.75rem', background: 'var(--surface-2)', borderRadius: '0.375rem', border: '1px solid var(--border)' }}>
-                  <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Next Due</p>
+                  <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>{isAr ? 'الاستحقاق القادم' : 'Next Due'}</p>
                   <p style={{ fontSize: '0.875rem', fontWeight: 600, color: nextDue.status === 'OVERDUE' ? 'var(--danger-fg)' : 'var(--text-1)' }}>
                     {fmt(Number(nextDue.amount))}
                   </p>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-2)', marginTop: '0.1rem' }}>
-                    {new Date(nextDue.dueDate).toLocaleDateString('en-EG', { weekday: 'short', day: 'numeric', month: 'short' })}
+                    {fmtDate(nextDue.dueDate, isAr, { weekday: 'short', day: 'numeric', month: 'short' })}
                   </p>
                   {deal.status === 'FINALIZED' && (
                     <button className="btn btn-primary btn-sm" style={{ marginTop: '0.5rem', width: '100%' }}
                       disabled={collectingLine === nextDue.id} onClick={() => collectInstallment(nextDue.id)}>
-                      {collectingLine === nextDue.id ? '…' : 'Record Payment'}
+                      {collectingLine === nextDue.id ? '…' : (isAr ? 'تسجيل الدفع' : 'Record Payment')}
                     </button>
                   )}
                 </div>
@@ -774,29 +916,29 @@ export default function DealDetailPage() {
 
       {/* ── Activity Timeline ───────────────────────────────────────────── */}
       <div style={{ marginTop: '1.5rem' }}>
-        <p className="section-label" style={{ marginBottom: '1rem' }}>Activity</p>
+        <p className="section-label" style={{ marginBottom: '1rem' }}>{isAr ? 'النشاط' : 'Activity'}</p>
 
         {/* Add Note form */}
         <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
           <form onSubmit={addNote} style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end' }}>
               <div style={{ width: 160 }}>
-                <label className="input-label">Type</label>
+                <label className="input-label">{isAr ? 'النوع' : 'Type'}</label>
                 <SearchableCombobox options={NOTE_TYPE_OPTS} value={noteType} onChange={setNoteType} />
               </div>
               <div style={{ flex: 1 }}>
-                <label className="input-label">Note</label>
+                <label className="input-label">{isAr ? 'ملاحظة' : 'Note'}</label>
                 <textarea
                   value={noteBody}
                   onChange={(e) => setNoteBody(e.target.value)}
-                  placeholder="Log a call, add a note, or record an email…"
+                  placeholder={isAr ? 'سجّل مكالمة، أضف ملاحظة، أو وثّق بريدًا إلكترونيًا…' : 'Log a call, add a note, or record an email…'}
                   rows={2}
                   className="input"
                   style={{ resize: 'vertical', width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
               <button type="submit" disabled={postingNote || !noteBody.trim()} className="btn btn-primary btn-sm" style={{ flexShrink: 0, marginBottom: '2px' }}>
-                {postingNote ? '…' : 'Add'}
+                {postingNote ? '…' : (isAr ? 'إضافة' : 'Add')}
               </button>
             </div>
           </form>
@@ -806,19 +948,19 @@ export default function DealDetailPage() {
         <div className="card" style={{ overflow: 'hidden' }}>
           {notes.length === 0 ? (
             <p style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.875rem' }}>
-              No activity yet.
+              {isAr ? 'لا يوجد نشاط بعد.' : 'No activity yet.'}
             </p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {notes.map((note, idx) => (
                 <div key={note.id} style={{ padding: '0.875rem 1rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start', borderBottom: idx < notes.length - 1 ? '1px solid var(--border)' : undefined }}>
                   <span className={`badge ${NOTE_BADGE[note.type] ?? 'badge-neutral'}`} style={{ fontSize: '0.6875rem', flexShrink: 0, marginTop: '0.1rem' }}>
-                    {note.type}
+                    {isAr ? ({ NOTE: 'ملاحظة', CALL: 'مكالمة', EMAIL: 'بريد' } as Record<string,string>)[note.type] ?? note.type : note.type}
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: '0.8125rem', color: 'var(--text-1)', wordBreak: 'break-word' }}>{note.body}</p>
                     <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', marginTop: '0.2rem' }}>
-                      {note.author?.name ?? 'Staff'} · {new Date(note.createdAt).toLocaleString('en-EG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      {note.author?.name ?? (isAr ? 'موظف' : 'Staff')} · {fmtDateTime(note.createdAt, isAr, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 </div>
@@ -831,24 +973,24 @@ export default function DealDetailPage() {
       {/* ── Finalize modal ──────────────────────────────────────────────── */}
       {showFinalize && (
         <Modal onClose={() => setShowFinalize(false)}>
-          <h2 style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-1)', marginBottom: '1rem' }}>Confirm &amp; Finalize Deal</h2>
-          <SummaryRow label="Customer" value={custName} />
-          <SummaryRow label="Vehicle" value={deal.vehicle ? `${deal.vehicle.year} ${deal.vehicle.make} ${deal.vehicle.model}` : '—'} />
-          <SummaryRow label="Payment Method" value={deal.purchaseMethod.replace(/_/g, ' ')} />
-          <SummaryRow label="Sale Price" value={fmt(salePrice)} />
-          <SummaryRow label="Admin Fee" value={fmt(adminFee)} />
-          <SummaryRow label="Insurance" value={fmt(insurance)} />
-          <SummaryRow label="VAT 14%" value={fmt(vat)} />
-          <SummaryRow label="Total Due" value={fmt(totalDue)} bold />
+          <h2 style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-1)', marginBottom: '1rem' }}>{isAr ? 'تأكيد وإتمام الصفقة' : 'Confirm & Finalize Deal'}</h2>
+          <SummaryRow label={isAr ? 'العميل' : 'Customer'} value={custName} />
+          <SummaryRow label={isAr ? 'السيارة' : 'Vehicle'} value={deal.vehicle ? `${deal.vehicle.year} ${deal.vehicle.make} ${deal.vehicle.model}` : '—'} />
+          <SummaryRow label={isAr ? 'طريقة الدفع' : 'Payment Method'} value={deal.purchaseMethod.replace(/_/g, ' ')} />
+          <SummaryRow label={isAr ? 'سعر البيع' : 'Sale Price'} value={fmt(salePrice)} />
+          <SummaryRow label={isAr ? 'الرسوم الإدارية' : 'Admin Fee'} value={fmt(adminFee)} />
+          <SummaryRow label={isAr ? 'رسوم التأمين' : 'Insurance'} value={fmt(insurance)} />
+          <SummaryRow label={isAr ? 'ضريبة 14%' : 'VAT 14%'} value={fmt(vat)} />
+          <SummaryRow label={isAr ? 'الإجمالي المستحق' : 'Total Due'} value={fmt(totalDue)} bold />
           <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: '1rem 0' }}>
-            This posts GL journal entries, marks the vehicle SOLD, and accrues sales commissions. Cannot be undone.
+            {isAr ? 'سيتم ترحيل القيود المحاسبية، وتعليم السيارة كمباعة، واستحقاق عمولات المبيعات. لا يمكن التراجع.' : 'This posts GL journal entries, marks the vehicle SOLD, and accrues sales commissions. Cannot be undone.'}
           </p>
           {finalizeError && <p style={{ fontSize: '0.8125rem', color: 'var(--danger-fg)', marginBottom: '0.75rem' }}>{finalizeError}</p>}
           <div style={{ display: 'flex', gap: '0.625rem' }}>
-            <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowFinalize(false)}>Cancel</button>
+            <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowFinalize(false)}>{isAr ? 'إلغاء' : 'Cancel'}</button>
             <button className="btn btn-primary" style={{ flex: 1, background: 'var(--success)', borderColor: 'var(--success)' }}
               disabled={finalizing} onClick={runFinalize}>
-              {finalizing ? 'Finalizing…' : 'Confirm Finalize'}
+              {finalizing ? (isAr ? 'جاري الإتمام…' : 'Finalizing…') : (isAr ? 'تأكيد الإتمام' : 'Confirm Finalize')}
             </button>
           </div>
         </Modal>
@@ -857,15 +999,15 @@ export default function DealDetailPage() {
       {/* ── Create Finance Application modal ─────────────────────────── */}
       {showFACreate && (
         <Modal onClose={() => setShowFACreate(false)}>
-          <h2 style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-1)', marginBottom: '1rem' }}>New Finance Application</h2>
+          <h2 style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-1)', marginBottom: '1rem' }}>{isAr ? 'طلب تمويل جديد' : 'New Finance Application'}</h2>
           <form onSubmit={createFA} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <ModalField label="Bank Name *" value={faForm.bankName} onChange={(v) => setFaForm((p) => ({ ...p, bankName: v }))} required />
-            <ModalField label="Branch" value={faForm.bankBranch} onChange={(v) => setFaForm((p) => ({ ...p, bankBranch: v }))} />
-            <ModalField label="Term (months)" type="number" value={faForm.termMonths} onChange={(v) => setFaForm((p) => ({ ...p, termMonths: v }))} />
-            <ModalField label="APR (%)" type="number" value={faForm.apr} onChange={(v) => setFaForm((p) => ({ ...p, apr: v }))} />
+            <ModalField label={isAr ? 'اسم البنك *' : 'Bank Name *'} value={faForm.bankName} onChange={(v) => setFaForm((p) => ({ ...p, bankName: v }))} required />
+            <ModalField label={isAr ? 'الفرع' : 'Branch'} value={faForm.bankBranch} onChange={(v) => setFaForm((p) => ({ ...p, bankBranch: v }))} />
+            <ModalField label={isAr ? 'المدة (شهور)' : 'Term (months)'} type="number" value={faForm.termMonths} onChange={(v) => setFaForm((p) => ({ ...p, termMonths: v }))} />
+            <ModalField label={isAr ? 'معدل الفائدة (%)' : 'APR (%)'} type="number" value={faForm.apr} onChange={(v) => setFaForm((p) => ({ ...p, apr: v }))} />
             <div style={{ display: 'flex', gap: '0.625rem', marginTop: '0.25rem' }}>
-              <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowFACreate(false)}>Cancel</button>
-              <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={savingFA}>{savingFA ? '…' : 'Create'}</button>
+              <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowFACreate(false)}>{isAr ? 'إلغاء' : 'Cancel'}</button>
+              <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={savingFA}>{savingFA ? '…' : (isAr ? 'إنشاء' : 'Create')}</button>
             </div>
           </form>
         </Modal>
@@ -874,17 +1016,17 @@ export default function DealDetailPage() {
       {/* ── Record Bank Approval modal ────────────────────────────────── */}
       {showApproval && (
         <Modal onClose={() => setShowApproval(false)}>
-          <h2 style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-1)', marginBottom: '1rem' }}>Record Bank Approval</h2>
+          <h2 style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-1)', marginBottom: '1rem' }}>{isAr ? 'تسجيل موافقة البنك' : 'Record Bank Approval'}</h2>
           <form onSubmit={recordApproval} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <ModalField label="Approval Reference # *" value={approvalForm.approvalReferenceNumber} onChange={(v) => setApprovalForm((p) => ({ ...p, approvalReferenceNumber: v }))} required />
-            <ModalField label="Approved Amount (EGP) *" type="number" value={approvalForm.approvedAmount} onChange={(v) => setApprovalForm((p) => ({ ...p, approvedAmount: v }))} required />
-            <ModalField label="Approval Date *" type="date" value={approvalForm.approvalDate} onChange={(v) => setApprovalForm((p) => ({ ...p, approvalDate: v }))} required />
-            <ModalField label="Expiry Date" type="date" value={approvalForm.expiryDate} onChange={(v) => setApprovalForm((p) => ({ ...p, expiryDate: v }))} />
-            <ModalField label="Notes" value={approvalForm.notes} onChange={(v) => setApprovalForm((p) => ({ ...p, notes: v }))} />
+            <ModalField label={isAr ? 'مرجع الموافقة *' : 'Approval Reference # *'} value={approvalForm.approvalReferenceNumber} onChange={(v) => setApprovalForm((p) => ({ ...p, approvalReferenceNumber: v }))} required />
+            <ModalField label={isAr ? 'المبلغ المعتمد (ج.م) *' : 'Approved Amount (EGP) *'} type="number" value={approvalForm.approvedAmount} onChange={(v) => setApprovalForm((p) => ({ ...p, approvedAmount: v }))} required />
+            <ModalField label={isAr ? 'تاريخ الموافقة *' : 'Approval Date *'} type="date" value={approvalForm.approvalDate} onChange={(v) => setApprovalForm((p) => ({ ...p, approvalDate: v }))} required />
+            <ModalField label={isAr ? 'تاريخ الانتهاء' : 'Expiry Date'} type="date" value={approvalForm.expiryDate} onChange={(v) => setApprovalForm((p) => ({ ...p, expiryDate: v }))} />
+            <ModalField label={isAr ? 'ملاحظات' : 'Notes'} value={approvalForm.notes} onChange={(v) => setApprovalForm((p) => ({ ...p, notes: v }))} />
             <div style={{ display: 'flex', gap: '0.625rem', marginTop: '0.25rem' }}>
-              <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowApproval(false)}>Cancel</button>
+              <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowApproval(false)}>{isAr ? 'إلغاء' : 'Cancel'}</button>
               <button type="submit" className="btn btn-primary" style={{ flex: 1, background: 'var(--success)', borderColor: 'var(--success)' }}
-                disabled={savingApproval}>{savingApproval ? '…' : 'Record'}</button>
+                disabled={savingApproval}>{savingApproval ? '…' : (isAr ? 'تسجيل' : 'Record')}</button>
             </div>
           </form>
         </Modal>

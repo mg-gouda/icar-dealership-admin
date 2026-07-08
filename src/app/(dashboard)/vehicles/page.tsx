@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../lib/useApi';
 import { canViewField } from '../../../lib/fieldPermissions';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
+import { useLang } from '../../../lib/lang-context';
 
 interface Vehicle {
   id: string;
@@ -28,44 +29,10 @@ interface Vehicle {
   thumbnailUrl?: string;
   stockNumber?: string;
   location?: { name: string };
+  accreditedDealer?: { name: string };
+  images?: { url: string }[];
 }
 
-const STATUS_OPTIONS = [
-  { value: 'AVAILABLE', label: 'Available' },
-  { value: 'RESERVED', label: 'Reserved' },
-  { value: 'SOLD', label: 'Sold' },
-  { value: 'IN_TRANSIT', label: 'In Transit' },
-  { value: 'PENDING_INSPECTION', label: 'Pending Inspection' },
-];
-
-const MAKE_OPTIONS = [
-  'Toyota', 'Hyundai', 'Kia', 'Chevrolet', 'Mercedes-Benz',
-  'BMW', 'Volkswagen', 'Nissan', 'Honda', 'Ford',
-].map((m) => ({ value: m, label: m }));
-
-const BODY_TYPE_OPTIONS = [
-  'Sedan', 'SUV', 'Hatchback', 'Pickup', 'Van', 'Coupe', 'Convertible', 'Wagon',
-].map((b) => ({ value: b, label: b }));
-
-const PRICE_RANGE_OPTIONS = [
-  { value: '0-500000', label: 'Under EGP 500K' },
-  { value: '500000-1000000', label: 'EGP 500K – 1M' },
-  { value: '1000000-2000000', label: 'EGP 1M – 2M' },
-  { value: '2000000-', label: 'Above EGP 2M' },
-];
-
-const FUEL_TYPE_OPTIONS = [
-  { value: 'Petrol', label: 'Petrol' },
-  { value: 'Diesel', label: 'Diesel' },
-  { value: 'Electric', label: 'Electric' },
-  { value: 'Hybrid', label: 'Hybrid' },
-];
-
-const AGING_OPTIONS = [
-  { value: '30', label: '> 30 days' },
-  { value: '60', label: '> 60 days' },
-  { value: '90', label: '> 90 days' },
-];
 
 const fmt = (n: number) =>
   'EGP ' + n.toLocaleString('en-EG', { maximumFractionDigits: 0 });
@@ -81,7 +48,14 @@ function statusBadgeClass(status: string): string {
   }
 }
 
-function statusLabel(status: string): string {
+function statusLabel(status: string, isAr: boolean): string {
+  if (isAr) {
+    const map: Record<string, string> = {
+      AVAILABLE: 'متوفر', RESERVED: 'محجوز', SOLD: 'مباع',
+      IN_TRANSIT: 'في الطريق', PENDING_INSPECTION: 'قيد الفحص', INACTIVE: 'غير نشط',
+    };
+    return map[status] ?? status.replace(/_/g, ' ');
+  }
   return status.replace(/_/g, ' ');
 }
 
@@ -95,10 +69,10 @@ function computeDaysInStock(v: Vehicle): number | null {
   return null;
 }
 
-function agingBadge(days: number | null): React.ReactNode {
+function agingBadge(days: number | null, isAr: boolean): React.ReactNode {
   if (days == null || days <= 60) return null;
   const cls = days > 90 ? 'badge badge-danger' : 'badge badge-warning';
-  const label = days > 90 ? `${days}d (aged)` : `${days}d`;
+  const label = days > 90 ? `${days}d ${isAr ? '(متقادم)' : '(aged)'}` : `${days}d`;
   return <span className={cls} style={{ fontSize: '0.625rem', marginLeft: '0.25rem' }}>{label}</span>;
 }
 
@@ -106,9 +80,31 @@ const PAGE_SIZE = 25;
 
 export default function VehiclesPage() {
   const router = useRouter();
+  const { isAr } = useLang();
+
+  const STATUS_OPTIONS = [
+    { value: 'AVAILABLE', label: isAr ? 'متوفر' : 'Available' },
+    { value: 'RESERVED', label: isAr ? 'محجوز' : 'Reserved' },
+    { value: 'SOLD', label: isAr ? 'مباع' : 'Sold' },
+    { value: 'IN_TRANSIT', label: isAr ? 'في الطريق' : 'In Transit' },
+    { value: 'PENDING_INSPECTION', label: isAr ? 'قيد الفحص' : 'Pending Inspection' },
+  ];
+  const PRICE_RANGE_OPTIONS = [
+    { value: '0-500000', label: isAr ? 'أقل من 500 ألف' : 'Under EGP 500K' },
+    { value: '500000-1000000', label: isAr ? '500 ألف – مليون' : 'EGP 500K – 1M' },
+    { value: '1000000-2000000', label: isAr ? 'مليون – 2 مليون' : 'EGP 1M – 2M' },
+    { value: '2000000-', label: isAr ? 'أكثر من 2 مليون' : 'Above EGP 2M' },
+  ];
+  const AGING_OPTIONS = [
+    { value: '30', label: isAr ? 'أكثر من 30 يوم' : '> 30 days' },
+    { value: '60', label: isAr ? 'أكثر من 60 يوم' : '> 60 days' },
+    { value: '90', label: isAr ? 'أكثر من 90 يوم' : '> 90 days' },
+  ];
+
   const [search, setSearch] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [dealerFilter, setDealerFilter] = useState('');
   const [makeFilter, setMakeFilter] = useState('');
   const [bodyTypeFilter, setBodyTypeFilter] = useState('');
   const [priceRange, setPriceRange] = useState('');
@@ -123,6 +119,7 @@ export default function VehiclesPage() {
     ...(makeFilter && { make: makeFilter }),
     ...(bodyTypeFilter && { bodyType: bodyTypeFilter }),
     ...(fuelTypeFilter && { fuelType: fuelTypeFilter }),
+    ...(dealerFilter && { accreditedDealerId: dealerFilter }),
     page: String(page),
     limit: String(PAGE_SIZE),
   });
@@ -132,13 +129,25 @@ export default function VehiclesPage() {
     total: number;
     page: number;
     limit: number;
-  }>(`/vehicles?${params}`, [search, statusFilter, makeFilter, bodyTypeFilter, fuelTypeFilter, page]);
+  }>(`/vehicles?${params}`, [search, statusFilter, makeFilter, bodyTypeFilter, fuelTypeFilter, dealerFilter, page]);
 
   const { data: locationsRaw } = useQuery<{ id: string; name: string }[]>('/locations');
   const locationOptions = (Array.isArray(locationsRaw) ? locationsRaw : []).map((l) => ({
     value: l.id,
     label: l.name,
   }));
+
+  const { data: rawDealers } = useQuery<{id:string;name:string}[]>('/accredited-dealers');
+  const dealers = Array.isArray(rawDealers) ? rawDealers : [];
+
+  type LI = { id: string; value: string; label: string };
+  const { data: rawMakeOpts }     = useQuery<LI[]>('/lookup-items?category=car_make');
+  const { data: rawBodyOpts }     = useQuery<LI[]>('/lookup-items?category=body_type');
+  const { data: rawFuelOpts }     = useQuery<LI[]>('/lookup-items?category=fuel_type');
+  const toLookupOpts = (r: LI[] | null | undefined) => (Array.isArray(r) ? r : []).map((i) => ({ value: i.value, label: i.label }));
+  const MAKE_OPTIONS      = toLookupOpts(rawMakeOpts);
+  const BODY_TYPE_OPTIONS = toLookupOpts(rawBodyOpts);
+  const FUEL_TYPE_OPTIONS = toLookupOpts(rawFuelOpts);
 
   const rawVehicles = res?.items ?? [];
   const total = res?.total ?? 0;
@@ -193,18 +202,19 @@ export default function VehiclesPage() {
     setPriceRange('');
     setFuelTypeFilter('');
     setAgingFilter('');
+    setDealerFilter('');
     setPage(1);
   }
 
-  const hasFilters = search || locationFilter || statusFilter || makeFilter || bodyTypeFilter || priceRange || fuelTypeFilter || agingFilter;
+  const hasFilters = search || locationFilter || statusFilter || makeFilter || bodyTypeFilter || priceRange || fuelTypeFilter || agingFilter || dealerFilter;
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100%' }}>
       {/* Page header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Inventory Management</h1>
-          <p className="page-subtitle">Manage all vehicles in stock</p>
+          <h1 className="page-title">{isAr ? 'إدارة المخزن' : 'Inventory Management'}</h1>
+          <p className="page-subtitle">{isAr ? 'إدارة جميع السيارات في المخزن' : 'Manage all vehicles in stock'}</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           {/* View mode toggle */}
@@ -217,7 +227,7 @@ export default function VehiclesPage() {
             <button
               className="btn btn-ghost btn-sm"
               onClick={() => setViewMode('table')}
-              title="Table view"
+              title={isAr ? 'عرض جدول' : 'Table view'}
               style={{
                 borderRadius: 0,
                 background: viewMode === 'table' ? 'var(--primary)' : undefined,
@@ -231,7 +241,7 @@ export default function VehiclesPage() {
             <button
               className="btn btn-ghost btn-sm"
               onClick={() => setViewMode('grid')}
-              title="Grid view"
+              title={isAr ? 'عرض شبكة' : 'Grid view'}
               style={{
                 borderRadius: 0,
                 background: viewMode === 'grid' ? 'var(--primary)' : undefined,
@@ -260,13 +270,13 @@ export default function VehiclesPage() {
               <path d="M8 2v9M4.5 7.5L8 11l3.5-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M2 13h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
-            {importing ? 'Importing…' : 'Bulk Import'}
+            {importing ? (isAr ? 'جارٍ الاستيراد…' : 'Importing…') : (isAr ? 'استيراد مجمّع' : 'Bulk Import')}
           </button>
           <Link href="/vehicles/new" className="btn btn-primary btn-sm">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden>
               <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
             </svg>
-            Add Vehicle
+            {isAr ? 'إضافة مركبة' : 'Add Vehicle'}
           </Link>
         </div>
       </div>
@@ -285,12 +295,13 @@ export default function VehiclesPage() {
             opacity: 0.9,
           }}>
             <p style={{ fontWeight: 600, marginBottom: importResult.errors.length ? '0.25rem' : 0 }}>
-              {importResult.created} vehicle{importResult.created !== 1 ? 's' : ''} imported
-              {importResult.errors.length ? ` · ${importResult.errors.length} row${importResult.errors.length !== 1 ? 's' : ''} failed` : ' successfully.'}
+              {isAr
+                ? `تم استيراد ${importResult.created} ${importResult.created !== 1 ? 'سيارات' : 'سيارة'}${importResult.errors.length ? ` · فشل ${importResult.errors.length} ${importResult.errors.length !== 1 ? 'صفوف' : 'صف'}` : ' بنجاح.'}`
+                : `${importResult.created} vehicle${importResult.created !== 1 ? 's' : ''} imported${importResult.errors.length ? ` · ${importResult.errors.length} row${importResult.errors.length !== 1 ? 's' : ''} failed` : ' successfully.'}`}
             </p>
             {importResult.errors.map((e) => (
               <p key={e.row} style={{ fontSize: '0.75rem', marginTop: '0.15rem' }}>
-                Row {e.row}: {e.error}
+                {isAr ? 'الصف' : 'Row'} {e.row}: {e.error}
               </p>
             ))}
           </div>
@@ -311,7 +322,7 @@ export default function VehiclesPage() {
               type="text"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Search VIN, make, model…"
+              placeholder={isAr ? 'بحث برقم الشاسيه، الشركة، الطراز…' : 'Search VIN, make, model…'}
               className="input"
               style={{ paddingLeft: '2rem' }}
             />
@@ -322,9 +333,9 @@ export default function VehiclesPage() {
               options={locationOptions}
               value={locationFilter}
               onChange={(v) => { setLocationFilter(v); setPage(1); }}
-              placeholder="All Locations"
+              placeholder={isAr ? 'كل الفروع' : 'All Locations'}
               clearable
-              clearLabel="All Locations"
+              clearLabel={isAr ? 'كل الفروع' : 'All Locations'}
             />
           </div>
 
@@ -333,9 +344,9 @@ export default function VehiclesPage() {
               options={STATUS_OPTIONS}
               value={statusFilter}
               onChange={(v) => { setStatusFilter(v); setPage(1); }}
-              placeholder="All Statuses"
+              placeholder={isAr ? 'كل الحالات' : 'All Statuses'}
               clearable
-              clearLabel="All Statuses"
+              clearLabel={isAr ? 'كل الحالات' : 'All Statuses'}
             />
           </div>
 
@@ -344,9 +355,9 @@ export default function VehiclesPage() {
               options={MAKE_OPTIONS}
               value={makeFilter}
               onChange={(v) => { setMakeFilter(v); setPage(1); }}
-              placeholder="All Makes"
+              placeholder={isAr ? 'كل الشركات' : 'All Makes'}
               clearable
-              clearLabel="All Makes"
+              clearLabel={isAr ? 'كل الشركات' : 'All Makes'}
             />
           </div>
 
@@ -355,9 +366,9 @@ export default function VehiclesPage() {
               options={BODY_TYPE_OPTIONS}
               value={bodyTypeFilter}
               onChange={(v) => { setBodyTypeFilter(v); setPage(1); }}
-              placeholder="Body Type"
+              placeholder={isAr ? 'نوع الهيكل' : 'Body Type'}
               clearable
-              clearLabel="All Types"
+              clearLabel={isAr ? 'كل الأنواع' : 'All Types'}
             />
           </div>
 
@@ -366,9 +377,9 @@ export default function VehiclesPage() {
               options={FUEL_TYPE_OPTIONS}
               value={fuelTypeFilter}
               onChange={(v) => { setFuelTypeFilter(v); setPage(1); }}
-              placeholder="Fuel Type"
+              placeholder={isAr ? 'نوع الوقود' : 'Fuel Type'}
               clearable
-              clearLabel="All Fuels"
+              clearLabel={isAr ? 'كل أنواع الوقود' : 'All Fuels'}
             />
           </div>
 
@@ -377,9 +388,9 @@ export default function VehiclesPage() {
               options={AGING_OPTIONS}
               value={agingFilter}
               onChange={(v) => { setAgingFilter(v); setPage(1); }}
-              placeholder="Days in Stock"
+              placeholder={isAr ? 'أيام في المخزن' : 'Days in Stock'}
               clearable
-              clearLabel="All Ages"
+              clearLabel={isAr ? 'كل الفترات' : 'All Ages'}
             />
           </div>
 
@@ -388,15 +399,29 @@ export default function VehiclesPage() {
               options={PRICE_RANGE_OPTIONS}
               value={priceRange}
               onChange={(v) => { setPriceRange(v); setPage(1); }}
-              placeholder="Price Range"
+              placeholder={isAr ? 'نطاق السعر' : 'Price Range'}
               clearable
-              clearLabel="Any Price"
+              clearLabel={isAr ? 'أي سعر' : 'Any Price'}
+            />
+          </div>
+
+          <div style={{ minWidth: '140px' }}>
+            <SearchableCombobox
+              options={[
+                { value: '', label: isAr ? 'جميع الوكلاء' : 'All Dealers' },
+                ...dealers.map(d => ({ value: d.id, label: d.name }))
+              ]}
+              value={dealerFilter}
+              onChange={(v) => { setDealerFilter(v); setPage(1); }}
+              placeholder={isAr ? 'الوكيل' : 'Dealer'}
+              clearable
+              clearLabel={isAr ? 'جميع الوكلاء' : 'All Dealers'}
             />
           </div>
 
           {hasFilters && (
             <button className="btn btn-ghost btn-sm" onClick={resetFilters}>
-              Clear filters
+              {isAr ? 'مسح الفلاتر' : 'Clear filters'}
             </button>
           )}
         </div>
@@ -404,7 +429,7 @@ export default function VehiclesPage() {
         {/* Loading / error */}
         {loading && (
           <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8125rem' }}>
-            Loading vehicles…
+            {isAr ? 'جارٍ تحميل السيارات…' : 'Loading vehicles…'}
           </div>
         )}
 
@@ -420,27 +445,29 @@ export default function VehiclesPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>VIN</th>
-                  <th>Vehicle</th>
-                  <th>Year</th>
-                  <th>Color</th>
-                  <th style={{ textAlign: 'right' }}>Price (EGP)</th>
+                  <th style={{ width: '3.5rem' }}></th>
+                  <th>{isAr ? 'رقم الشاسيه' : 'VIN'}</th>
+                  <th>{isAr ? 'السيارة' : 'Vehicle'}</th>
+                  <th>{isAr ? 'السنة' : 'Year'}</th>
+                  <th>{isAr ? 'اللون' : 'Color'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'السعر (ج.م)' : 'Price (EGP)'}</th>
                   <th style={{ textAlign: 'right' }}>
-                    {canSeeCost ? 'Cost (EGP)' : 'Cost'}
+                    {canSeeCost ? (isAr ? 'التكلفة (ج.م)' : 'Cost (EGP)') : (isAr ? 'التكلفة' : 'Cost')}
                   </th>
-                  <th style={{ textAlign: 'right' }}>Days In Stock</th>
-                  <th>Location</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'أيام في المخزن' : 'Days In Stock'}</th>
+                  <th>{isAr ? 'الفرع' : 'Location'}</th>
+                  <th>{isAr ? 'الوكيل' : 'Dealer'}</th>
+                  <th>{isAr ? 'الحالة' : 'Status'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'الإجراءات' : 'Actions'}</th>
                 </tr>
               </thead>
               <tbody>
                 {vehicles.length === 0 ? (
                   <tr>
-                    <td colSpan={10} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-3)' }}>
+                    <td colSpan={12} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-3)' }}>
                       {hasFilters
-                        ? 'No vehicles match the current filters.'
-                        : 'No vehicles found. Add your first vehicle.'}
+                        ? (isAr ? 'لا توجد مركبات تطابق الفلاتر الحالية.' : 'No vehicles match the current filters.')
+                        : (isAr ? 'لا توجد مركبات. أضف أول مركبة.' : 'No vehicles found. Add your first vehicle.')}
                     </td>
                   </tr>
                 ) : (
@@ -454,6 +481,21 @@ export default function VehiclesPage() {
                         onClick={() => router.push(`/vehicles/${v.id}`)}
                         style={{ cursor: 'pointer' }}
                       >
+                        <td style={{ padding: '0.375rem 0.75rem' }}>
+                          {v.images?.[0]?.url ? (
+                            <img
+                              src={v.images[0].url}
+                              alt=""
+                              style={{ width: '2.75rem', height: '2.25rem', objectFit: 'cover', borderRadius: '0.25rem', display: 'block', background: 'var(--surface-2)' }}
+                            />
+                          ) : (
+                            <div style={{ width: '2.75rem', height: '2.25rem', borderRadius: '0.25rem', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--text-3)' }}>
+                                <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>
+                              </svg>
+                            </div>
+                          )}
+                        </td>
                         <td>
                           <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-2)' }}>
                             {v.vin
@@ -479,15 +521,18 @@ export default function VehiclesPage() {
                         <td style={{ textAlign: 'right', color: 'var(--text-2)' }}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
                             {days != null ? days : '—'}
-                            {agingBadge(days)}
+                            {agingBadge(days, isAr)}
                           </span>
                         </td>
                         <td style={{ color: 'var(--text-2)' }}>
                           {v.location?.name ?? '—'}
                         </td>
+                        <td style={{ color: 'var(--text-2)' }}>
+                          {v.accreditedDealer?.name ?? '—'}
+                        </td>
                         <td>
                           <span className={statusBadgeClass(v.status)}>
-                            {statusLabel(v.status)}
+                            {statusLabel(v.status, isAr)}
                           </span>
                         </td>
                         <td style={{ textAlign: 'right' }}>
@@ -497,7 +542,7 @@ export default function VehiclesPage() {
                             onClick={(e) => e.stopPropagation()}
                             style={{ color: 'var(--primary)' }}
                           >
-                            Edit
+                            {isAr ? 'تعديل' : 'Edit'}
                           </Link>
                         </td>
                       </tr>
@@ -519,7 +564,7 @@ export default function VehiclesPage() {
                 color: 'var(--text-3)',
               }}>
                 <span>
-                  Showing {showingFrom}–{showingTo} of {total} vehicles
+                  {isAr ? `عرض ${showingFrom}–${showingTo} من ${total} مركبة` : `Showing ${showingFrom}–${showingTo} of ${total} vehicles`}
                 </span>
                 <div style={{ display: 'flex', gap: '0.25rem' }}>
                   <button
@@ -527,7 +572,7 @@ export default function VehiclesPage() {
                     disabled={page <= 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
-                    Previous
+                    {isAr ? 'السابق' : 'Previous'}
                   </button>
                   {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
                     let p: number;
@@ -561,7 +606,7 @@ export default function VehiclesPage() {
                     disabled={page >= totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   >
-                    Next
+                    {isAr ? 'التالي' : 'Next'}
                   </button>
                 </div>
               </div>
@@ -574,7 +619,7 @@ export default function VehiclesPage() {
           <>
             {vehicles.length === 0 ? (
               <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8125rem' }}>
-                {hasFilters ? 'No vehicles match the current filters.' : 'No vehicles found. Add your first vehicle.'}
+                {hasFilters ? (isAr ? 'لا توجد مركبات تطابق الفلاتر الحالية.' : 'No vehicles match the current filters.') : (isAr ? 'لا توجد مركبات. أضف أول مركبة.' : 'No vehicles found. Add your first vehicle.')}
               </div>
             ) : (
               <div style={{
@@ -612,13 +657,13 @@ export default function VehiclesPage() {
                 fontSize: '0.8125rem',
                 color: 'var(--text-3)',
               }}>
-                <span>Showing {showingFrom}–{showingTo} of {total} vehicles</span>
+                <span>{isAr ? `عرض ${showingFrom}–${showingTo} من ${total} مركبة` : `Showing ${showingFrom}–${showingTo} of ${total} vehicles`}</span>
                 <div style={{ display: 'flex', gap: '0.25rem' }}>
                   <button className="btn btn-ghost btn-sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                    Previous
+                    {isAr ? 'السابق' : 'Previous'}
                   </button>
                   <button className="btn btn-ghost btn-sm" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
-                    Next
+                    {isAr ? 'التالي' : 'Next'}
                   </button>
                 </div>
               </div>
@@ -648,6 +693,7 @@ function VehicleCard({
   onEdit: () => void;
   onQuickSell: () => void;
 }) {
+  const { isAr } = useLang();
   return (
     <div
       className="card vehicle-card"
@@ -680,7 +726,7 @@ function VehicleCard({
           className={statusBadgeClass(v.status)}
           style={{ position: 'absolute', top: '0.5rem', left: '0.5rem', fontSize: '0.625rem' }}
         >
-          {statusLabel(v.status)}
+          {statusLabel(v.status, isAr)}
         </span>
 
         {/* Aging badge overlay */}
@@ -712,21 +758,21 @@ function VehicleCard({
             onClick={onView}
             style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(4px)' }}
           >
-            View
+            {isAr ? 'عرض' : 'View'}
           </button>
           <button
             className="btn btn-sm"
             onClick={onEdit}
             style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(4px)' }}
           >
-            Edit
+            {isAr ? 'تعديل' : 'Edit'}
           </button>
           <button
             className="btn btn-sm"
             onClick={onQuickSell}
             style={{ background: 'var(--primary)', color: 'var(--primary-fg)', border: 'none' }}
           >
-            Quick-sell
+            {isAr ? 'بيع سريع' : 'Quick-sell'}
           </button>
         </div>
       </div>
@@ -742,6 +788,11 @@ function VehicleCard({
         <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', fontFamily: 'monospace', letterSpacing: '0.03em' }}>
           {v.stockNumber ? `#${v.stockNumber} · ` : ''}{v.vin ? v.vin.slice(0, 12) + '…' : '—'}
         </p>
+        {v.accreditedDealer && (
+          <span className="text-xs" style={{ color: 'var(--text-3)', fontSize: '0.6875rem' }}>
+            {isAr ? 'الوكيل:' : 'Dealer:'} {v.accreditedDealer.name}
+          </span>
+        )}
       </div>
     </div>
   );

@@ -32,6 +32,9 @@
   --primary-hover: oklch(0.46 0.21 265);
   --primary-fg:    oklch(1 0 0);
 
+  /* Active tab indicator — overridden to gray in dark mode */
+  --tab-active: var(--primary);
+
   /* Semantic status */
   --success:    oklch(0.52 0.17 145);
   --success-bg: oklch(0.96 0.045 145);
@@ -57,6 +60,7 @@
   --orange-bg: oklch(0.97 0.055 52);
   --orange-fg: oklch(0.42 0.14 52);
 }
+
 
 @theme inline {
   /* Map tokens → Tailwind utilities */
@@ -271,7 +275,7 @@ body {
   border-right: none;
 }
 .tab:hover { color: var(--text-1); }
-.tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.tab.active { color: var(--tab-active); border-bottom-color: var(--tab-active); }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -336,4 +340,57 @@ body {
 /* Transition utilities */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+}
+
+/* ─── RTL support ───────────────────────────────────────────────────────── */
+
+/* Cairo font already loaded — use it as the body font for Arabic */
+:root[dir="rtl"] body,
+html[dir="rtl"] body {
+  font-family: inherit; /* Cairo loaded via next/font/google */
+  letter-spacing: 0;    /* Arabic doesn't use letter-spacing */
+}
+
+/* Step indicator connector — flip for RTL */
+[dir="rtl"] .step-item:not(:last-child)::after {
+  left: calc(-50% + 1.1rem);
+  right: calc(50% + 1.1rem);
+}
+
+/* Input labels — right-aligned in RTL */
+[dir="rtl"] .input-label {
+  text-align: right;
+}
+
+/* Section labels */
+[dir="rtl"] .section-label {
+  text-align: right;
+}
+
+/* Number inputs stay LTR even in RTL */
+[dir="rtl"] input[type="number"],
+[dir="rtl"] input[type="tel"] {
+  direction: ltr;
+  text-align: right;
+}
+
+/* Date inputs */
+[dir="rtl"] input[type="date"],
+[dir="rtl"] input[type="month"] {
+  direction: ltr;
+}
+
+/* Sidebar active indicator — use logical border property (already in layout.tsx as borderInlineStart) */
+
+/* Badge text */
+[dir="rtl"] .badge {
+  direction: rtl;
+}
+
+/* Scrollbars stay on left side in RTL (default browser behavior) */
+
+/* Table headers follow reading direction — RTL overrides .data-table th text-align:left */
+[dir="rtl"] .data-table th,
+[dir="rtl"] th {
+  text-align: right !important;
 }

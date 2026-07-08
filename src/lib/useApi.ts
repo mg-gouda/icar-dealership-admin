@@ -20,7 +20,13 @@ export async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error(err.message ?? res.statusText);
+    // NestJS exception filter wraps: { message: { message: "...", error: "...", statusCode: N }, ... }
+    const raw = err.message;
+    const inner = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw.message : raw;
+    const msg = Array.isArray(inner)
+      ? inner.join(', ')
+      : (inner ?? err.error ?? res.statusText);
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
   }
   return res.json();
 }

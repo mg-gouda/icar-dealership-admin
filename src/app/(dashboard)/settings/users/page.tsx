@@ -3,6 +3,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import { useLang } from '../../../../lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
 
 interface UserPermission { permissionKey: string; granted: boolean; }
 interface User {
@@ -27,11 +29,26 @@ const ROLE_OPTS = [
   { value: 'SUPER_ADMIN', label: 'Super Admin'  },
 ];
 
-const ROLE_FILTER_OPTS = [{ value: '', label: 'All Roles' }, ...ROLE_OPTS];
+const ROLE_OPTS_AR = [
+  { value: 'SALES_REP',   label: 'مندوب مبيعات' },
+  { value: 'MANAGER',     label: 'مدير'          },
+  { value: 'FINANCE',     label: 'مالية'         },
+  { value: 'ADMIN',       label: 'مسؤول'         },
+  { value: 'SUPER_ADMIN', label: 'المسؤول الأعلى'},
+];
+
+const ROLE_FILTER_OPTS    = [{ value: '', label: 'All Roles'    }, ...ROLE_OPTS];
+const ROLE_FILTER_OPTS_AR = [{ value: '', label: 'كل الأدوار'  }, ...ROLE_OPTS_AR];
+
 const STATUS_OPTS = [
   { value: '',     label: 'All Status' },
   { value: 'true', label: 'Active'     },
   { value: 'false',label: 'Inactive'   },
+];
+const STATUS_OPTS_AR = [
+  { value: '',     label: 'كل الحالات' },
+  { value: 'true', label: 'نشط'        },
+  { value: 'false',label: 'غير نشط'    },
 ];
 
 const ROLE_BADGE: Record<string, string> = {
@@ -50,6 +67,15 @@ const ROLE_LABEL: Record<string, string> = {
   MANAGER:     'Manager',
   SALES_REP:   'Sales Rep',
   CUSTOMER:    'Customer',
+};
+
+const ROLE_LABEL_AR: Record<string, string> = {
+  SUPER_ADMIN: 'المسؤول الأعلى',
+  ADMIN:       'مسؤول',
+  FINANCE:     'مالية',
+  MANAGER:     'مدير',
+  SALES_REP:   'مندوب مبيعات',
+  CUSTOMER:    'عميل',
 };
 
 // Module → permission list for Roles & Permissions tab
@@ -100,6 +126,35 @@ const PERMISSION_MATRIX = [
   },
 ];
 
+const MODULE_AR: Record<string, string> = {
+  'Inventory': 'المخزن',
+  'Deals':     'الصفقات',
+  'CRM':       'العملاء',
+  'Finance':   'المالية',
+  'Settings':  'الإعدادات',
+};
+
+const PERM_LABEL_AR: Record<string, string> = {
+  'View Vehicles':    'عرض السيارات',
+  'Add Vehicles':     'إضافة سيارات',
+  'Edit Vehicles':    'تعديل السيارات',
+  'Delete Vehicles':  'حذف السيارات',
+  'View Deals':       'عرض الصفقات',
+  'Create Deals':     'إنشاء صفقات',
+  'Approve Deals':    'الموافقة على الصفقات',
+  'Finalize Deals':   'إتمام الصفقات',
+  'View Leads':       'عرض العملاء',
+  'Create Leads':     'إنشاء عملاء',
+  'Assign Leads':     'تعيين العملاء',
+  'View Invoices':    'عرض الفواتير',
+  'Post GL Entries':  'ترحيل قيود',
+  'View Reports':     'عرض التقارير',
+  'Manage Bank':      'إدارة البنك',
+  'View Settings':    'عرض الإعدادات',
+  'Manage Users':     'إدارة المستخدمين',
+  'System Config':    'إعدادات النظام',
+};
+
 // Which roles have which permissions by default
 const ROLE_PERMISSIONS: Record<string, Set<string>> = {
   SUPER_ADMIN: new Set(PERMISSION_MATRIX.flatMap((m) => m.permissions.map((p) => p.key))),
@@ -113,16 +168,16 @@ function initials(name: string) {
   return name.split(' ').slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase();
 }
 
-function timeAgo(iso?: string) {
-  if (!iso) return 'Never';
+function timeAgo(iso?: string, isAr = false) {
+  if (!iso) return isAr ? 'أبداً' : 'Never';
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
-  if (m < 1)   return 'Just now';
-  if (m < 60)  return `${m}m ago`;
+  if (m < 1)   return isAr ? 'الآن' : 'Just now';
+  if (m < 60)  return isAr ? `منذ ${m} د` : `${m}m ago`;
   const h = Math.floor(m / 60);
-  if (h < 24)  return `${h}h ago`;
+  if (h < 24)  return isAr ? `منذ ${h} س` : `${h}h ago`;
   const d = Math.floor(h / 24);
-  return `${d}d ago`;
+  return isAr ? `منذ ${d} ي` : `${d}d ago`;
 }
 
 const AVATAR_COLORS = [
@@ -143,6 +198,7 @@ function avatarStyle(name: string) {
 function UserPermissionsTab({ user }: { user: User }) {
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const { isAr } = useLang();
 
   const fetchPerms = useCallback(async () => {
     try {
@@ -179,12 +235,14 @@ function UserPermissionsTab({ user }: { user: User }) {
   return (
     <div style={{ padding: '0.75rem 0', maxHeight: 400, overflowY: 'auto' }}>
       <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginBottom: '0.75rem', padding: '0 1.25rem' }}>
-        Overrides apply on top of the user&apos;s role defaults. Click a permission to add or remove an override.
+        {isAr
+          ? 'التجاوزات تُطبَّق فوق الإعدادات الافتراضية للدور. انقر على صلاحية لإضافة تجاوز أو إزالته.'
+          : 'Overrides apply on top of the user\'s role defaults. Click a permission to add or remove an override.'}
       </p>
       {PERMISSION_MATRIX.map((mod) => (
         <div key={mod.module} style={{ marginBottom: '0.5rem' }}>
           <p style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.07em', color: 'var(--text-3)', textTransform: 'uppercase', padding: '0.3rem 1.25rem', background: 'var(--surface-2)' }}>
-            {mod.module}
+            {isAr ? (MODULE_AR[mod.module] ?? mod.module) : mod.module}
           </p>
           {mod.permissions.map((perm) => {
             const roleDefault = ROLE_PERMISSIONS[user.role]?.has(perm.key) ?? false;
@@ -194,10 +252,13 @@ function UserPermissionsTab({ user }: { user: User }) {
               <div key={perm.key}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 1.25rem', borderBottom: '1px solid var(--border)' }}>
                 <div>
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-1)', fontWeight: 500 }}>{perm.label}</p>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-1)', fontWeight: 500 }}>{isAr ? (PERM_LABEL_AR[perm.label] ?? perm.label) : perm.label}</p>
                   <p style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>
-                    {hasOverride ? <span style={{ color: effective ? 'var(--success-fg)' : 'var(--danger-fg)', fontWeight: 600 }}>Override: {effective ? 'Granted' : 'Denied'}</span>
-                      : <span>Role default: {roleDefault ? 'Granted' : 'Denied'}</span>}
+                    {hasOverride
+                      ? <span style={{ color: effective ? 'var(--success-fg)' : 'var(--danger-fg)', fontWeight: 600 }}>
+                          {isAr ? (effective ? 'تجاوز: ممنوح' : 'تجاوز: مرفوض') : (effective ? 'Override: Granted' : 'Override: Denied')}
+                        </span>
+                      : <span>{isAr ? (roleDefault ? 'افتراضي الدور: ممنوح' : 'افتراضي الدور: مرفوض') : (roleDefault ? 'Role default: Granted' : 'Role default: Denied')}</span>}
                   </p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -210,7 +271,9 @@ function UserPermissionsTab({ user }: { user: User }) {
                       background: effective ? 'var(--success)' : 'var(--border-strong)',
                       position: 'relative', transition: 'background 0.15s', opacity: busy === perm.key ? 0.5 : 1,
                     }}
-                    title={hasOverride ? 'Click to remove override (revert to role default)' : 'Click to add override'}
+                    title={isAr
+                      ? (hasOverride ? 'انقر لإزالة التجاوز (إعادة للافتراضي)' : 'انقر لإضافة تجاوز')
+                      : (hasOverride ? 'Click to remove override (revert to role default)' : 'Click to add override')}
                   >
                     <span style={{
                       position: 'absolute', top: 3, left: effective ? 18 : 3,
@@ -220,7 +283,7 @@ function UserPermissionsTab({ user }: { user: User }) {
                   </button>
                   {hasOverride && (
                     <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--primary)', background: 'var(--primary-light)', padding: '1px 5px', borderRadius: 4 }}>
-                      OVERRIDE
+                      {isAr ? 'تجاوز' : 'OVERRIDE'}
                     </span>
                   )}
                 </div>
@@ -235,6 +298,7 @@ function UserPermissionsTab({ user }: { user: User }) {
 
 // ── Working Hours (Schedule) Tab ─────────────────────────────────────────────
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAYS_AR = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 interface WorkingHoursRow { dayOfWeek: number; startTime: string; endTime: string; }
 
 function UserScheduleTab({ userId }: { userId: string }) {
@@ -245,6 +309,7 @@ function UserScheduleTab({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const { isAr } = useLang();
 
   useEffect(() => {
     apiFetch<WorkingHoursRow[]>(`/users/${userId}/working-hours`)
@@ -273,12 +338,14 @@ function UserScheduleTab({ userId }: { userId: string }) {
     } catch { /* silent */ } finally { setSaving(false); }
   }
 
-  if (loading) return <div className="p-5" style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>Loading…</div>;
+  if (loading) return <div className="p-5" style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</div>;
 
   return (
     <div className="p-5">
       <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginBottom: '0.75rem' }}>
-        Set which days this user is available and their hours. Used for appointment slot availability.
+        {isAr
+          ? 'حدد أيام عمل هذا المستخدم وساعاته. تُستخدم لتحديد مواعيد المقابلات المتاحة.'
+          : 'Set which days this user is available and their hours. Used for appointment slot availability.'}
       </p>
       <div className="space-y-2">
         {DAYS.map((day, i) => (
@@ -286,13 +353,13 @@ function UserScheduleTab({ userId }: { userId: string }) {
             <label className="flex items-center gap-2 w-14 shrink-0 cursor-pointer">
               <input type="checkbox" checked={enabled[i]}
                 onChange={(e) => setEnabled((p) => p.map((v, j) => j === i ? e.target.checked : v))} />
-              <span style={{ fontSize: '0.8125rem', color: enabled[i] ? 'var(--text-1)' : 'var(--text-3)' }}>{day}</span>
+              <span style={{ fontSize: '0.8125rem', color: enabled[i] ? 'var(--text-1)' : 'var(--text-3)' }}>{isAr ? DAYS_AR[i] : day}</span>
             </label>
             <input type="time" className="input" disabled={!enabled[i]}
               value={rows[i].startTime}
               onChange={(e) => setRows((p) => p.map((r, j) => j === i ? { ...r, startTime: e.target.value } : r))}
               style={{ width: '7.5rem', opacity: enabled[i] ? 1 : 0.4 }} />
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>to</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{isAr ? 'إلى' : 'to'}</span>
             <input type="time" className="input" disabled={!enabled[i]}
               value={rows[i].endTime}
               onChange={(e) => setRows((p) => p.map((r, j) => j === i ? { ...r, endTime: e.target.value } : r))}
@@ -302,9 +369,9 @@ function UserScheduleTab({ userId }: { userId: string }) {
       </div>
       <div className="flex items-center gap-3 mt-4">
         <button onClick={save} disabled={saving} className="btn btn-primary" style={{ minWidth: '8rem' }}>
-          {saving ? 'Saving…' : 'Save Schedule'}
+          {saving ? (isAr ? 'جاري الحفظ…' : 'Saving…') : (isAr ? 'حفظ الجدول' : 'Save Schedule')}
         </button>
-        {saved && <span style={{ fontSize: '0.75rem', color: 'var(--success-fg)' }}>Saved ✓</span>}
+        {saved && <span style={{ fontSize: '0.75rem', color: 'var(--success-fg)' }}>{isAr ? 'تم الحفظ ✓' : 'Saved ✓'}</span>}
       </div>
     </div>
   );
@@ -323,6 +390,7 @@ function UserModal({
   onSuccess: () => void;
 }) {
   const editing = !!user;
+  const { isAr } = useLang();
   const [modalTab, setModalTab] = useState<'details' | 'permissions' | 'schedule'>('details');
   const [form, setForm] = useState({
     name:       user?.name       ?? '',
@@ -371,6 +439,12 @@ function UserModal({
     finally { setSaving(false); }
   }
 
+  const modalTabLabels = {
+    details:     isAr ? 'الملف والدور'  : 'Profile & Role',
+    permissions: isAr ? 'الصلاحيات'    : 'Permissions',
+    schedule:    isAr ? 'الجدول'        : 'Schedule',
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose} />
@@ -378,7 +452,9 @@ function UserModal({
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
           <div>
             <h2 className="page-title" style={{ fontSize: '0.9375rem' }}>
-              {editing ? `Edit ${user!.name}` : 'Invite New User'}
+              {editing
+                ? (isAr ? `تعديل ${user!.name}` : `Edit ${user!.name}`)
+                : (isAr ? 'دعوة مستخدم جديد' : 'Invite New User')}
             </h2>
             {editing && <p className="page-subtitle">{user!.email}</p>}
           </div>
@@ -395,10 +471,9 @@ function UserModal({
                   background: modalTab === t ? 'var(--surface)' : 'transparent',
                   color: modalTab === t ? 'var(--text-1)' : 'var(--text-3)',
                   borderBottom: modalTab === t ? '2px solid var(--primary)' : '2px solid transparent',
-                  textTransform: 'capitalize',
                   whiteSpace: 'nowrap',
                 }}>
-                {t === 'details' ? 'Profile & Role' : t === 'permissions' ? 'Permissions' : 'Schedule'}
+                {modalTabLabels[t]}
               </button>
             ))}
           </div>
@@ -407,40 +482,40 @@ function UserModal({
         {(!editing || modalTab === 'details') && (
           <form onSubmit={submit} className="p-5 space-y-3">
             <div>
-              <label className="input-label">Full Name *</label>
+              <label className="input-label">{isAr ? 'الاسم الكامل *' : 'Full Name *'}</label>
               <input required className="input" value={form.name} onChange={(e) => set('name', e.target.value)} />
             </div>
             {!editing && (
               <>
                 <div>
-                  <label className="input-label">Email *</label>
+                  <label className="input-label">{isAr ? 'البريد الإلكتروني *' : 'Email *'}</label>
                   <input required type="email" className="input" value={form.email} onChange={(e) => set('email', e.target.value)} />
                 </div>
                 <div>
-                  <label className="input-label">Password *</label>
+                  <label className="input-label">{isAr ? 'كلمة المرور *' : 'Password *'}</label>
                   <input required type="password" minLength={8} className="input" value={form.password} onChange={(e) => set('password', e.target.value)} />
                 </div>
               </>
             )}
             <div>
-              <label className="input-label">Phone</label>
+              <label className="input-label">{isAr ? 'الهاتف' : 'Phone'}</label>
               <input className="input" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
             </div>
             <SearchableCombobox
-              label="Role *"
-              options={ROLE_OPTS}
+              label={isAr ? 'الدور *' : 'Role *'}
+              options={isAr ? ROLE_OPTS_AR : ROLE_OPTS}
               value={form.role}
               onChange={(v) => set('role', v)}
-              placeholder="Select role"
+              placeholder={isAr ? 'اختر الدور' : 'Select role'}
             />
             <SearchableCombobox
-              label="Location *"
+              label={isAr ? 'الفرع *' : 'Location *'}
               options={locationOpts}
               value={form.locationId}
               onChange={(v) => set('locationId', v)}
-              placeholder="Select location"
+              placeholder={isAr ? 'اختر الفرع' : 'Select location'}
               clearable
-              clearLabel="No location"
+              clearLabel={isAr ? 'بدون فرع' : 'No location'}
             />
             {needs2fa && (
               <div className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: 'var(--info-bg)', border: '1px solid var(--info-bg)' }}>
@@ -448,16 +523,19 @@ function UserModal({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
                 <span style={{ fontSize: '0.75rem', color: 'var(--info-fg)' }}>
-                  2FA required for {ROLE_LABEL[form.role]} role —
-                  {editing && user?.role === form.role ? ' user must enrol via Settings' : ' will be prompted on first login'}
+                  {isAr
+                    ? `المصادقة الثنائية مطلوبة لدور ${ROLE_LABEL_AR[form.role] ?? form.role} — ${editing && user?.role === form.role ? 'يجب على المستخدم التسجيل عبر الإعدادات' : 'سيُطلب منه عند أول تسجيل دخول'}`
+                    : `2FA required for ${ROLE_LABEL[form.role]} role — ${editing && user?.role === form.role ? ' user must enrol via Settings' : ' will be prompted on first login'}`}
                 </span>
               </div>
             )}
             {err && <p style={{ fontSize: '0.75rem', color: 'var(--danger-fg)' }}>{err}</p>}
             <div className="flex gap-3 pt-1">
-              <button type="button" onClick={onClose} className="btn btn-secondary" style={{ flex: 1 }}>Cancel</button>
+              <button type="button" onClick={onClose} className="btn btn-secondary" style={{ flex: 1 }}>
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
               <button type="submit" disabled={saving} className="btn btn-primary" style={{ flex: 1 }}>
-                {saving ? '…' : editing ? 'Save Changes' : 'Send Invite'}
+                {saving ? '…' : editing ? (isAr ? 'حفظ التغييرات' : 'Save Changes') : (isAr ? 'إرسال الدعوة' : 'Send Invite')}
               </button>
             </div>
           </form>
@@ -476,21 +554,24 @@ function UserModal({
 
 // ── Roles & Permissions Tab ───────────────────────────────────────────────────
 function RolesPermissionsTab() {
+  const { isAr } = useLang();
   return (
     <div className="space-y-4">
       <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
-        Default permission matrix by role. Individual overrides can be set per user via the Staff Accounts tab.
+        {isAr
+          ? 'مصفوفة الصلاحيات الافتراضية حسب الدور. يمكن ضبط تجاوزات فردية لكل مستخدم عبر تبويب حسابات الموظفين.'
+          : 'Default permission matrix by role. Individual overrides can be set per user via the Staff Accounts tab.'}
       </p>
       {PERMISSION_MATRIX.map((module) => (
         <div key={module.module} className="card overflow-hidden">
           <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
-            <span className="section-label" style={{ marginBottom: 0 }}>{module.module}</span>
+            <span className="section-label" style={{ marginBottom: 0 }}>{isAr ? (MODULE_AR[module.module] ?? module.module) : module.module}</span>
           </div>
           <table className="data-table">
             <thead>
               <tr>
-                <th style={{ width: '30%' }}>Permission</th>
-                {ROLE_OPTS.map((r) => (
+                <th style={{ width: '30%' }}>{isAr ? 'الصلاحية' : 'Permission'}</th>
+                {(isAr ? ROLE_OPTS_AR : ROLE_OPTS).map((r) => (
                   <th key={r.value} style={{ textAlign: 'center' }}>
                     <span className={ROLE_BADGE[r.value] ?? 'badge badge-neutral'}>{r.label}</span>
                   </th>
@@ -500,7 +581,7 @@ function RolesPermissionsTab() {
             <tbody>
               {module.permissions.map((perm) => (
                 <tr key={perm.key}>
-                  <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>{perm.label}</td>
+                  <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>{isAr ? (PERM_LABEL_AR[perm.label] ?? perm.label) : perm.label}</td>
                   {ROLE_OPTS.map((r) => {
                     const granted = ROLE_PERMISSIONS[r.value]?.has(perm.key) ?? false;
                     return (
@@ -529,6 +610,7 @@ function RolesPermissionsTab() {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function UsersPage() {
+  const { isAr } = useLang();
   const [activeTab,    setActiveTab]    = useState<'users' | 'customers' | 'roles'>('users');
   const [search,       setSearch]       = useState('');
   const [roleFilter,   setRoleFilter]   = useState('');
@@ -566,7 +648,7 @@ export default function UsersPage() {
 
   const locations = Array.isArray(locationsRaw) ? locationsRaw : [];
   const locationOpts = locations.map((l) => ({ value: l.id, label: l.name }));
-  const locFilterOpts = [{ value: '', label: 'All Locations' }, ...locationOpts];
+  const locFilterOpts = [{ value: '', label: isAr ? 'كل الفروع' : 'All Locations' }, ...locationOpts];
 
   async function deactivate(u: User) {
     setToggling(u.id);
@@ -583,15 +665,15 @@ export default function UsersPage() {
       {/* Page header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Users &amp; Permissions</h1>
-          <p className="page-subtitle">Manage accounts, roles, working hours &amp; permissions</p>
+          <h1 className="page-title">{isAr ? 'المستخدمون والصلاحيات' : 'Users & Permissions'}</h1>
+          <p className="page-subtitle">{isAr ? 'إدارة الحسابات والأدوار وساعات العمل والصلاحيات' : 'Manage accounts, roles, working hours & permissions'}</p>
         </div>
         {activeTab === 'users' && (
           <button className="btn btn-primary" onClick={() => setModalUser('new')}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Invite User
+            {isAr ? 'دعوة مستخدم' : 'Invite User'}
           </button>
         )}
       </div>
@@ -600,19 +682,19 @@ export default function UsersPage() {
         {/* Tab strip */}
         <div className="tabs">
           <button className={`tab ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
-            Staff Accounts
+            {isAr ? 'حسابات الموظفين' : 'Staff Accounts'}
             <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium" style={{ background: 'var(--surface-2)', color: 'var(--text-3)' }}>
               {users.length}
             </span>
           </button>
           <button className={`tab ${activeTab === 'customers' ? 'active' : ''}`} onClick={() => setActiveTab('customers')}>
-            Customers
+            {isAr ? 'العملاء' : 'Customers'}
             <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium" style={{ background: 'var(--surface-2)', color: 'var(--text-3)' }}>
               {allCustomers.length}
             </span>
           </button>
           <button className={`tab ${activeTab === 'roles' ? 'active' : ''}`} onClick={() => setActiveTab('roles')}>
-            Roles &amp; Permissions
+            {isAr ? 'الأدوار والصلاحيات' : 'Roles & Permissions'}
           </button>
         </div>
 
@@ -627,36 +709,57 @@ export default function UsersPage() {
                 <input
                   className="input"
                   style={{ paddingLeft: '2.25rem' }}
-                  placeholder="Search by name or email…"
+                  placeholder={isAr ? 'بحث بالاسم أو البريد…' : 'Search by name or email…'}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
               <div style={{ width: 160 }}>
-                <SearchableCombobox options={ROLE_FILTER_OPTS} value={roleFilter} onChange={setRoleFilter} placeholder="All Roles" clearable clearLabel="All Roles" />
+                <SearchableCombobox
+                  options={isAr ? ROLE_FILTER_OPTS_AR : ROLE_FILTER_OPTS}
+                  value={roleFilter}
+                  onChange={setRoleFilter}
+                  placeholder={isAr ? 'كل الأدوار' : 'All Roles'}
+                  clearable
+                  clearLabel={isAr ? 'كل الأدوار' : 'All Roles'}
+                />
               </div>
               <div style={{ width: 160 }}>
-                <SearchableCombobox options={locFilterOpts} value={locFilter} onChange={setLocFilter} placeholder="All Locations" clearable clearLabel="All Locations" />
+                <SearchableCombobox
+                  options={locFilterOpts}
+                  value={locFilter}
+                  onChange={setLocFilter}
+                  placeholder={isAr ? 'كل الفروع' : 'All Locations'}
+                  clearable
+                  clearLabel={isAr ? 'كل الفروع' : 'All Locations'}
+                />
               </div>
               <div style={{ width: 140 }}>
-                <SearchableCombobox options={STATUS_OPTS} value={statusFilter} onChange={setStatusFilter} placeholder="All Status" clearable clearLabel="All Status" />
+                <SearchableCombobox
+                  options={isAr ? STATUS_OPTS_AR : STATUS_OPTS}
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  placeholder={isAr ? 'كل الحالات' : 'All Status'}
+                  clearable
+                  clearLabel={isAr ? 'كل الحالات' : 'All Status'}
+                />
               </div>
             </div>
 
             {/* Table */}
             <div className="card overflow-hidden">
               {loading && !allUsers.length ? (
-                <div className="flex items-center justify-center py-12" style={{ color: 'var(--text-3)' }}>Loading…</div>
+                <div className="flex items-center justify-center py-12" style={{ color: 'var(--text-3)' }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</div>
               ) : (
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Staff Member</th>
-                      <th>Role</th>
-                      <th>Branch</th>
-                      <th>Last Login</th>
-                      <th>Status</th>
-                      <th>Actions</th>
+                      <th>{isAr ? 'الموظف' : 'Staff Member'}</th>
+                      <th>{isAr ? 'الدور' : 'Role'}</th>
+                      <th>{isAr ? 'الفرع' : 'Branch'}</th>
+                      <th>{isAr ? 'آخر تسجيل دخول' : 'Last Login'}</th>
+                      <th>{isAr ? 'الحالة' : 'Status'}</th>
+                      <th>{isAr ? 'الإجراءات' : 'Actions'}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -681,15 +784,17 @@ export default function UsersPage() {
                         </td>
                         <td>
                           <span className={ROLE_BADGE[u.role] ?? 'badge badge-neutral'}>
-                            {ROLE_LABEL[u.role] ?? u.role}
+                            {(isAr ? ROLE_LABEL_AR : ROLE_LABEL)[u.role] ?? u.role}
                           </span>
                         </td>
-                        <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>{u.location?.name ?? 'All Locations'}</td>
-                        <td style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>{timeAgo(u.lastLogin)}</td>
+                        <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>
+                          {u.location?.name ?? (isAr ? 'كل الفروع' : 'All Locations')}
+                        </td>
+                        <td style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>{timeAgo(u.lastLogin, isAr)}</td>
                         <td>
                           {u.isActive !== false
-                            ? <span className="badge badge-success">Active</span>
-                            : <span className="badge badge-neutral">Inactive</span>}
+                            ? <span className="badge badge-success">{isAr ? 'نشط' : 'Active'}</span>
+                            : <span className="badge badge-neutral">{isAr ? 'غير نشط' : 'Inactive'}</span>}
                         </td>
                         <td>
                           <div className="flex items-center gap-3">
@@ -697,7 +802,7 @@ export default function UsersPage() {
                               className="btn btn-ghost btn-sm"
                               onClick={() => setModalUser(u)}
                             >
-                              Edit
+                              {isAr ? 'تعديل' : 'Edit'}
                             </button>
                             <button
                               className="btn btn-ghost btn-sm"
@@ -705,7 +810,11 @@ export default function UsersPage() {
                               onClick={() => deactivate(u)}
                               style={{ color: u.isActive !== false ? 'var(--danger-fg)' : 'var(--success-fg)' }}
                             >
-                              {toggling === u.id ? '…' : u.isActive !== false ? 'Deactivate' : 'Activate'}
+                              {toggling === u.id
+                                ? '…'
+                                : u.isActive !== false
+                                  ? (isAr ? 'تعطيل' : 'Deactivate')
+                                  : (isAr ? 'تفعيل' : 'Activate')}
                             </button>
                           </div>
                         </td>
@@ -714,7 +823,7 @@ export default function UsersPage() {
                     {users.length === 0 && !loading && (
                       <tr>
                         <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-3)' }}>
-                          No users match the current filters.
+                          {isAr ? 'لا يوجد مستخدمون مطابقون للفلاتر الحالية.' : 'No users match the current filters.'}
                         </td>
                       </tr>
                     )}
@@ -732,22 +841,23 @@ export default function UsersPage() {
                 <svg className="w-4 h-4" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-3)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-                <input className="input" style={{ paddingLeft: '2.25rem' }} placeholder="Search by name, email or phone…"
+                <input className="input" style={{ paddingLeft: '2.25rem' }}
+                  placeholder={isAr ? 'بحث بالاسم أو البريد أو الهاتف…' : 'Search by name, email or phone…'}
                   value={custSearch} onChange={(e) => setCustSearch(e.target.value)} />
               </div>
             </div>
             <div className="card overflow-hidden">
               {custLoading && !allCustomers.length ? (
-                <div className="flex items-center justify-center py-12" style={{ color: 'var(--text-3)' }}>Loading…</div>
+                <div className="flex items-center justify-center py-12" style={{ color: 'var(--text-3)' }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</div>
               ) : (
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Customer</th>
-                      <th>Phone</th>
-                      <th>Registered</th>
-                      <th>Last Login</th>
-                      <th>Status</th>
+                      <th>{isAr ? 'العميل' : 'Customer'}</th>
+                      <th>{isAr ? 'الهاتف' : 'Phone'}</th>
+                      <th>{isAr ? 'تاريخ التسجيل' : 'Registered'}</th>
+                      <th>{isAr ? 'آخر تسجيل دخول' : 'Last Login'}</th>
+                      <th>{isAr ? 'الحالة' : 'Status'}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -769,20 +879,22 @@ export default function UsersPage() {
                         </td>
                         <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>{u.phone ?? '—'}</td>
                         <td style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>
-                          {(u as any).createdAt ? new Date((u as any).createdAt).toLocaleDateString('en-EG', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}
+                          {(u as any).createdAt ? fmtDate((u as any).createdAt, isAr, { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}
                         </td>
-                        <td style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>{timeAgo(u.lastLogin)}</td>
+                        <td style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>{timeAgo(u.lastLogin, isAr)}</td>
                         <td>
                           {u.isActive !== false
-                            ? <span className="badge badge-success">Active</span>
-                            : <span className="badge badge-neutral">Inactive</span>}
+                            ? <span className="badge badge-success">{isAr ? 'نشط' : 'Active'}</span>
+                            : <span className="badge badge-neutral">{isAr ? 'غير نشط' : 'Inactive'}</span>}
                         </td>
                       </tr>
                     ))}
                     {customers.length === 0 && !custLoading && (
                       <tr>
                         <td colSpan={5} style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-3)' }}>
-                          {custSearch ? 'No customers match your search.' : 'No registered customers yet.'}
+                          {custSearch
+                            ? (isAr ? 'لا يوجد عملاء مطابقون لبحثك.' : 'No customers match your search.')
+                            : (isAr ? 'لا يوجد عملاء مسجلون بعد.' : 'No registered customers yet.')}
                         </td>
                       </tr>
                     )}
