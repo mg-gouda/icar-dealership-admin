@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useLang } from '@/lib/lang-context';
 
 const COMMANDS = [
   { label: 'Dashboard',         href: '/',                    hint: 'g h', icon: '⬛' },
@@ -26,7 +27,31 @@ const COMMANDS = [
   { label: 'Settings',          href: '/settings',            hint: 'g s', icon: '⚙️' },
 ];
 
+const CMD_LABELS_AR: Record<string, string> = {
+  'Dashboard':         'لوحة التحكم',
+  'Inventory':         'المخزن',
+  'Import Shipments':  'شحنات الاستيراد',
+  'Leads & CRM':       'العملاء المحتملون',
+  'WhatsApp Hub':      'واتساب',
+  'Deals':             'الصفقات',
+  'Appointments':      'المواعيد',
+  'Service Center':    'مركز الخدمة',
+  'Parts':             'قطع الغيار',
+  'Transfers':         'التحويلات',
+  'Floor Plan':        'تمويل المعرض',
+  'Petty Cash':        'النثريات',
+  'Finance':           'المالية',
+  'Reports':           'التقارير',
+  'Sales Targets':     'أهداف المبيعات',
+  'Sales Funnel':      'مسار المبيعات',
+  'My Commissions':    'عمولاتي',
+  'Executive View':    'عرض تنفيذي',
+  'Users & Locations': 'المستخدمون والفروع',
+  'Settings':          'الإعدادات',
+};
+
 export default function CommandPalette() {
+  const { isAr } = useLang();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [activeIdx, setActiveIdx] = useState(0);
@@ -34,9 +59,12 @@ export default function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
-  const filtered = COMMANDS.filter(c =>
-    c.label.toLowerCase().includes(query.toLowerCase())
-  );
+  const filtered = COMMANDS.filter(c => {
+    const q = query.toLowerCase();
+    const en = c.label.toLowerCase();
+    const ar = isAr ? (CMD_LABELS_AR[c.label] ?? '').toLowerCase() : '';
+    return en.includes(q) || ar.includes(q);
+  });
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -146,7 +174,7 @@ export default function CommandPalette() {
             type="text"
             value={query}
             onChange={(e) => { setQuery(e.target.value); setActiveIdx(0); }}
-            placeholder="Search navigation..."
+            placeholder={isAr ? 'بحث في الأوامر…' : 'Search commands…'}
             style={{
               flex: 1,
               border: 'none',
@@ -174,7 +202,7 @@ export default function CommandPalette() {
         <div style={{ padding: '0.375rem', maxHeight: '320px', overflowY: 'auto' }}>
           {filtered.length === 0 ? (
             <p style={{ padding: '1.25rem', textAlign: 'center', fontSize: '0.8125rem', color: 'var(--text-3)' }}>
-              No results for &ldquo;{query}&rdquo;
+              {isAr ? `لا نتائج لـ "${query}"` : `No results for "${query}"`}
             </p>
           ) : (
             filtered.map((cmd, i) => (
@@ -202,7 +230,7 @@ export default function CommandPalette() {
                 <span style={{ fontSize: '1rem', lineHeight: 1, flexShrink: 0, opacity: i === activeIdx ? 1 : 0.7 }}>
                   {cmd.icon}
                 </span>
-                <span style={{ flex: 1, fontWeight: 500 }}>{cmd.label}</span>
+                <span style={{ flex: 1, fontWeight: 500 }}>{isAr ? (CMD_LABELS_AR[cmd.label] ?? cmd.label) : cmd.label}</span>
                 <kbd style={{
                   fontSize: '0.6875rem',
                   padding: '0.125rem 0.375rem',
@@ -229,9 +257,9 @@ export default function CommandPalette() {
           fontSize: '0.6875rem',
           color: 'var(--text-3)',
         }}>
-          <span><kbd style={{ fontFamily: 'inherit' }}>↑↓</kbd> navigate</span>
-          <span><kbd style={{ fontFamily: 'inherit' }}>↵</kbd> open</span>
-          <span><kbd style={{ fontFamily: 'inherit' }}>esc</kbd> close</span>
+          <span><kbd style={{ fontFamily: 'inherit' }}>↑↓</kbd> {isAr ? 'تنقل' : 'navigate'}</span>
+          <span><kbd style={{ fontFamily: 'inherit' }}>↵</kbd> {isAr ? 'فتح' : 'open'}</span>
+          <span><kbd style={{ fontFamily: 'inherit' }}>esc</kbd> {isAr ? 'إغلاق' : 'close'}</span>
         </div>
       </div>
     </div>

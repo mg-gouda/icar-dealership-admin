@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '../../../lib/useApi';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
+import { useLang } from '../../../lib/lang-context';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface AuditEntry {
@@ -25,35 +26,6 @@ interface AuditResponse {
   limit: number;
 }
 
-// ── Options ───────────────────────────────────────────────────────────────────
-const ENTITY_OPTS = [
-  { value: '',             label: 'All Entities'     },
-  { value: 'Vehicle',      label: 'Vehicle'          },
-  { value: 'Deal',         label: 'Deal'             },
-  { value: 'Invoice',      label: 'Invoice'          },
-  { value: 'User',         label: 'User'             },
-  { value: 'JournalEntry', label: 'Journal Entry'    },
-  { value: 'Payment',      label: 'Payment'          },
-  { value: 'FixedAsset',   label: 'Fixed Asset'      },
-  { value: 'Setting',      label: 'Setting'          },
-  { value: 'Lead',         label: 'Lead'             },
-  { value: 'Appointment',  label: 'Appointment'      },
-];
-
-const ACTION_OPTS = [
-  { value: '',              label: 'All Actions'    },
-  { value: 'CREATE',        label: 'CREATE'         },
-  { value: 'UPDATE',        label: 'UPDATE'         },
-  { value: 'DELETE',        label: 'DELETE'         },
-  { value: 'POST',          label: 'POST'           },
-  { value: 'REVERSE',       label: 'REVERSE'        },
-  { value: 'FINALIZE',      label: 'FINALIZE'       },
-  { value: 'CANCEL',        label: 'CANCEL'         },
-  { value: 'LOGIN',         label: 'LOGIN'          },
-  { value: 'LOGOUT',        label: 'LOGOUT'         },
-  { value: 'LOCK_OVERRIDE', label: 'LOCK_OVERRIDE'  },
-];
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const ACTION_BADGE: Record<string, string> = {
   CREATE:       'badge badge-success',
@@ -68,12 +40,15 @@ const ACTION_BADGE: Record<string, string> = {
   CANCEL:       'badge badge-warning',
 };
 
-function fmtTimestamp(iso: string) {
+function fmtTimestamp(iso: string, isAr: boolean) {
   const d = new Date(iso);
-  return {
-    date: d.toLocaleDateString('en-EG', { day: '2-digit', month: 'short', year: 'numeric' }),
-    time: d.toLocaleTimeString('en-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
-  };
+  if (!isNaN(d.getTime())) {
+    return {
+      date: d.toLocaleDateString(isAr ? 'ar-EG' : 'en-EG', { day: '2-digit', month: 'short', year: 'numeric' }),
+      time: d.toLocaleTimeString(isAr ? 'ar-EG' : 'en-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
+    };
+  }
+  return { date: '—', time: '—' };
 }
 
 function initials(name: string) {
@@ -102,8 +77,9 @@ function exportCsv(entries: AuditEntry[]) {
 
 // ── Expanded row diff ─────────────────────────────────────────────────────────
 function ChangeDiff({ changes }: { changes: Record<string, { from: unknown; to: unknown }> }) {
+  const { isAr } = useLang();
   const entries = Object.entries(changes);
-  if (!entries.length) return <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>No change detail available.</p>;
+  if (!entries.length) return <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{isAr ? 'لا تفاصيل متاحة.' : 'No change detail available.'}</p>;
 
   return (
     <div className="space-y-2">
@@ -127,6 +103,33 @@ function ChangeDiff({ changes }: { changes: Record<string, { from: unknown; to: 
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function AuditLogPage() {
+  const { isAr } = useLang();
+  const ENTITY_OPTS = [
+    { value: '',             label: isAr ? 'جميع الكيانات' : 'All Entities'  },
+    { value: 'Vehicle',      label: isAr ? 'سيارة'        : 'Vehicle'        },
+    { value: 'Deal',         label: isAr ? 'صفقة'         : 'Deal'           },
+    { value: 'Invoice',      label: isAr ? 'فاتورة'       : 'Invoice'        },
+    { value: 'User',         label: isAr ? 'مستخدم'       : 'User'           },
+    { value: 'JournalEntry', label: isAr ? 'قيد'          : 'Journal Entry'  },
+    { value: 'Payment',      label: isAr ? 'دفعة'         : 'Payment'        },
+    { value: 'FixedAsset',   label: isAr ? 'أصل ثابت'    : 'Fixed Asset'    },
+    { value: 'Setting',      label: isAr ? 'إعداد'        : 'Setting'        },
+    { value: 'Lead',         label: isAr ? 'عميل'         : 'Lead'           },
+    { value: 'Appointment',  label: isAr ? 'موعد'         : 'Appointment'    },
+  ];
+  const ACTION_OPTS = [
+    { value: '',              label: isAr ? 'جميع الإجراءات' : 'All Actions'  },
+    { value: 'CREATE',        label: 'CREATE'        },
+    { value: 'UPDATE',        label: 'UPDATE'        },
+    { value: 'DELETE',        label: 'DELETE'        },
+    { value: 'POST',          label: 'POST'          },
+    { value: 'REVERSE',       label: 'REVERSE'       },
+    { value: 'FINALIZE',      label: 'FINALIZE'      },
+    { value: 'CANCEL',        label: 'CANCEL'        },
+    { value: 'LOGIN',         label: 'LOGIN'         },
+    { value: 'LOGOUT',        label: 'LOGOUT'        },
+    { value: 'LOCK_OVERRIDE', label: 'LOCK_OVERRIDE' },
+  ];
   const [search,      setSearch]      = useState('');
   const [entityType,  setEntityType]  = useState('');
   const [action,      setAction]      = useState('');
@@ -165,8 +168,8 @@ export default function AuditLogPage() {
       {/* Page header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Audit Log</h1>
-          <p className="page-subtitle">System Activity — every important action is recorded automatically</p>
+          <h1 className="page-title">{isAr ? 'سجل المراجعة' : 'Audit Log'}</h1>
+          <p className="page-subtitle">{isAr ? 'نشاط النظام — كل إجراء مهم يُسجَّل تلقائياً' : 'System Activity — every important action is recorded automatically'}</p>
         </div>
         <button
           className="btn btn-secondary"
@@ -176,7 +179,7 @@ export default function AuditLogPage() {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
-          Export CSV
+          {isAr ? 'تصدير CSV' : 'Export CSV'}
         </button>
       </div>
 
@@ -193,7 +196,7 @@ export default function AuditLogPage() {
               <input
                 className="input"
                 style={{ paddingLeft: '2.25rem' }}
-                placeholder="Search actions, users, entities…"
+                placeholder={isAr ? 'بحث في الإجراءات، المستخدمين، الكيانات…' : 'Search actions, users, entities…'}
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               />
@@ -204,9 +207,9 @@ export default function AuditLogPage() {
                 options={ENTITY_OPTS}
                 value={entityType}
                 onChange={(v) => { setEntityType(v); setPage(1); }}
-                placeholder="Entity Type"
+                placeholder={isAr ? 'نوع الكيان' : 'Entity Type'}
                 clearable
-                clearLabel="All Entities"
+                clearLabel={isAr ? 'جميع الكيانات' : 'All Entities'}
               />
             </div>
 
@@ -215,28 +218,28 @@ export default function AuditLogPage() {
                 options={ACTION_OPTS}
                 value={action}
                 onChange={(v) => { setAction(v); setPage(1); }}
-                placeholder="Action"
+                placeholder={isAr ? 'الإجراء' : 'Action'}
                 clearable
-                clearLabel="All Actions"
+                clearLabel={isAr ? 'جميع الإجراءات' : 'All Actions'}
               />
             </div>
 
             <div style={{ width: 140 }}>
-              <label className="input-label">From</label>
+              <label className="input-label">{isAr ? 'من' : 'From'}</label>
               <input type="date" className="input"
                 value={dateFrom}
                 onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} />
             </div>
 
             <div style={{ width: 140 }}>
-              <label className="input-label">To</label>
+              <label className="input-label">{isAr ? 'إلى' : 'To'}</label>
               <input type="date" className="input"
                 value={dateTo}
                 onChange={(e) => { setDateTo(e.target.value); setPage(1); }} />
             </div>
 
             <button className="btn btn-ghost btn-sm" onClick={resetFilters}>
-              Reset
+              {isAr ? 'إعادة ضبط' : 'Reset'}
             </button>
           </div>
         </div>
@@ -247,7 +250,7 @@ export default function AuditLogPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
           <span style={{ fontSize: '0.75rem', color: 'var(--warning-fg)' }}>
-            System Audit Log — cannot be edited or deleted. {total > 0 ? `${total.toLocaleString()} records total.` : ''}
+            {isAr ? 'سجل مراجعة النظام — لا يمكن تعديله أو حذفه.' : 'System Audit Log — cannot be edited or deleted.'} {total > 0 ? (isAr ? `${total.toLocaleString()} سجل إجمالي.` : `${total.toLocaleString()} records total.`) : ''}
           </span>
         </div>
 
@@ -262,31 +265,31 @@ export default function AuditLogPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Timestamp</th>
-                <th>User</th>
-                <th>Action</th>
-                <th>Entity</th>
-                <th>Branch</th>
-                <th style={{ minWidth: 260 }}>Details</th>
+                <th>{isAr ? 'الطابع الزمني' : 'Timestamp'}</th>
+                <th>{isAr ? 'المستخدم' : 'User'}</th>
+                <th>{isAr ? 'الإجراء' : 'Action'}</th>
+                <th>{isAr ? 'الكيان' : 'Entity'}</th>
+                <th>{isAr ? 'الفرع' : 'Branch'}</th>
+                <th style={{ minWidth: 260 }}>{isAr ? 'التفاصيل' : 'Details'}</th>
               </tr>
             </thead>
             <tbody>
               {loading && entries.length === 0 && (
                 <tr>
                   <td colSpan={6} style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-3)' }}>
-                    Loading…
+                    {isAr ? 'جارٍ التحميل…' : 'Loading…'}
                   </td>
                 </tr>
               )}
               {!loading && entries.length === 0 && (
                 <tr>
                   <td colSpan={6} style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-3)' }}>
-                    No audit records found matching your filters.
+                    {isAr ? 'لا توجد سجلات مراجعة تطابق الفلاتر الحالية.' : 'No audit records found matching your filters.'}
                   </td>
                 </tr>
               )}
               {entries.map((entry) => {
-                const { date, time } = fmtTimestamp(entry.createdAt);
+                const { date, time } = fmtTimestamp(entry.createdAt, isAr);
                 const expanded       = expandedId === entry.id;
                 const hasChanges     = entry.changes && Object.keys(entry.changes).length > 0;
 
@@ -315,7 +318,7 @@ export default function AuditLogPage() {
                           <span style={{ fontSize: '0.8125rem', color: 'var(--text-1)' }}>{entry.user.name}</span>
                         </div>
                       ) : (
-                        <span style={{ fontSize: '0.8125rem', color: 'var(--text-3)' }}>System</span>
+                        <span style={{ fontSize: '0.8125rem', color: 'var(--text-3)' }}>{isAr ? 'النظام' : 'System'}</span>
                       )}
                     </td>
 
@@ -369,7 +372,7 @@ export default function AuditLogPage() {
                   expanded && entry.changes && (
                     <tr key={`${entry.id}-diff`}>
                       <td colSpan={6} style={{ padding: '0.75rem 1rem 1rem', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
-                        <p className="section-label" style={{ marginBottom: '0.5rem' }}>Changes</p>
+                        <p className="section-label" style={{ marginBottom: '0.5rem' }}>{isAr ? 'التغييرات' : 'Changes'}</p>
                         <ChangeDiff changes={entry.changes as Record<string, { from: unknown; to: unknown }>} />
                       </td>
                     </tr>
@@ -384,7 +387,7 @@ export default function AuditLogPage() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between">
             <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
-              Page {page} of {totalPages} — {total.toLocaleString()} total records
+              {isAr ? `صفحة ${page} من ${totalPages} — ${total.toLocaleString()} سجل إجمالي` : `Page ${page} of ${totalPages} — ${total.toLocaleString()} total records`}
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -392,7 +395,7 @@ export default function AuditLogPage() {
                 disabled={page <= 1}
                 onClick={() => setPage((p) => p - 1)}
               >
-                Prev
+                {isAr ? 'السابق' : 'Prev'}
               </button>
               {/* Page number pills */}
               {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
@@ -419,7 +422,7 @@ export default function AuditLogPage() {
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => p + 1)}
               >
-                Next
+                {isAr ? 'التالي' : 'Next'}
               </button>
             </div>
           </div>

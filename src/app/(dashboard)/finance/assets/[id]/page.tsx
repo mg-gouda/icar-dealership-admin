@@ -3,6 +3,8 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../../lib/useApi';
+import { useLang } from '@/lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
 
 interface DepScheduleLine {
   period: string;
@@ -34,26 +36,25 @@ interface FixedAsset {
 const egp = (n: number) =>
   'EGP ' + n.toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const METHOD_LABELS: Record<string, string> = {
-  STRAIGHT_LINE: 'Straight Line',
-  DECLINING_BALANCE: 'Declining Balance',
-  SUM_OF_YEARS_DIGITS: 'Sum of Years Digits',
-};
-
-function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString('en-EG', { year: 'numeric', month: 'short', day: 'numeric' });
-}
 
 export default function AssetDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { isAr } = useLang();
+
+  const METHOD_LABELS: Record<string, string> = {
+    STRAIGHT_LINE: isAr ? 'القسط الثابت' : 'Straight Line',
+    DECLINING_BALANCE: isAr ? 'الرصيد المتناقص' : 'Declining Balance',
+    SUM_OF_YEARS_DIGITS: isAr ? 'مجموع أرقام السنوات' : 'Sum of Years Digits',
+  };
+
   const { data: asset, loading, error, reload } = useQuery<FixedAsset>(`/finance/assets/${id}`);
   const [postingMonth, setPostingMonth] = useState(new Date().toISOString().slice(0, 7));
   const [posting, setPosting] = useState(false);
 
   async function postDepreciation() {
-    if (!postingMonth) { alert('Select a month first.'); return; }
-    if (!confirm(`Post depreciation for ${postingMonth}?`)) return;
+    if (!postingMonth) { alert(isAr ? 'اختر شهراً أولاً.' : 'Select a month first.'); return; }
+    if (!confirm(isAr ? `ترحيل الإهلاك لشهر ${postingMonth}؟` : `Post depreciation for ${postingMonth}?`)) return;
     setPosting(true);
     try {
       await apiFetch(`/finance/assets/${id}/depreciate`, {
@@ -68,7 +69,7 @@ export default function AssetDetailPage() {
   if (loading) {
     return (
       <div className="page-body">
-        <p className="text-sm" style={{ color: 'var(--text-3)' }}>Loading asset…</p>
+        <p className="text-sm" style={{ color: 'var(--text-3)' }}>{isAr ? 'جارٍ تحميل الأصل…' : 'Loading asset…'}</p>
       </div>
     );
   }
@@ -87,6 +88,18 @@ export default function AssetDetailPage() {
   const progressPct = totalMonths > 0 ? Math.min(100, Math.round((postedCount / totalMonths) * 100)) : 0;
   const methodLabel = METHOD_LABELS[asset.method] ?? asset.method.replace(/_/g, ' ');
 
+  const detailFields = [
+    [isAr ? 'اسم الأصل' : 'Asset Name', asset.name],
+    [isAr ? 'الفئة' : 'Category', asset.category],
+    [isAr ? 'تاريخ الشراء' : 'Purchase Date', fmtDate(asset.purchaseDate, isAr)],
+    [isAr ? 'التكلفة الأصلية' : 'Original Cost', egp(Number(asset.cost))],
+    [isAr ? 'قيمة الخردة' : 'Salvage Value', egp(Number(asset.salvageValue ?? 0))],
+    [isAr ? 'العمر الإنتاجي' : 'Useful Life', `${asset.usefulLife} ${isAr ? 'سنوات' : 'years'} / ${totalMonths} ${isAr ? 'شهرًا' : 'months'}`],
+    [isAr ? 'طريقة الاستهلاك' : 'Method', methodLabel],
+    [isAr ? 'الفرع' : 'Location', asset.location?.name ?? '—'],
+    [isAr ? 'حساب الأستاذ' : 'GL Account', asset.assetAccount ? `${asset.assetAccount.code} — ${asset.assetAccount.name}` : '—'],
+  ] as [string, string][];
+
   return (
     <>
       {/* Page header */}
@@ -97,19 +110,19 @@ export default function AssetDetailPage() {
             style={{ marginBottom: '0.5rem', paddingLeft: 0 }}
             onClick={() => router.push('/finance/assets')}
           >
-            ← Fixed Assets
+            {isAr ? '← العودة للأصول' : '← Fixed Assets'}
           </button>
           <h1 className="page-title">{asset.name}</h1>
           <p className="page-subtitle">
             {asset.code && <span className="font-mono mr-2">{asset.code}</span>}
-            {methodLabel} · {asset.usefulLife} years · {asset.category}
+            {methodLabel} · {asset.usefulLife} {isAr ? 'سنة' : 'years'} · {asset.category}
             {asset.location && ` · ${asset.location.name}`}
           </p>
         </div>
         <div>
-          {asset.status === 'ACTIVE' && <span className="badge badge-success">Active</span>}
-          {asset.status === 'DISPOSED' && <span className="badge badge-neutral">Disposed</span>}
-          {asset.status === 'FULLY_DEPRECIATED' && <span className="badge badge-warning">Fully Depreciated</span>}
+          {asset.status === 'ACTIVE' && <span className="badge badge-success">{isAr ? 'نشط' : 'Active'}</span>}
+          {asset.status === 'DISPOSED' && <span className="badge badge-neutral">{isAr ? 'مُستبعد' : 'Disposed'}</span>}
+          {asset.status === 'FULLY_DEPRECIATED' && <span className="badge badge-warning">{isAr ? 'مستهلك كليًا' : 'Fully Depreciated'}</span>}
         </div>
       </div>
 
@@ -117,34 +130,34 @@ export default function AssetDetailPage() {
         {/* KPI row */}
         <div className="grid grid-cols-4 gap-4">
           <div className="card p-4">
-            <p className="section-label mb-1">Original Cost</p>
+            <p className="section-label mb-1">{isAr ? 'التكلفة الأصلية' : 'Original Cost'}</p>
             <p className="text-xl font-bold tabular-nums" style={{ color: 'var(--text-1)' }}>
               {egp(Number(asset.cost))}
             </p>
             <p className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>
-              Purchased {fmtDate(asset.purchaseDate)}
+              {isAr ? `تاريخ الشراء ${fmtDate(asset.purchaseDate, isAr)}` : `Purchased ${fmtDate(asset.purchaseDate, isAr)}`}
             </p>
           </div>
           <div className="card p-4">
-            <p className="section-label mb-1">Accum. Depreciation</p>
+            <p className="section-label mb-1">{isAr ? 'الاستهلاك المتراكم' : 'Accum. Depreciation'}</p>
             <p className="text-xl font-bold tabular-nums" style={{ color: 'var(--warning-fg)' }}>
               {egp(Number(asset.accumDepreciation ?? 0))}
             </p>
             <p className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>
-              {postedCount} of {totalMonths} months posted
+              {isAr ? `${postedCount} من ${totalMonths} شهرًا مرحَّلًا` : `${postedCount} of ${totalMonths} months posted`}
             </p>
           </div>
           <div className="card p-4">
-            <p className="section-label mb-1">Net Book Value</p>
+            <p className="section-label mb-1">{isAr ? 'القيمة الدفترية الصافية' : 'Net Book Value'}</p>
             <p className="text-xl font-bold tabular-nums" style={{ color: 'var(--primary)' }}>
               {egp(Number(asset.netBookValue ?? 0))}
             </p>
             <p className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>
-              Salvage: {egp(Number(asset.salvageValue ?? 0))}
+              {isAr ? `الخردة: ${egp(Number(asset.salvageValue ?? 0))}` : `Salvage: ${egp(Number(asset.salvageValue ?? 0))}`}
             </p>
           </div>
           <div className="card p-4">
-            <p className="section-label mb-1">Depreciation Progress</p>
+            <p className="section-label mb-1">{isAr ? 'تقدم الاستهلاك' : 'Depreciation Progress'}</p>
             <p className="text-xl font-bold" style={{ color: 'var(--text-1)' }}>
               {progressPct}%
             </p>
@@ -172,19 +185,9 @@ export default function AssetDetailPage() {
 
         {/* Asset details */}
         <div className="card p-5">
-          <p className="section-label">Asset Details</p>
+          <p className="section-label">{isAr ? 'تفاصيل الأصل' : 'Asset Details'}</p>
           <div className="grid gap-x-8 gap-y-3" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-            {[
-              ['Asset Name', asset.name],
-              ['Category', asset.category],
-              ['Purchase Date', fmtDate(asset.purchaseDate)],
-              ['Original Cost', egp(Number(asset.cost))],
-              ['Salvage Value', egp(Number(asset.salvageValue ?? 0))],
-              ['Useful Life', `${asset.usefulLife} years / ${totalMonths} months`],
-              ['Method', methodLabel],
-              ['Location', asset.location?.name ?? '—'],
-              ['GL Account', asset.assetAccount ? `${asset.assetAccount.code} — ${asset.assetAccount.name}` : '—'],
-            ].map(([label, val]) => (
+            {detailFields.map(([label, val]) => (
               <div key={label as string}>
                 <p className="input-label" style={{ marginBottom: 2 }}>{label}</p>
                 <p className="text-sm" style={{ color: 'var(--text-1)' }}>{val}</p>
@@ -193,7 +196,7 @@ export default function AssetDetailPage() {
           </div>
           {asset.description && (
             <div className="mt-4">
-              <p className="input-label" style={{ marginBottom: 2 }}>Description</p>
+              <p className="input-label" style={{ marginBottom: 2 }}>{isAr ? 'الوصف' : 'Description'}</p>
               <p className="text-sm" style={{ color: 'var(--text-2)' }}>{asset.description}</p>
             </div>
           )}
@@ -206,8 +209,12 @@ export default function AssetDetailPage() {
             style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)' }}
           >
             <div>
-              <p className="page-title" style={{ fontSize: '0.9375rem' }}>Depreciation Schedule</p>
-              <p className="page-subtitle">{postedCount} months posted of {totalMonths} total</p>
+              <p className="page-title" style={{ fontSize: '0.9375rem' }}>{isAr ? 'جدول الاستهلاك' : 'Depreciation Schedule'}</p>
+              <p className="page-subtitle">
+                {isAr
+                  ? `${postedCount} شهرًا مرحَّلًا من ${totalMonths} إجمالًا`
+                  : `${postedCount} months posted of ${totalMonths} total`}
+              </p>
             </div>
             {asset.status === 'ACTIVE' && (
               <div className="flex items-center gap-2">
@@ -223,7 +230,9 @@ export default function AssetDetailPage() {
                   disabled={posting || !postingMonth}
                   onClick={postDepreciation}
                 >
-                  {posting ? 'Posting…' : `Post Depreciation for ${postingMonth || '…'}`}
+                  {posting
+                    ? (isAr ? 'جاري الترحيل…' : 'Posting…')
+                    : `${isAr ? 'ترحيل الاستهلاك' : 'Post Depreciation'} ${isAr ? 'لـ' : 'for'} ${postingMonth || '…'}`}
                 </button>
               </div>
             )}
@@ -233,12 +242,12 @@ export default function AssetDetailPage() {
             <thead>
               <tr>
                 <th>#</th>
-                <th>Period</th>
-                <th style={{ textAlign: 'right' }}>Opening NBV</th>
-                <th style={{ textAlign: 'right' }}>Depreciation</th>
-                <th style={{ textAlign: 'right' }}>Closing NBV</th>
-                <th>Status</th>
-                <th>Journal Entry</th>
+                <th>{isAr ? 'الفترة' : 'Period'}</th>
+                <th style={{ textAlign: 'right' }}>{isAr ? 'القيمة الافتتاحية' : 'Opening NBV'}</th>
+                <th style={{ textAlign: 'right' }}>{isAr ? 'مبلغ الاستهلاك' : 'Depreciation'}</th>
+                <th style={{ textAlign: 'right' }}>{isAr ? 'القيمة الدفترية' : 'Closing NBV'}</th>
+                <th>{isAr ? 'الحالة' : 'Status'}</th>
+                <th>{isAr ? 'قيد اليومية' : 'Journal Entry'}</th>
               </tr>
             </thead>
             <tbody>
@@ -249,7 +258,7 @@ export default function AssetDetailPage() {
                     className="text-center text-sm"
                     style={{ color: 'var(--text-3)', padding: '2rem 1rem' }}
                   >
-                    No depreciation schedule generated.
+                    {isAr ? 'لم يُنشأ جدول الاستهلاك بعد.' : 'No depreciation schedule generated.'}
                   </td>
                 </tr>
               )}
@@ -277,9 +286,9 @@ export default function AssetDetailPage() {
                   </td>
                   <td>
                     {line.posted ? (
-                      <span className="badge badge-success">Posted</span>
+                      <span className="badge badge-success">{isAr ? 'مرحَّل' : 'Posted'}</span>
                     ) : (
-                      <span className="badge badge-neutral">Scheduled</span>
+                      <span className="badge badge-neutral">{isAr ? 'مجدول' : 'Scheduled'}</span>
                     )}
                   </td>
                   <td className="text-xs" style={{ color: 'var(--text-3)' }}>—</td>

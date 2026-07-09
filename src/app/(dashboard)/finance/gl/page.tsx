@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery, apiFetch } from '../../../../lib/useApi';
+import { useQuery } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import { useLang } from '@/lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
 
 interface JournalEntry {
   id: string; number?: string; date: string; description?: string;
@@ -17,45 +19,46 @@ interface JournalEntry {
 const egp = (n: number) =>
   'EGP ' + n.toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const fmtDate = (d: string) =>
-  new Date(d).toLocaleDateString('en-EG', { day: '2-digit', month: 'short', year: 'numeric' });
-
 function StatusBadge({ status }: { status: string }) {
+  const { isAr } = useLang();
   const map: Record<string, string> = {
     DRAFT: 'badge badge-neutral',
     POSTED: 'badge badge-info',
     CANCELLED: 'badge badge-danger',
   };
   const labelMap: Record<string, string> = {
-    DRAFT: 'Draft', POSTED: 'Posted', CANCELLED: 'Cancelled',
+    DRAFT: isAr ? 'مسودة' : 'Draft',
+    POSTED: isAr ? 'مرحل' : 'Posted',
+    CANCELLED: isAr ? 'ملغى' : 'Cancelled',
   };
   return <span className={map[status] ?? 'badge badge-neutral'}>{labelMap[status] ?? status}</span>;
 }
 
-const JOURNAL_FILTER_OPTS = [
-  { value: '', label: 'All Journals' },
-  { value: 'SALES', label: 'Sales' },
-  { value: 'PURCHASE', label: 'Purchase' },
-  { value: 'CASH', label: 'Cash' },
-  { value: 'BANK', label: 'Bank' },
-  { value: 'GENERAL', label: 'General' },
-];
-
-const STATUS_FILTER_OPTS = [
-  { value: '', label: 'All Statuses' },
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'POSTED', label: 'Posted' },
-  { value: 'CANCELLED', label: 'Cancelled' },
-];
-
 export default function GlPage() {
   const router = useRouter();
+  const { isAr } = useLang();
 
   const [search, setSearch] = useState('');
   const [journalFilter, setJournalFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+
+  const JOURNAL_FILTER_OPTS = [
+    { value: '', label: isAr ? 'كل الدفاتر' : 'All Journals' },
+    { value: 'SALES', label: isAr ? 'مبيعات' : 'Sales' },
+    { value: 'PURCHASE', label: isAr ? 'مشتريات' : 'Purchase' },
+    { value: 'CASH', label: isAr ? 'نقدية' : 'Cash' },
+    { value: 'BANK', label: isAr ? 'بنك' : 'Bank' },
+    { value: 'GENERAL', label: isAr ? 'عام' : 'General' },
+  ];
+
+  const STATUS_FILTER_OPTS = [
+    { value: '', label: isAr ? 'كل الحالات' : 'All Statuses' },
+    { value: 'DRAFT', label: isAr ? 'مسودة' : 'Draft' },
+    { value: 'POSTED', label: isAr ? 'مرحل' : 'Posted' },
+    { value: 'CANCELLED', label: isAr ? 'ملغى' : 'Cancelled' },
+  ];
 
   const qs = new URLSearchParams({
     limit: '50',
@@ -66,7 +69,7 @@ export default function GlPage() {
     ...(search && { search }),
   }).toString();
 
-  const { data, loading, error, reload } = useQuery<{ items: JournalEntry[]; total: number }>(
+  const { data, loading, error } = useQuery<{ items: JournalEntry[]; total: number }>(
     `/finance/gl?${qs}`,
     [qs],
   );
@@ -83,21 +86,21 @@ export default function GlPage() {
       {/* Page header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Journal Entries</h1>
-          <p className="page-subtitle">General Ledger — Manual & Automatic Postings</p>
+          <h1 className="page-title">{isAr ? 'القيود المحاسبية' : 'Journal Entries'}</h1>
+          <p className="page-subtitle">{isAr ? 'دفتر الأستاذ العام — القيود اليدوية والتلقائية' : 'General Ledger — Manual & Automatic Postings'}</p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => router.push('/finance/gl/recurring')}
             className="btn btn-secondary"
           >
-            Recurring Templates
+            {isAr ? 'القوالب المتكررة' : 'Recurring Templates'}
           </button>
           <button
             onClick={() => router.push('/finance/gl/new')}
             className="btn btn-primary"
           >
-            + New Entry
+            {isAr ? '+ قيد جديد' : '+ New Entry'}
           </button>
         </div>
       </div>
@@ -105,7 +108,6 @@ export default function GlPage() {
       {/* Toolbar */}
       <div className="px-6">
         <div className="card p-3 flex flex-wrap gap-3 items-end">
-          {/* Search */}
           <div className="relative flex-1 min-w-48">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[--text-3]"
               fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -116,14 +118,13 @@ export default function GlPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search entries…"
+              placeholder={isAr ? 'بحث في القيود…' : 'Search entries…'}
               className="input pl-9"
             />
           </div>
 
-          {/* Journal filter */}
           <div className="w-40">
-            <label className="input-label">Journal</label>
+            <label className="input-label">{isAr ? 'الدفتر' : 'Journal'}</label>
             <SearchableCombobox
               options={JOURNAL_FILTER_OPTS}
               value={journalFilter}
@@ -131,19 +132,17 @@ export default function GlPage() {
             />
           </div>
 
-          {/* Date range */}
           <div>
-            <label className="input-label">From</label>
+            <label className="input-label">{isAr ? 'من' : 'From'}</label>
             <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="input w-36" />
           </div>
           <div>
-            <label className="input-label">To</label>
+            <label className="input-label">{isAr ? 'إلى' : 'To'}</label>
             <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="input w-36" />
           </div>
 
-          {/* Status filter */}
           <div className="w-36">
-            <label className="input-label">Status</label>
+            <label className="input-label">{isAr ? 'الحالة' : 'Status'}</label>
             <SearchableCombobox
               options={STATUS_FILTER_OPTS}
               value={statusFilter}
@@ -162,7 +161,7 @@ export default function GlPage() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
-              Loading journal entries…
+              {isAr ? 'تحميل القيود المحاسبية…' : 'Loading journal entries…'}
             </div>
           )}
           {error && <p className="p-6 text-danger-fg text-sm">{error}</p>}
@@ -170,13 +169,13 @@ export default function GlPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Entry #</th>
-                  <th>Date</th>
-                  <th>Journal</th>
-                  <th>Description</th>
-                  <th className="text-right">Debit</th>
-                  <th className="text-right">Credit</th>
-                  <th>Status</th>
+                  <th>{isAr ? 'رقم القيد' : 'Entry #'}</th>
+                  <th>{isAr ? 'التاريخ' : 'Date'}</th>
+                  <th>{isAr ? 'الدفتر' : 'Journal'}</th>
+                  <th>{isAr ? 'الوصف' : 'Description'}</th>
+                  <th className="text-right">{isAr ? 'مدين' : 'Debit'}</th>
+                  <th className="text-right">{isAr ? 'دائن' : 'Credit'}</th>
+                  <th>{isAr ? 'الحالة' : 'Status'}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -195,7 +194,7 @@ export default function GlPage() {
                           {e.number ?? (e.reference ?? e.ref) ?? e.id.slice(0, 8).toUpperCase()}
                         </span>
                       </td>
-                      <td className="text-[--text-2] text-xs">{fmtDate(e.date)}</td>
+                      <td className="text-[--text-2] text-xs">{fmtDate(e.date, isAr, { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                       <td>
                         <span className="text-xs text-[--text-2]">
                           {e.journal?.name ?? e.journal?.code ?? '—'}
@@ -216,7 +215,7 @@ export default function GlPage() {
                           onClick={(ev) => { ev.stopPropagation(); router.push(`/finance/gl/${e.id}`); }}
                           className="btn btn-ghost btn-sm"
                         >
-                          View
+                          {isAr ? 'عرض' : 'View'}
                         </button>
                       </td>
                     </tr>
@@ -225,7 +224,7 @@ export default function GlPage() {
                 {entries.length === 0 && (
                   <tr>
                     <td colSpan={8} className="py-12 text-center text-[--text-3]">
-                      No journal entries found.
+                      {isAr ? 'لا توجد قيود محاسبية.' : 'No journal entries found.'}
                     </td>
                   </tr>
                 )}
@@ -234,7 +233,9 @@ export default function GlPage() {
           )}
           {data && (
             <div className="px-4 py-2 border-t border-[--border] bg-[--surface-2] flex justify-between items-center">
-              <p className="text-xs text-[--text-3]">{data.total} total entries</p>
+              <p className="text-xs text-[--text-3]">
+                {isAr ? `${data.total} قيد إجمالي` : `${data.total} total entries`}
+              </p>
             </div>
           )}
         </div>

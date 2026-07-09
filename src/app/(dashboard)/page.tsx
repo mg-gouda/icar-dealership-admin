@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useQuery } from '../../lib/useApi';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+import { useLang } from '@/lib/lang-context';
+import { translateSource } from '@/lib/source-labels';
+import { API_BASE } from '@/lib/config';
 const TODAY = new Date().toISOString().slice(0, 10);
 
 /* ─── Helpers ─────────────────────────────────────────────────────────────── */
@@ -23,21 +24,21 @@ function toTotal(res: unknown): number {
   if (typeof r.total === 'number') return r.total;
   return 0;
 }
-function timeAgo(d: string) {
+function timeAgo(d: string, ar: boolean) {
   const ms = Date.now() - new Date(d).getTime();
   const m  = Math.floor(ms / 60_000);
-  if (m < 1)   return 'just now';
-  if (m < 60)  return `${m}m ago`;
+  if (m < 1)   return ar ? 'الآن' : 'just now';
+  if (m < 60)  return ar ? `منذ ${m} د` : `${m}m ago`;
   const h = Math.floor(m / 60);
-  if (h < 24)  return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+  if (h < 24)  return ar ? `منذ ${h} س` : `${h}h ago`;
+  return ar ? `منذ ${Math.floor(h / 24)} ي` : `${Math.floor(h / 24)}d ago`;
 }
-const egp = (n: number | string) =>
-  'EGP ' + Number(n).toLocaleString('en-EG', { maximumFractionDigits: 0 });
+const egp = (n: number | string, ar = false) =>
+  'EGP ' + Number(n).toLocaleString(ar ? 'ar-EG' : 'en-EG', { maximumFractionDigits: 0 });
 
 /* ─── Mini donut (SVG) ────────────────────────────────────────────────────── */
 type Slice = { value: number; color: string };
-function MiniDonut({ slices, total }: { slices: Slice[]; total: number }) {
+function MiniDonut({ slices, total, centerLabel = 'vehicles' }: { slices: Slice[]; total: number; centerLabel?: string }) {
   const R = 44; const cx = 56; const cy = 56; const sw = 22;
   let cursor = -Math.PI / 2;
   const arcs: { d: string; color: string }[] = [];
@@ -62,7 +63,7 @@ function MiniDonut({ slices, total }: { slices: Slice[]; total: number }) {
       }
       <circle cx={cx} cy={cy} r={R - sw / 2 - 4} fill="var(--surface)" />
       <text x={cx} y={cy - 6} textAnchor="middle" fontSize="18" fontWeight="700" fill="var(--text-1)">{total}</text>
-      <text x={cx} y={cy + 12} textAnchor="middle" fontSize="10" fill="var(--text-3)">vehicles</text>
+      <text x={cx} y={cy + 12} textAnchor="middle" fontSize="10" fill="var(--text-3)">{centerLabel}</text>
     </svg>
   );
 }
@@ -129,8 +130,12 @@ function TodoItem({ text, tag, tagColor }: { text: string; tag: string; tagColor
   );
 }
 
+// ponytail: suppress unused import warning — API_BASE retained for future direct fetch calls
+void API_BASE;
+
 /* ─── Page ────────────────────────────────────────────────────────────────── */
 export default function DashboardHome() {
+  const { isAr } = useLang();
   const { data: vehiclesAvail }  = useQuery<unknown>('/vehicles?status=AVAILABLE&limit=1');
   const { data: vehiclesReserv } = useQuery<unknown>('/vehicles?status=RESERVED&limit=1');
   const { data: vehiclesSold }   = useQuery<unknown>('/vehicles?status=SOLD&limit=1');
@@ -189,12 +194,20 @@ export default function DashboardHome() {
     { value: inTransit,  color: 'var(--warning)' },
   ];
 
+  const locale = isAr ? 'ar-EG' : 'en-EG';
+
+  const arMonths = ['يناير','فبراير','مارس','أبريل','مايو','يونيو'];
+  const enMonths = ['Jan','Feb','Mar','Apr','May','Jun'];
+  const months   = isAr ? arMonths : enMonths;
+
   return (
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Dashboard Overview</h1>
-          <p className="page-subtitle">All Locations · {new Date().toLocaleDateString('en-EG', { month: 'long', year: 'numeric' })}</p>
+          <h1 className="page-title">{isAr ? 'لوحة التحكم' : 'Dashboard Overview'}</h1>
+          <p className="page-subtitle">
+            {isAr ? 'جميع الفروع' : 'All Locations'} · {new Date().toLocaleDateString(locale, { month: 'long', year: 'numeric' })}
+          </p>
         </div>
       </div>
 
@@ -202,20 +215,35 @@ export default function DashboardHome() {
 
         {/* ── KPI Row ───────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-          <KpiCard label="Vehicles in Stock" value={available} sub={`↑ ${inTransit} in transit`}
+          <KpiCard
+            label={isAr ? 'سيارات في المخزن' : 'Vehicles in Stock'}
+            value={available}
+            sub={isAr ? `↑ ${inTransit} في الطريق` : `↑ ${inTransit} in transit`}
             color="var(--primary)" href="/vehicles"
             icon={<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1.5 10L3 6h10l1.5 4v2h-13v-2z" stroke="currentColor" strokeWidth="1.2" fill="currentColor" fillOpacity=".15"/><circle cx="4.5" cy="11" r="1" fill="currentColor"/><circle cx="11.5" cy="11" r="1" fill="currentColor"/></svg>}
           />
-          <KpiCard label="Active Leads" value={leads.length} sub={`↑ ${leads.filter(l=>l.createdAt && String(l.createdAt).slice(0,10)===TODAY).length} new today`}
+          <KpiCard
+            label={isAr ? 'العملاء المحتملون' : 'Active Leads'}
+            value={leads.length}
+            sub={isAr
+              ? `↑ ${leads.filter(l=>l.createdAt && String(l.createdAt).slice(0,10)===TODAY).length} جديد اليوم`
+              : `↑ ${leads.filter(l=>l.createdAt && String(l.createdAt).slice(0,10)===TODAY).length} new today`}
             color="var(--purple)" href="/crm"
             icon={<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.2"/><path d="M2 14c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>}
           />
-          <KpiCard label="Deals This Month" value={dealsThisMonth.length}
-            sub={monthRevenue > 0 ? `EGP ${(monthRevenue/1_000_000).toFixed(1)}M revenue` : 'No revenue yet'}
+          <KpiCard
+            label={isAr ? 'صفقات هذا الشهر' : 'Deals This Month'}
+            value={dealsThisMonth.length}
+            sub={monthRevenue > 0
+              ? `EGP ${(monthRevenue/1_000_000).toFixed(1)}M ${isAr ? 'إيرادات' : 'revenue'}`
+              : (isAr ? 'لا توجد إيرادات بعد' : 'No revenue yet')}
             color="var(--success)" href="/deals"
             icon={<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.2"/><path d="M5 8h6M5 11h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/><path d="M2 7h12" stroke="currentColor" strokeWidth="1.2"/></svg>}
           />
-          <KpiCard label="Appointments Today" value={todayAppts} sub={`${pendingFin} pending finance`}
+          <KpiCard
+            label={isAr ? 'مواعيد اليوم' : 'Appointments Today'}
+            value={todayAppts}
+            sub={isAr ? `${pendingFin} بانتظار التمويل` : `${pendingFin} pending finance`}
             color="var(--warning)" href="/appointments"
             icon={<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.2"/><path d="M2 7h12" stroke="currentColor" strokeWidth="1.2"/><path d="M5 1v3M11 1v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>}
           />
@@ -227,12 +255,14 @@ export default function DashboardHome() {
           {/* Monthly revenue sparkline (CSS-only) */}
           <div className="card p-5 lg:col-span-2">
             <div className="flex items-center justify-between mb-4">
-              <p className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Monthly Revenue (EGP 000s)</p>
-              <span className="badge badge-info">This year</span>
+              <p className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>
+                {isAr ? 'الإيرادات الشهرية (ألف جنيه)' : 'Monthly Revenue (EGP 000s)'}
+              </p>
+              <span className="badge badge-info">{isAr ? 'هذا العام' : 'This year'}</span>
             </div>
             {/* Simple CSS bar chart */}
             <div className="flex items-end gap-1.5 h-24">
-              {['Jan','Feb','Mar','Apr','May','Jun'].map((m, i) => {
+              {months.map((m, i) => {
                 const h = [45, 60, 38, 72, 55, 80][i];
                 return (
                   <div key={m} className="flex-1 flex flex-col items-center gap-1">
@@ -246,15 +276,17 @@ export default function DashboardHome() {
 
           {/* Inventory status donut */}
           <div className="card p-5">
-            <p className="text-sm font-semibold mb-4" style={{ color: 'var(--text-1)' }}>Inventory Status</p>
+            <p className="text-sm font-semibold mb-4" style={{ color: 'var(--text-1)' }}>
+              {isAr ? 'حالة المخزن' : 'Inventory Status'}
+            </p>
             <div className="flex items-center gap-4">
-              <MiniDonut slices={inventorySlices} total={invTotal} />
+              <MiniDonut slices={inventorySlices} total={invTotal} centerLabel={isAr ? 'مركبات' : 'vehicles'} />
               <div className="space-y-2 flex-1">
                 {[
-                  { label: 'Available',  count: available,  color: 'var(--success)' },
-                  { label: 'Reserved',   count: reserved,   color: 'var(--primary)' },
-                  { label: 'Sold',       count: sold,       color: 'var(--purple)' },
-                  { label: 'In Transit', count: inTransit,  color: 'var(--warning)' },
+                  { label: isAr ? 'متوفر'       : 'Available',  count: available,  color: 'var(--success)' },
+                  { label: isAr ? 'محجوز'       : 'Reserved',   count: reserved,   color: 'var(--primary)' },
+                  { label: isAr ? 'مباع'        : 'Sold',       count: sold,       color: 'var(--purple)' },
+                  { label: isAr ? 'في الطريق'   : 'In Transit', count: inTransit,  color: 'var(--warning)' },
                 ].map(({ label, count, color }) => (
                   <div key={label} className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: color }} />
@@ -273,7 +305,9 @@ export default function DashboardHome() {
           {/* Recent activity */}
           <div className="card p-5 lg:col-span-1">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Recent Activity</p>
+              <p className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>
+                {isAr ? 'آخر النشاطات' : 'Recent Activity'}
+              </p>
             </div>
             <div>
               {leads.slice(0, 5).map((l) => (
@@ -281,26 +315,34 @@ export default function DashboardHome() {
                   key={String(l.id)}
                   avatar={String(l.name ?? '?').slice(0, 2).toUpperCase()}
                   name={String(l.name ?? '—')}
-                  detail={`New lead • ${String(l.source ?? '').replace('_', ' ')}`}
-                  time={l.createdAt ? timeAgo(String(l.createdAt)) : ''}
+                  detail={isAr
+                    ? `عميل جديد • ${translateSource(String(l.source ?? ''), true)}`
+                    : `New lead • ${translateSource(String(l.source ?? ''), false)}`}
+                  time={l.createdAt ? timeAgo(String(l.createdAt), isAr) : ''}
                   color={l.status === 'CLOSED_WON' ? 'var(--success)' : l.status === 'NEGOTIATING' ? 'var(--orange)' : 'var(--primary)'}
                 />
               ))}
               {leads.length === 0 && (
-                <p className="text-xs py-6 text-center" style={{ color: 'var(--text-3)' }}>No recent activity</p>
+                <p className="text-xs py-6 text-center" style={{ color: 'var(--text-3)' }}>
+                  {isAr ? 'لا توجد نشاطات حديثة' : 'No recent activity'}
+                </p>
               )}
             </div>
-            <Link href="/crm" className="block mt-3 text-xs" style={{ color: 'var(--primary)' }}>View all leads →</Link>
+            <Link href="/crm" className="block mt-3 text-xs" style={{ color: 'var(--primary)' }}>
+              {isAr ? 'عرض جميع العملاء →' : 'View all leads →'}
+            </Link>
           </div>
 
           {/* Lead sources */}
           <div className="card p-5">
-            <p className="text-sm font-semibold mb-4" style={{ color: 'var(--text-1)' }}>Lead Sources</p>
+            <p className="text-sm font-semibold mb-4" style={{ color: 'var(--text-1)' }}>
+              {isAr ? 'مصادر العملاء' : 'Lead Sources'}
+            </p>
             <div className="space-y-3">
               {Object.entries(sourceMap).length === 0
-                ? <p className="text-xs" style={{ color: 'var(--text-3)' }}>No data yet</p>
+                ? <p className="text-xs" style={{ color: 'var(--text-3)' }}>{isAr ? 'لا توجد بيانات بعد' : 'No data yet'}</p>
                 : Object.entries(sourceMap).map(([src, cnt]) => (
-                  <SourceBar key={src} label={src.replace('_', ' ')} count={cnt} max={sourceMax}
+                  <SourceBar key={src} label={translateSource(src, isAr)} count={cnt} max={sourceMax}
                     color={sourceColors[src] ?? 'var(--text-3)'} />
                 ))
               }
@@ -309,18 +351,24 @@ export default function DashboardHome() {
 
           {/* To-do today */}
           <div className="card p-5">
-            <p className="text-sm font-semibold mb-2" style={{ color: 'var(--text-1)' }}>✅ To Do Today</p>
+            <p className="text-sm font-semibold mb-2" style={{ color: 'var(--text-1)' }}>
+              {isAr ? '✅ مهام اليوم' : '✅ To Do Today'}
+            </p>
             <div>
               {deals.slice(0, 5).map((d) => (
                 <TodoItem
                   key={String(d.id)}
-                  text={`Review deal #${String(d.id ?? '').slice(-4)} — ${String((d.vehicle as Record<string,unknown>)?.make ?? '')} ${String((d.vehicle as Record<string,unknown>)?.model ?? '')}`}
+                  text={isAr
+                    ? `مراجعة صفقة #${String(d.id ?? '').slice(-4)} — ${String((d.vehicle as Record<string,unknown>)?.make ?? '')} ${String((d.vehicle as Record<string,unknown>)?.model ?? '')}`
+                    : `Review deal #${String(d.id ?? '').slice(-4)} — ${String((d.vehicle as Record<string,unknown>)?.make ?? '')} ${String((d.vehicle as Record<string,unknown>)?.model ?? '')}`}
                   tag={String(d.status ?? '').replace('_', ' ')}
                   tagColor={d.status === 'PENDING_FINANCE' ? 'var(--warning)' : d.status === 'APPROVED' ? 'var(--success)' : 'var(--text-3)'}
                 />
               ))}
               {deals.length === 0 && (
-                <p className="text-xs py-4 text-center" style={{ color: 'var(--text-3)' }}>All caught up!</p>
+                <p className="text-xs py-4 text-center" style={{ color: 'var(--text-3)' }}>
+                  {isAr ? 'أحسنت! لا توجد مهام متبقية.' : 'All caught up!'}
+                </p>
               )}
             </div>
           </div>
@@ -338,11 +386,13 @@ export default function DashboardHome() {
           const maxVal = Math.max(...entries.map(e => e[1]));
           return (
             <div className="card p-5">
-              <p className="text-sm font-semibold mb-4" style={{ color: 'var(--text-1)' }}>Per-Branch Gross Profit (EGP 000s)</p>
+              <p className="text-sm font-semibold mb-4" style={{ color: 'var(--text-1)' }}>
+                {isAr ? 'إجمالي الربح بالفرع (ألف جنيه)' : 'Per-Branch Gross Profit (EGP 000s)'}
+              </p>
               <div className="flex items-end gap-4 h-28">
                 {entries.map(([loc, val]) => (
                   <div key={loc} className="flex-1 flex flex-col items-center gap-1">
-                    <span className="text-xs font-semibold tabular-nums" style={{ color: 'var(--text-2)' }}>{egp(val / 1000)}</span>
+                    <span className="text-xs font-semibold tabular-nums" style={{ color: 'var(--text-2)' }}>{egp(val / 1000, isAr)}</span>
                     <div className="w-full rounded-t" style={{ height: `${Math.max(10, (val / maxVal) * 80)}px`, background: 'var(--primary)', opacity: 0.7 }} />
                     <span style={{ fontSize: '11px', color: 'var(--text-3)' }}>{loc}</span>
                   </div>

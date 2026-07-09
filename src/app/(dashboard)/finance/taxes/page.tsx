@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import { useLang } from '@/lib/lang-context';
+import { ErrorBanner } from '@/components/ui/error-banner';
 
 interface TaxGroup { id: string; name: string; _count?: { taxes: number }; }
 interface Tax {
@@ -12,18 +14,21 @@ interface Tax {
 }
 interface Account { id: string; code: string; name: string; }
 
-const COMPUTATIONS = [
-  { value: 'PERCENT', label: 'Percentage' },
-  { value: 'FIXED', label: 'Fixed Amount' },
-];
-const SCOPES = [
-  { value: 'SALE', label: 'Sales' },
-  { value: 'PURCHASE', label: 'Purchase' },
-  { value: 'ALL', label: 'Both' },
-];
 
 export default function TaxesPage() {
-  const { data: taxes, loading, reload } = useQuery<Tax[]>('/finance/taxes');
+  const { isAr } = useLang();
+
+  const COMPUTATIONS = [
+    { value: 'PERCENT', label: isAr ? 'نسبة مئوية' : 'Percentage' },
+    { value: 'FIXED', label: isAr ? 'مبلغ ثابت' : 'Fixed Amount' },
+  ];
+  const SCOPES = [
+    { value: 'SALE', label: isAr ? 'مبيعات' : 'Sales' },
+    { value: 'PURCHASE', label: isAr ? 'مشتريات' : 'Purchase' },
+    { value: 'ALL', label: isAr ? 'كلاهما' : 'Both' },
+  ];
+
+  const { data: taxes, loading, error, reload } = useQuery<Tax[]>('/finance/taxes');
   const { data: groups, reload: reloadGroups } = useQuery<TaxGroup[]>('/finance/taxes/groups');
   const { data: accountsRes } = useQuery<{ items: Account[] }>('/finance/accounts?limit=200');
 
@@ -48,7 +53,7 @@ export default function TaxesPage() {
 
   async function createTax(e: React.FormEvent) {
     e.preventDefault();
-    if (!taxForm.name || !taxForm.amount) { setErr('Name and amount required.'); return; }
+    if (!taxForm.name || !taxForm.amount) { setErr(isAr ? 'الاسم والمبلغ مطلوبان.' : 'Name and amount required.'); return; }
     setSaving(true); setErr('');
     try {
       await apiFetch('/finance/taxes', {
@@ -77,63 +82,68 @@ export default function TaxesPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="page-body">
+      <div className="page-header" style={{ marginBottom: '1.5rem' }}>
         <div>
-          <h1 className="text-xl font-semibold text-white">Taxes</h1>
-          <p className="text-xs text-gray-500 mt-0.5">VAT & withholding tax configuration</p>
+          <h1 className="page-title">{isAr ? 'الضرائب' : 'Taxes'}</h1>
+          <p className="page-subtitle">{isAr ? 'مجموعات ومعدلات الضرائب' : 'VAT & withholding tax configuration'}</p>
         </div>
-        <button onClick={() => tab === 'rates' ? setShowTax(true) : setShowGroup(true)}
-          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-lg transition">
-          {tab === 'rates' ? '+ Tax Rate' : '+ Tax Group'}
+        <button onClick={() => tab === 'rates' ? setShowTax(true) : setShowGroup(true)} className="btn btn-primary btn-sm">
+          {tab === 'rates' ? (isAr ? '+ معدل ضريبي' : '+ Tax Rate') : (isAr ? '+ مجموعة ضريبية' : '+ Tax Group')}
         </button>
       </div>
 
-      <div className="flex gap-1 mb-5">
+      {/* Tabs */}
+      <div className="tabs mb-5">
         {(['rates', 'groups'] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2 text-xs rounded-lg transition capitalize ${tab === t ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
-            {t}
+          <button key={t} onClick={() => setTab(t)} className={`tab${tab === t ? ' active' : ''}`}>
+            {t === 'rates' ? (isAr ? 'المعدلات' : 'Rates') : (isAr ? 'المجموعات' : 'Groups')}
           </button>
         ))}
       </div>
 
-      {loading && <p className="text-gray-500 text-sm">Loading…</p>}
+      {loading && <p style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>{isAr ? 'جاري التحميل…' : 'Loading…'}</p>}
+      {error && <div className="mb-5"><ErrorBanner error={error} retry={reload} /></div>}
 
       {tab === 'rates' && (
-        <div className="rounded-xl border border-white/5 bg-gray-900 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-white/5 text-xs text-gray-500">
+        <div className="card overflow-hidden">
+          <table className="data-table">
+            <thead>
               <tr>
-                <th className="px-4 py-3 text-left font-medium">Name</th>
-                <th className="px-4 py-3 text-left font-medium">Amount</th>
-                <th className="px-4 py-3 text-left font-medium">Type</th>
-                <th className="px-4 py-3 text-left font-medium">Scope</th>
-                <th className="px-4 py-3 text-left font-medium">Group</th>
-                <th className="px-4 py-3 text-left font-medium">GL Account</th>
-                <th className="px-4 py-3 text-center font-medium">In Price</th>
+                <th>{isAr ? 'الاسم' : 'Name'}</th>
+                <th>{isAr ? 'المبلغ' : 'Amount'}</th>
+                <th>{isAr ? 'النوع' : 'Type'}</th>
+                <th>{isAr ? 'النطاق' : 'Scope'}</th>
+                <th>{isAr ? 'المجموعة' : 'Group'}</th>
+                <th>{isAr ? 'حساب المحاسبة' : 'GL Account'}</th>
+                <th style={{ textAlign: 'center' }}>{isAr ? 'مضمن بالسعر' : 'In Price'}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody>
               {taxList.map((t) => (
-                <tr key={t.id} className="hover:bg-white/5 transition">
-                  <td className="px-4 py-2.5 text-white font-medium">{t.name}</td>
-                  <td className="px-4 py-2.5 text-blue-300 font-mono text-xs">
+                <tr key={t.id}>
+                  <td style={{ fontWeight: 500 }}>{t.name}</td>
+                  <td style={{ color: 'var(--primary)', fontFamily: 'monospace', fontSize: '0.75rem' }}>
                     {t.computation === 'PERCENT' ? `${t.amount}%` : `${Number(t.amount).toLocaleString()} EGP`}
                   </td>
-                  <td className="px-4 py-2.5 text-gray-400 text-xs">{t.computation}</td>
-                  <td className="px-4 py-2.5 text-gray-400 text-xs">{t.scope}</td>
-                  <td className="px-4 py-2.5 text-gray-500 text-xs">{t.taxGroup?.name ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-gray-500 text-xs font-mono">
+                  <td style={{ color: 'var(--text-2)', fontSize: '0.75rem' }}>{t.computation}</td>
+                  <td style={{ color: 'var(--text-2)', fontSize: '0.75rem' }}>{t.scope}</td>
+                  <td style={{ color: 'var(--text-3)', fontSize: '0.75rem' }}>{t.taxGroup?.name ?? '—'}</td>
+                  <td style={{ color: 'var(--text-3)', fontSize: '0.75rem', fontFamily: 'monospace' }}>
                     {t.account ? `${t.account.code} ${t.account.name}` : '—'}
                   </td>
-                  <td className="px-4 py-2.5 text-center">
-                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${t.includedInPrice ? 'bg-green-400' : 'bg-gray-600'}`} />
+                  <td style={{ textAlign: 'center' }}>
+                    <span style={{
+                      display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+                      background: t.includedInPrice ? 'var(--success)' : 'var(--border-strong)',
+                    }} />
                   </td>
                 </tr>
               ))}
               {taxList.length === 0 && !loading && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-600 text-sm">No tax rates configured.</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)' }}>
+                  {isAr ? 'لا توجد معدلات ضريبية.' : 'No tax rates configured.'}
+                </td></tr>
               )}
             </tbody>
           </table>
@@ -141,55 +151,56 @@ export default function TaxesPage() {
       )}
 
       {tab === 'groups' && (
-        <div className="space-y-2">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           {groupList.map((g) => (
-            <div key={g.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-gray-900 px-5 py-4">
-              <span className="text-white font-medium">{g.name}</span>
-              <span className="text-xs text-gray-500">{g._count?.taxes ?? 0} rates</span>
+            <div key={g.id} className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.25rem' }}>
+              <span style={{ fontWeight: 500, color: 'var(--text-1)' }}>{g.name}</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
+                {g._count?.taxes ?? 0} {isAr ? 'معدلات' : 'rates'}
+              </span>
             </div>
           ))}
           {groupList.length === 0 && !loading && (
-            <p className="text-gray-600 text-sm">No tax groups.</p>
+            <p style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>{isAr ? 'لا توجد مجموعات ضريبية.' : 'No tax groups.'}</p>
           )}
         </div>
       )}
 
       {/* Create Tax dialog */}
       {showTax && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowTax(false)} />
-          <div className="relative w-full max-w-md rounded-2xl bg-gray-900 border border-white/10 shadow-2xl">
-            <div className="flex items-center justify-between p-5 border-b border-white/5">
-              <h2 className="text-sm font-semibold text-white">New Tax Rate</h2>
-              <button onClick={() => setShowTax(false)} className="text-gray-500 hover:text-white text-lg">×</button>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }} onClick={() => setShowTax(false)} />
+          <div className="card" style={{ position: 'relative', width: '100%', maxWidth: 440, borderRadius: '1rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem', borderBottom: '1px solid var(--border)' }}>
+              <h2 style={{ fontWeight: 600, fontSize: '0.9375rem', color: 'var(--text-1)' }}>{isAr ? 'معدل ضريبي جديد' : 'New Tax Rate'}</h2>
+              <button onClick={() => setShowTax(false)} className="btn btn-ghost btn-sm" style={{ fontSize: '1.2rem', lineHeight: 1 }}>×</button>
             </div>
-            <form onSubmit={createTax} className="p-5 space-y-3">
-              <div><label className="block text-xs text-gray-500 mb-1">Name *</label>
-                <input required value={taxForm.name} onChange={(e) => setT('name', e.target.value)}
-                  placeholder="e.g. VAT 14%"
-                  className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-xs text-gray-500 mb-1">Amount *</label>
-                  <input required type="number" step="0.01" value={taxForm.amount} onChange={(e) => setT('amount', e.target.value)}
-                    placeholder="14"
-                    className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" /></div>
-                <SearchableCombobox label="Computation" options={COMPUTATIONS} value={taxForm.computation} onChange={(v) => setT('computation', v)} />
+            <form onSubmit={createTax} style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div>
+                <label className="input-label">{isAr ? 'الاسم *' : 'Name *'}</label>
+                <input required className="input" value={taxForm.name} onChange={(e) => setT('name', e.target.value)}
+                  placeholder={isAr ? 'مثال: ضريبة القيمة المضافة 14%' : 'e.g. VAT 14%'} />
               </div>
-              <SearchableCombobox label="Scope" options={SCOPES} value={taxForm.scope} onChange={(v) => setT('scope', v)} />
-              <SearchableCombobox label="Tax Group" options={groupOpts} value={taxForm.taxGroupId} onChange={(v) => setT('taxGroupId', v)} placeholder="None" clearable />
-              <SearchableCombobox label="GL Account" options={accountOpts} value={taxForm.accountId} onChange={(v) => setT('accountId', v)} placeholder="Select…" clearable />
-              <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
-                <input type="checkbox" checked={taxForm.includedInPrice} onChange={(e) => setT('includedInPrice', e.target.checked)}
-                  className="rounded border-white/20" />
-                Included in price
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="input-label">{isAr ? 'المبلغ *' : 'Amount *'}</label>
+                  <input required type="number" step="0.01" className="input" value={taxForm.amount}
+                    onChange={(e) => setT('amount', e.target.value)} placeholder="14" />
+                </div>
+                <SearchableCombobox label={isAr ? 'طريقة الحساب' : 'Computation'} options={COMPUTATIONS} value={taxForm.computation} onChange={(v) => setT('computation', v)} />
+              </div>
+              <SearchableCombobox label={isAr ? 'النطاق' : 'Scope'} options={SCOPES} value={taxForm.scope} onChange={(v) => setT('scope', v)} />
+              <SearchableCombobox label={isAr ? 'المجموعة الضريبية' : 'Tax Group'} options={groupOpts} value={taxForm.taxGroupId} onChange={(v) => setT('taxGroupId', v)} placeholder={isAr ? 'بدون' : 'None'} clearable />
+              <SearchableCombobox label={isAr ? 'حساب المحاسبة' : 'GL Account'} options={accountOpts} value={taxForm.accountId} onChange={(v) => setT('accountId', v)} placeholder={isAr ? 'اختر…' : 'Select…'} clearable />
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8125rem', color: 'var(--text-2)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={taxForm.includedInPrice} onChange={(e) => setT('includedInPrice', e.target.checked)} />
+                {isAr ? 'مضمن في السعر' : 'Included in price'}
               </label>
-              {err && <p className="text-red-400 text-xs">{err}</p>}
-              <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => setShowTax(false)}
-                  className="flex-1 py-2 text-sm text-gray-400 border border-white/10 rounded-lg hover:text-white transition">Cancel</button>
-                <button type="submit" disabled={saving}
-                  className="flex-1 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition">
-                  {saving ? '…' : 'Create'}
+              {err && <p style={{ color: 'var(--danger-fg)', fontSize: '0.8125rem' }}>{err}</p>}
+              <div style={{ display: 'flex', gap: '0.75rem', paddingTop: '0.25rem' }}>
+                <button type="button" onClick={() => setShowTax(false)} className="btn btn-secondary" style={{ flex: 1 }}>{isAr ? 'إلغاء' : 'Cancel'}</button>
+                <button type="submit" disabled={saving} className="btn btn-primary" style={{ flex: 1 }}>
+                  {saving ? '…' : (isAr ? 'إنشاء' : 'Create')}
                 </button>
               </div>
             </form>
@@ -199,21 +210,20 @@ export default function TaxesPage() {
 
       {/* Create Group dialog */}
       {showGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowGroup(false)} />
-          <div className="relative w-full max-w-xs rounded-2xl bg-gray-900 border border-white/10 shadow-2xl p-5">
-            <h2 className="text-sm font-semibold text-white mb-4">New Tax Group</h2>
-            <form onSubmit={createGroup} className="space-y-3">
-              <div><label className="block text-xs text-gray-500 mb-1">Name *</label>
-                <input required value={groupForm.name} onChange={(e) => setGroupForm({ name: e.target.value })}
-                  placeholder="e.g. VAT"
-                  className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" /></div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setShowGroup(false)}
-                  className="flex-1 py-2 text-sm text-gray-400 border border-white/10 rounded-lg hover:text-white transition">Cancel</button>
-                <button type="submit" disabled={saving}
-                  className="flex-1 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition">
-                  {saving ? '…' : 'Create'}
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }} onClick={() => setShowGroup(false)} />
+          <div className="card" style={{ position: 'relative', width: '100%', maxWidth: 360, borderRadius: '1rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', padding: '1.25rem' }}>
+            <h2 style={{ fontWeight: 600, fontSize: '0.9375rem', color: 'var(--text-1)', marginBottom: '1rem' }}>{isAr ? 'مجموعة ضريبية جديدة' : 'New Tax Group'}</h2>
+            <form onSubmit={createGroup} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div>
+                <label className="input-label">{isAr ? 'الاسم *' : 'Name *'}</label>
+                <input required className="input" value={groupForm.name} onChange={(e) => setGroupForm({ name: e.target.value })}
+                  placeholder={isAr ? 'مثال: ض.ق.م' : 'e.g. VAT'} />
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button type="button" onClick={() => setShowGroup(false)} className="btn btn-secondary" style={{ flex: 1 }}>{isAr ? 'إلغاء' : 'Cancel'}</button>
+                <button type="submit" disabled={saving} className="btn btn-primary" style={{ flex: 1 }}>
+                  {saving ? '…' : (isAr ? 'إنشاء' : 'Create')}
                 </button>
               </div>
             </form>

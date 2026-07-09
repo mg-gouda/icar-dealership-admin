@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import { useLang } from '@/lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
 
 interface VendorBill {
   id: string;
@@ -22,9 +24,6 @@ interface VendorBill {
 interface Vendor { id: string; name: string; }
 interface Location { id: string; name: string; }
 
-const fmtDate = (d: string) =>
-  new Date(d).toLocaleDateString('en-EG', { day: '2-digit', month: 'short', year: 'numeric' });
-
 const fmtMoney = (n: number, currency = 'EGP') =>
   `${currency} ${n.toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -35,21 +34,17 @@ const STATUS_BADGE: Record<string, string> = {
   PAID:      'badge badge-success',
   CANCELLED: 'badge badge-danger',
 };
-const STATUS_LABEL: Record<string, string> = {
+
+const STATUS_LABEL_EN: Record<string, string> = {
   DRAFT: 'Draft', POSTED: 'Posted', PARTIAL: 'Partial', PAID: 'Paid', CANCELLED: 'Cancelled',
 };
-
-const STATUS_FILTER_OPTS = [
-  { value: '', label: 'All Statuses' },
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'POSTED', label: 'Posted' },
-  { value: 'PARTIAL', label: 'Partial' },
-  { value: 'PAID', label: 'Paid' },
-  { value: 'CANCELLED', label: 'Cancelled' },
-];
+const STATUS_LABEL_AR: Record<string, string> = {
+  DRAFT: 'مسودة', POSTED: 'مرحّل', PARTIAL: 'جزئي', PAID: 'مدفوع', CANCELLED: 'ملغى',
+};
 
 export default function VendorBillsPage() {
   const router = useRouter();
+  const { isAr } = useLang();
 
   const [statusFilter, setStatusFilter] = useState('');
   const [vendorFilter, setVendorFilter] = useState('');
@@ -58,6 +53,15 @@ export default function VendorBillsPage() {
   const [dateTo, setDateTo] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+
+  const STATUS_FILTER_OPTS = [
+    { value: '', label: isAr ? 'كل الحالات' : 'All Statuses' },
+    { value: 'DRAFT',     label: isAr ? 'مسودة' : 'Draft' },
+    { value: 'POSTED',    label: isAr ? 'مرحّل' : 'Posted' },
+    { value: 'PARTIAL',   label: isAr ? 'جزئي' : 'Partial' },
+    { value: 'PAID',      label: isAr ? 'مدفوع' : 'Paid' },
+    { value: 'CANCELLED', label: isAr ? 'ملغى' : 'Cancelled' },
+  ];
 
   const qs = new URLSearchParams({
     limit: '50',
@@ -69,20 +73,20 @@ export default function VendorBillsPage() {
   }).toString();
 
   const { data, loading, error, reload } = useQuery<{ data: VendorBill[]; total: number }>(
-    `/finance/vendor-bills?${qs}`,
+    `/finance/invoices?type=VENDOR_BILL&${qs}`,
     [qs],
   );
 
-  const { data: vendorsRaw } = useQuery<{ data: Vendor[] }>('/finance/vendors?limit=200');
+  const { data: vendorsRaw } = useQuery<{ data: Vendor[] }>('/partners?type=VENDOR&limit=200');
   const { data: locationsRaw } = useQuery<{ items: Location[] }>('/locations?limit=50');
 
   const bills = data?.data ?? [];
   const vendorOpts = [
-    { value: '', label: 'All Vendors' },
+    { value: '', label: isAr ? 'كل الموردين' : 'All Vendors' },
     ...(vendorsRaw?.data ?? []).map((v) => ({ value: v.id, label: v.name })),
   ];
   const locationOpts = [
-    { value: '', label: 'All Locations' },
+    { value: '', label: isAr ? 'كل الفروع' : 'All Locations' },
     ...(locationsRaw?.items ?? []).map((l) => ({ value: l.id, label: l.name })),
   ];
 
@@ -108,7 +112,7 @@ export default function VendorBillsPage() {
     setBulkLoading(true);
     try {
       await Promise.all(
-        ids.map((id) => apiFetch(`/finance/vendor-bills/${id}/post`, { method: 'POST' })),
+        ids.map((id) => apiFetch(`/finance/invoices/${id}/post`, { method: 'POST' })),
       );
       setSelected(new Set());
       reload();
@@ -122,16 +126,16 @@ export default function VendorBillsPage() {
   async function postBill(id: string, e: React.MouseEvent) {
     e.stopPropagation();
     try {
-      await apiFetch(`/finance/vendor-bills/${id}/post`, { method: 'POST' });
+      await apiFetch(`/finance/invoices/${id}/post`, { method: 'POST' });
       reload();
     } catch { /* ignore — real error handling TBD */ }
   }
 
   async function cancelBill(id: string, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!confirm('Cancel this vendor bill?')) return;
+    if (!confirm(isAr ? 'إلغاء هذه الفاتورة؟' : 'Cancel this vendor bill?')) return;
     try {
-      await apiFetch(`/finance/vendor-bills/${id}/cancel`, { method: 'POST' });
+      await apiFetch(`/finance/invoices/${id}/cancel`, { method: 'POST' });
       reload();
     } catch { /* ignore */ }
   }
@@ -140,16 +144,20 @@ export default function VendorBillsPage() {
     (id) => bills.find((b) => b.id === id)?.status === 'DRAFT',
   );
 
+  const statusLabel = (s: string) => isAr ? (STATUS_LABEL_AR[s] ?? s) : (STATUS_LABEL_EN[s] ?? s);
+
   return (
     <div className="page-body space-y-5">
       {/* Page header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Vendor Bills</h1>
-          <p className="page-subtitle">Accounts Payable — Supplier Invoices</p>
+          <h1 className="page-title">{isAr ? 'فواتير الموردين' : 'Vendor Bills'}</h1>
+          <p className="page-subtitle">
+            {isAr ? 'الذمم الدائنة — فواتير الموردين' : 'Accounts Payable — Supplier Invoices'}
+          </p>
         </div>
         <button onClick={() => router.push('/finance/vendor-bills/new')} className="btn btn-primary">
-          + New Bill
+          {isAr ? '+ فاتورة جديدة' : '+ New Bill'}
         </button>
       </div>
 
@@ -157,7 +165,7 @@ export default function VendorBillsPage() {
       <div className="px-6">
         <div className="card p-3 flex flex-wrap gap-3 items-end">
           <div className="w-40">
-            <label className="input-label">Status</label>
+            <label className="input-label">{isAr ? 'الحالة' : 'Status'}</label>
             <SearchableCombobox
               options={STATUS_FILTER_OPTS}
               value={statusFilter}
@@ -165,7 +173,7 @@ export default function VendorBillsPage() {
             />
           </div>
           <div className="w-52">
-            <label className="input-label">Vendor</label>
+            <label className="input-label">{isAr ? 'المورد' : 'Vendor'}</label>
             <SearchableCombobox
               options={vendorOpts}
               value={vendorFilter}
@@ -173,7 +181,7 @@ export default function VendorBillsPage() {
             />
           </div>
           <div className="w-44">
-            <label className="input-label">Location</label>
+            <label className="input-label">{isAr ? 'الفرع' : 'Location'}</label>
             <SearchableCombobox
               options={locationOpts}
               value={locationFilter}
@@ -181,11 +189,11 @@ export default function VendorBillsPage() {
             />
           </div>
           <div>
-            <label className="input-label">From</label>
+            <label className="input-label">{isAr ? 'من' : 'From'}</label>
             <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="input w-36" />
           </div>
           <div>
-            <label className="input-label">To</label>
+            <label className="input-label">{isAr ? 'إلى' : 'To'}</label>
             <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="input w-36" />
           </div>
         </div>
@@ -195,19 +203,21 @@ export default function VendorBillsPage() {
       {selected.size > 0 && (
         <div className="px-6">
           <div className="rounded-lg bg-[--surface-2] border border-[--border] px-4 py-2.5 flex items-center gap-3">
-            <span className="text-xs text-[--text-2]">{selected.size} selected</span>
+            <span className="text-xs text-[--text-2]">
+              {selected.size} {isAr ? 'محدد' : 'selected'}
+            </span>
             <button
               onClick={bulkPost}
               disabled={bulkLoading || !draftSelected}
               className="btn btn-secondary btn-sm"
             >
-              {bulkLoading ? 'Posting…' : 'Post Selected'}
+              {bulkLoading ? (isAr ? 'جاري الترحيل…' : 'Posting…') : (isAr ? 'ترحيل المحدد' : 'Post Selected')}
             </button>
             <button
               onClick={() => setSelected(new Set())}
               className="btn btn-ghost btn-sm"
             >
-              Clear
+              {isAr ? 'إلغاء التحديد' : 'Clear'}
             </button>
           </div>
         </div>
@@ -222,7 +232,7 @@ export default function VendorBillsPage() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
-              Loading vendor bills…
+              {isAr ? 'جاري تحميل الفواتير…' : 'Loading vendor bills…'}
             </div>
           )}
           {error && <p className="p-6 text-danger-fg text-sm">{error}</p>}
@@ -238,14 +248,14 @@ export default function VendorBillsPage() {
                       className="rounded"
                     />
                   </th>
-                  <th>Bill #</th>
-                  <th>Date</th>
-                  <th>Due Date</th>
-                  <th>Vendor</th>
-                  <th>Reference</th>
-                  <th>Status</th>
-                  <th className="text-right">Amount</th>
-                  <th className="text-right">Balance Due</th>
+                  <th>{isAr ? 'رقم الفاتورة' : 'Bill #'}</th>
+                  <th>{isAr ? 'التاريخ' : 'Date'}</th>
+                  <th>{isAr ? 'تاريخ الاستحقاق' : 'Due Date'}</th>
+                  <th>{isAr ? 'المورد' : 'Vendor'}</th>
+                  <th>{isAr ? 'المرجع' : 'Reference'}</th>
+                  <th>{isAr ? 'الحالة' : 'Status'}</th>
+                  <th className="text-right">{isAr ? 'المبلغ' : 'Amount'}</th>
+                  <th className="text-right">{isAr ? 'الرصيد المستحق' : 'Balance Due'}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -269,15 +279,15 @@ export default function VendorBillsPage() {
                         {b.number ?? b.id.slice(0, 8).toUpperCase()}
                       </span>
                     </td>
-                    <td className="text-[--text-2] text-xs">{fmtDate(b.date)}</td>
+                    <td className="text-[--text-2] text-xs">{fmtDate(b.date, isAr)}</td>
                     <td className="text-[--text-2] text-xs">
-                      {b.dueDate ? fmtDate(b.dueDate) : '—'}
+                      {b.dueDate ? fmtDate(b.dueDate, isAr) : '—'}
                     </td>
                     <td className="text-[--text-1]">{b.vendor?.name ?? '—'}</td>
                     <td className="text-[--text-2] text-xs">{b.reference ?? '—'}</td>
                     <td>
                       <span className={STATUS_BADGE[b.status] ?? 'badge badge-neutral'}>
-                        {STATUS_LABEL[b.status] ?? b.status}
+                        {statusLabel(b.status)}
                       </span>
                     </td>
                     <td className="text-right tabular-nums text-[--text-1]">
@@ -298,14 +308,14 @@ export default function VendorBillsPage() {
                           onClick={(e) => { e.stopPropagation(); router.push(`/finance/vendor-bills/${b.id}`); }}
                           className="btn btn-ghost btn-sm"
                         >
-                          View
+                          {isAr ? 'عرض' : 'View'}
                         </button>
                         {b.status === 'DRAFT' && (
                           <button
                             onClick={(e) => postBill(b.id, e)}
                             className="btn btn-ghost btn-sm text-[--primary]"
                           >
-                            Post
+                            {isAr ? 'ترحيل' : 'Post'}
                           </button>
                         )}
                         {(b.status === 'POSTED' || b.status === 'PARTIAL') && (
@@ -313,7 +323,7 @@ export default function VendorBillsPage() {
                             onClick={(e) => { e.stopPropagation(); router.push(`/finance/payments/new?billId=${b.id}`); }}
                             className="btn btn-ghost btn-sm"
                           >
-                            Pay
+                            {isAr ? 'دفع' : 'Pay'}
                           </button>
                         )}
                         {b.status === 'DRAFT' && (
@@ -321,7 +331,7 @@ export default function VendorBillsPage() {
                             onClick={(e) => cancelBill(b.id, e)}
                             className="btn btn-ghost btn-sm text-danger-fg"
                           >
-                            Cancel
+                            {isAr ? 'إلغاء' : 'Cancel'}
                           </button>
                         )}
                       </div>
@@ -331,7 +341,7 @@ export default function VendorBillsPage() {
                 {bills.length === 0 && (
                   <tr>
                     <td colSpan={10} className="py-12 text-center text-[--text-3]">
-                      No vendor bills found.
+                      {isAr ? 'لا توجد فواتير موردين.' : 'No vendor bills found.'}
                     </td>
                   </tr>
                 )}
@@ -340,7 +350,9 @@ export default function VendorBillsPage() {
           )}
           {data && (
             <div className="px-4 py-2 border-t border-[--border] bg-[--surface-2] flex justify-between items-center">
-              <p className="text-xs text-[--text-3]">{data.total} total bills</p>
+              <p className="text-xs text-[--text-3]">
+                {data.total} {isAr ? 'فاتورة إجمالاً' : 'total bills'}
+              </p>
             </div>
           )}
         </div>

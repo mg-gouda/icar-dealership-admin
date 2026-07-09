@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { useQuery, apiFetch } from '../../../lib/useApi';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 import ScannerModal, { PART_FORMATS } from '../../../components/ScannerModal';
+import { useLang } from '../../../lib/lang-context';
 
 const fmt = (n: number) =>
   'EGP ' + n.toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -29,6 +30,7 @@ const EMPTY_PART_FORM = {
 };
 
 export default function PartsPage() {
+  const { isAr } = useLang();
   const [locationFilter, setLocationFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [lowStockOnly, setLowStockOnly] = useState(false);
@@ -149,19 +151,19 @@ export default function PartsPage() {
       {/* Page header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Parts &amp; Accessories</h1>
-          <p className="page-subtitle">{total} parts</p>
+          <h1 className="page-title">{isAr ? 'قطع الغيار والإكسسوارات' : 'Parts & Accessories'}</h1>
+          <p className="page-subtitle">{total} {isAr ? 'قطعة' : 'parts'}</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button
             className="btn btn-outline btn-sm"
             onClick={() => setScanTarget('adjust')}
-            title="Scan barcode to find and adjust a part"
+            title={isAr ? 'امسح الباركود للبحث عن قطعة وتعديل مخزونها' : 'Scan barcode to find and adjust a part'}
             style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}
           >
-            <CameraIcon /> Scan to Adjust
+            <CameraIcon /> {isAr ? 'مسح للتعديل' : 'Scan to Adjust'}
           </button>
-          <button className="btn btn-primary" onClick={() => setShowAddPart(true)}>+ Add Part</button>
+          <button className="btn btn-primary" onClick={() => setShowAddPart(true)}>{isAr ? '+ إضافة قطعة' : '+ Add Part'}</button>
         </div>
       </div>
 
@@ -170,7 +172,7 @@ export default function PartsPage() {
         <input
           className="input"
           style={{ maxWidth: 240 }}
-          placeholder="Search part # or name…"
+          placeholder={isAr ? 'بحث برقم القطعة أو الاسم…' : 'Search part # or name…'}
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
         />
@@ -187,7 +189,7 @@ export default function PartsPage() {
         <input
           className="input"
           style={{ maxWidth: 160 }}
-          placeholder="Category…"
+          placeholder={isAr ? 'الفئة…' : 'Category…'}
           value={categoryFilter}
           onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
         />
@@ -198,7 +200,7 @@ export default function PartsPage() {
             onChange={(e) => { setLowStockOnly(e.target.checked); setPage(1); }}
             style={{ cursor: 'pointer' }}
           />
-          Low stock only
+          {isAr ? 'مخزون منخفض فقط' : 'Low stock only'}
         </label>
       </div>
 
@@ -211,15 +213,15 @@ export default function PartsPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Part #</th>
-                  <th>OEM #</th>
-                  <th>Name</th>
-                  <th>Category</th>
-                  <th style={{ textAlign: 'right' }}>On Hand</th>
-                  <th style={{ textAlign: 'right' }}>Reorder Level</th>
-                  <th style={{ textAlign: 'right' }}>Cost Price</th>
-                  <th style={{ textAlign: 'right' }}>Sale Price</th>
-                  <th>Status</th>
+                  <th>{isAr ? 'رقم القطعة' : 'Part #'}</th>
+                  <th>{isAr ? 'رقم OEM' : 'OEM #'}</th>
+                  <th>{isAr ? 'الاسم' : 'Name'}</th>
+                  <th>{isAr ? 'الفئة' : 'Category'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'المخزن' : 'On Hand'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'مستوى إعادة الطلب' : 'Reorder Level'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'تكلفة الوحدة' : 'Cost Price'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'سعر البيع' : 'Sale Price'}</th>
+                  <th>{isAr ? 'الحالة' : 'Status'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -268,7 +270,7 @@ export default function PartsPage() {
                           {p.status ?? 'ACTIVE'}
                         </span>
                         {isLow && (
-                          <span className="badge badge-warning" style={{ marginLeft: '0.3rem' }}>Low</span>
+                          <span className="badge badge-warning" style={{ marginLeft: '0.3rem' }}>{isAr ? 'منخفض' : 'Low'}</span>
                         )}
                       </td>
                     </tr>
@@ -277,7 +279,7 @@ export default function PartsPage() {
                 {parts.length === 0 && (
                   <tr>
                     <td colSpan={9} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-3)' }}>
-                      No parts found.
+                      {isAr ? 'لا توجد قطع غيار.' : 'No parts found.'}
                     </td>
                   </tr>
                 )}
@@ -288,11 +290,11 @@ export default function PartsPage() {
             {totalPages > 1 && (
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1rem', borderTop: '1px solid var(--border)' }}>
                 <button className="btn btn-ghost btn-sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                  ← Prev
+                  {isAr ? 'السابق →' : '← Prev'}
                 </button>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-2)' }}>Page {page} of {totalPages}</span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-2)' }}>{isAr ? `صفحة ${page} من ${totalPages}` : `Page ${page} of ${totalPages}`}</span>
                 <button className="btn btn-ghost btn-sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                  Next →
+                  {isAr ? '← التالي' : 'Next →'}
                 </button>
               </div>
             )}
@@ -317,11 +319,11 @@ export default function PartsPage() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
               <div>
-                <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-1)' }}>Adjust Stock</h2>
+                <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-1)' }}>{isAr ? 'تعديل المخزن' : 'Adjust Stock'}</h2>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-3)', marginTop: '0.2rem' }}>
                   {adjustPart.name}
                   <span style={{ marginLeft: '0.5rem' }}>·</span>
-                  <span style={{ marginLeft: '0.5rem' }}>Current: <strong>{adjustPart.onHand}</strong></span>
+                  <span style={{ marginLeft: '0.5rem' }}>{isAr ? 'الحالي:' : 'Current:'} <strong>{adjustPart.onHand}</strong></span>
                 </p>
               </div>
               <button
@@ -333,7 +335,7 @@ export default function PartsPage() {
             </div>
             <form onSubmit={submitAdjust} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
-                <label className="input-label">Quantity (positive to add, negative to remove)</label>
+                <label className="input-label">{isAr ? 'الكمية (موجب للإضافة، سالب للخصم)' : 'Quantity (positive to add, negative to remove)'}</label>
                 <input
                   type="number"
                   step="1"
@@ -346,10 +348,10 @@ export default function PartsPage() {
                 />
               </div>
               <div>
-                <label className="input-label">Reason</label>
+                <label className="input-label">{isAr ? 'السبب' : 'Reason'}</label>
                 <input
                   className="input"
-                  placeholder="e.g. Received PO, damaged, cycle count…"
+                  placeholder={isAr ? 'مثال: استلام أمر شراء، تالف، جرد…' : 'e.g. Received PO, damaged, cycle count…'}
                   value={adjustReason}
                   onChange={(e) => setAdjustReason(e.target.value)}
                 />
@@ -365,10 +367,10 @@ export default function PartsPage() {
                 }}
               >
                 <button type="button" className="btn btn-secondary" onClick={() => setAdjustPart(null)}>
-                  Cancel
+                  {isAr ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={adjustSaving}>
-                  {adjustSaving ? 'Saving…' : 'Apply Adjustment'}
+                  {adjustSaving ? (isAr ? 'جارٍ الحفظ…' : 'Saving…') : (isAr ? 'تطبيق التعديل' : 'Apply Adjustment')}
                 </button>
               </div>
             </form>
@@ -401,7 +403,7 @@ export default function PartsPage() {
                 borderBottom: '1px solid var(--border)',
               }}
             >
-              <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-1)' }}>Add New Part</h2>
+              <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-1)' }}>{isAr ? 'إضافة قطعة جديدة' : 'Add New Part'}</h2>
               <button
                 onClick={() => setShowAddPart(false)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: '1.2rem', lineHeight: 1 }}
@@ -416,7 +418,7 @@ export default function PartsPage() {
                 {/* Part # + OEM # + Name */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: '1rem' }}>
                   <div>
-                    <label className="input-label">Part Number *</label>
+                    <label className="input-label">{isAr ? 'رقم القطعة *' : 'Part Number *'}</label>
                     <div style={{ display: 'flex', gap: '0.375rem' }}>
                       <input
                         className="input"
@@ -441,7 +443,7 @@ export default function PartsPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="input-label">OEM Number</label>
+                    <label className="input-label">{isAr ? 'رقم OEM' : 'OEM Number'}</label>
                     <input
                       className="input"
                       value={partForm.oemNumber}
@@ -449,10 +451,10 @@ export default function PartsPage() {
                     />
                   </div>
                   <div>
-                    <label className="input-label">Name *</label>
+                    <label className="input-label">{isAr ? 'الاسم *' : 'Name *'}</label>
                     <input
                       className="input"
-                      placeholder="Part name…"
+                      placeholder={isAr ? 'اسم القطعة…' : 'Part name…'}
                       value={partForm.name}
                       onChange={(e) => setPF('name', e.target.value)}
                       required
@@ -463,16 +465,16 @@ export default function PartsPage() {
                 {/* Category + UOM + Reorder Level */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
                   <div>
-                    <label className="input-label">Category</label>
+                    <label className="input-label">{isAr ? 'الفئة' : 'Category'}</label>
                     <input
                       className="input"
-                      placeholder="e.g. Filters, Brakes…"
+                      placeholder={isAr ? 'مثال: فلاتر، فرامل…' : 'e.g. Filters, Brakes…'}
                       value={partForm.category}
                       onChange={(e) => setPF('category', e.target.value)}
                     />
                   </div>
                   <div>
-                    <label className="input-label">Unit of Measure</label>
+                    <label className="input-label">{isAr ? 'وحدة القياس' : 'Unit of Measure'}</label>
                     <input
                       className="input"
                       placeholder="EA"
@@ -481,7 +483,7 @@ export default function PartsPage() {
                     />
                   </div>
                   <div>
-                    <label className="input-label">Reorder Level</label>
+                    <label className="input-label">{isAr ? 'مستوى إعادة الطلب' : 'Reorder Level'}</label>
                     <input
                       type="number"
                       min="0"
@@ -495,7 +497,7 @@ export default function PartsPage() {
                 {/* Cost Price + Sale Price */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                   <div>
-                    <label className="input-label">Cost Price</label>
+                    <label className="input-label">{isAr ? 'تكلفة الوحدة' : 'Cost Price'}</label>
                     <input
                       type="number"
                       min="0"
@@ -507,7 +509,7 @@ export default function PartsPage() {
                     />
                   </div>
                   <div>
-                    <label className="input-label">Sale Price</label>
+                    <label className="input-label">{isAr ? 'سعر البيع' : 'Sale Price'}</label>
                     <input
                       type="number"
                       min="0"
@@ -523,7 +525,7 @@ export default function PartsPage() {
                 {/* Location + Supplier */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                   <div>
-                    <label className="input-label">Location *</label>
+                    <label className="input-label">{isAr ? 'الفرع *' : 'Location *'}</label>
                     <SearchableCombobox
                       options={locationSelectOpts}
                       value={partForm.locationId}
@@ -532,7 +534,7 @@ export default function PartsPage() {
                     />
                   </div>
                   <div>
-                    <label className="input-label">Supplier</label>
+                    <label className="input-label">{isAr ? 'المورد' : 'Supplier'}</label>
                     <SearchableCombobox
                       options={supplierOpts}
                       value={partForm.supplierId}
@@ -546,11 +548,11 @@ export default function PartsPage() {
 
                 {/* Description */}
                 <div>
-                  <label className="input-label">Description</label>
+                  <label className="input-label">{isAr ? 'الوصف' : 'Description'}</label>
                   <textarea
                     className="input"
                     style={{ resize: 'vertical', minHeight: '60px' }}
-                    placeholder="Part description or notes…"
+                    placeholder={isAr ? 'وصف القطعة أو ملاحظات…' : 'Part description or notes…'}
                     value={partForm.description}
                     onChange={(e) => setPF('description', e.target.value)}
                   />
@@ -568,10 +570,10 @@ export default function PartsPage() {
                   }}
                 >
                   <button type="button" className="btn btn-secondary" onClick={() => setShowAddPart(false)}>
-                    Cancel
+                    {isAr ? 'إلغاء' : 'Cancel'}
                   </button>
                   <button type="submit" className="btn btn-primary" disabled={partSaving}>
-                    {partSaving ? 'Saving…' : 'Add Part'}
+                    {partSaving ? (isAr ? 'جارٍ الحفظ…' : 'Saving…') : (isAr ? 'إضافة القطعة' : 'Add Part')}
                   </button>
                 </div>
 

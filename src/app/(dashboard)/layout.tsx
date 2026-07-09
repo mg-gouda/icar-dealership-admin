@@ -7,13 +7,16 @@ import NotificationBell from '@/components/NotificationBell';
 import CommandPalette from '@/components/CommandPalette';
 import { LocationProvider, useLocation } from '@/lib/location-context';
 import { DateRangeProvider, useDateRange } from '@/lib/date-range-context';
+import { LangProvider, useLang } from '@/lib/lang-context';
+import { BrandProvider, useBrand } from '@/lib/brand-context';
+import { ThemeProvider, useTheme } from '@/lib/theme-context';
 import SearchableCombobox from '@/components/ui/SearchableCombobox';
+import { API_BASE } from '@/lib/config';
 
 /* ─── Nav items ──────────────────────────────────────────────────────────── */
-const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[] }[] = [
+const NAV: { href: string; key: string; icon: React.ReactNode; roles?: string[] }[] = [
   {
-    href: '/',
-    label: 'Dashboard',
+    href: '/', key: 'nav.dashboard',
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <rect x="1" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity=".9"/>
@@ -24,8 +27,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/vehicles',
-    label: 'Inventory',
+    href: '/vehicles', key: 'nav.inventory',
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <path d="M2 10.5L3.5 6h9l1.5 4.5V12a.5.5 0 01-.5.5H3a.5.5 0 01-.5-.5v-1.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
@@ -37,8 +39,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/import',
-    label: 'Imports',
+    href: '/import', key: 'nav.imports',
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <path d="M1.5 11h13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
@@ -51,8 +52,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/crm',
-    label: 'Leads & CRM',
+    href: '/crm', key: 'nav.crm',
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <circle cx="6" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.2"/>
@@ -63,8 +63,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/reports',
-    label: 'Reports',
+    href: '/reports', key: 'nav.reports',
     roles: ['MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -74,8 +73,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/whatsapp',
-    label: 'WhatsApp',
+    href: '/whatsapp', key: 'nav.whatsapp',
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <rect x="1.5" y="2" width="13" height="10" rx="2" stroke="currentColor" strokeWidth="1.2"/>
@@ -85,8 +83,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/deals',
-    label: 'Deals',
+    href: '/deals', key: 'nav.deals',
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <rect x="1.5" y="3.5" width="13" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
@@ -96,8 +93,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/appointments',
-    label: 'Appointments',
+    href: '/appointments', key: 'nav.appointments',
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <rect x="1.5" y="3" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
@@ -108,8 +104,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/service',
-    label: 'Service Center',
+    href: '/service', key: 'nav.service',
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <path d="M10.5 2.5a4 4 0 0 1 0 5.657L5.657 13.1a2 2 0 1 1-2.828-2.828L7.672 5.43A4 4 0 0 1 10.5 2.5z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -119,8 +114,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/parts',
-    label: 'Parts',
+    href: '/parts', key: 'nav.parts',
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <path d="M8 1.5L14.5 5v6L8 14.5 1.5 11V5L8 1.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
@@ -129,8 +123,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/transfers',
-    label: 'Transfers',
+    href: '/transfers', key: 'nav.transfers',
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <path d="M2 8h12M10 5l4 3-4 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -139,8 +132,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/floor-plan',
-    label: 'Floor Plan',
+    href: '/floor-plan', key: 'nav.floorplan',
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <rect x="1.5" y="5" width="13" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
@@ -150,8 +142,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/petty-cash',
-    label: 'Petty Cash',
+    href: '/petty-cash', key: 'nav.pettycash',
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <rect x="1.5" y="4" width="13" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
@@ -163,8 +154,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/finance',
-    label: 'Finance',
+    href: '/finance', key: 'nav.finance',
     roles: ['FINANCE', 'ADMIN', 'SUPER_ADMIN'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -175,8 +165,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/reports/my-commissions',
-    label: 'My Commissions',
+    href: '/reports/my-commissions', key: 'nav.commissions',
     roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -185,8 +174,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/executive',
-    label: 'Executive View',
+    href: '/executive', key: 'nav.executive',
     roles: ['MANAGER', 'ADMIN', 'SUPER_ADMIN'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -196,8 +184,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/settings/users',
-    label: 'Users & Locations',
+    href: '/settings/users', key: 'nav.users',
     roles: ['ADMIN', 'SUPER_ADMIN'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -208,8 +195,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/audit-log',
-    label: 'Audit Log',
+    href: '/audit-log', key: 'nav.auditlog',
     roles: ['ADMIN', 'SUPER_ADMIN'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -220,8 +206,7 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
     ),
   },
   {
-    href: '/settings',
-    label: 'Settings',
+    href: '/settings', key: 'nav.settings',
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2"/>
@@ -234,8 +219,9 @@ const NAV: { href: string; label: string; icon: React.ReactNode; roles?: string[
 /* ─── Location dropdown ──────────────────────────────────────────────────── */
 function LocationDropdown() {
   const { locationId, setLocationId, locations } = useLocation();
+  const { t } = useLang();
   const opts = [
-    { value: '', label: 'All Locations' },
+    { value: '', label: t('lbl.allLocations') },
     ...locations.map((l) => ({ value: l.id, label: l.name })),
   ];
   return (
@@ -243,20 +229,24 @@ function LocationDropdown() {
       options={opts}
       value={locationId}
       onChange={setLocationId}
-      placeholder="All Locations"
+      placeholder={t('lbl.allLocations')}
       className="w-44"
     />
   );
 }
 
-/* ─── Interactive date range picker ─────────────────────────────────────── */
-function fmtMonthLabel(ym: string): string {
+/* ─── Date range picker ──────────────────────────────────────────────────── */
+function fmtMonthLabel(ym: string, lang: string): string {
   const [y, m] = ym.split('-');
-  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString(
+    lang === 'ar' ? 'ar-EG' : 'en-US',
+    { month: 'short', year: 'numeric' }
+  );
 }
 
 function DateRangePicker() {
   const { dateRange, setDateRange } = useDateRange();
+  const { t, lang } = useLang();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -269,8 +259,8 @@ function DateRangePicker() {
   }, []);
 
   const label = dateRange.from === dateRange.to
-    ? fmtMonthLabel(dateRange.from)
-    : `${fmtMonthLabel(dateRange.from)} – ${fmtMonthLabel(dateRange.to)}`;
+    ? fmtMonthLabel(dateRange.from, lang)
+    : `${fmtMonthLabel(dateRange.from, lang)} – ${fmtMonthLabel(dateRange.to, lang)}`;
 
   return (
     <div ref={ref} className="relative">
@@ -292,49 +282,106 @@ function DateRangePicker() {
 
       {open && (
         <div
-          className="absolute z-50 top-full mt-1.5 left-0 rounded-xl shadow-xl shadow-black/30 p-4 space-y-3"
-          style={{ background: 'var(--surface)', border: '1px solid var(--border)', minWidth: 220 }}
+          className="absolute z-50 top-full mt-1.5 rounded-xl shadow-xl shadow-black/30 p-4 space-y-3"
+          style={{
+            background: 'var(--surface)', border: '1px solid var(--border)', minWidth: 220,
+            insetInlineStart: 0,
+          }}
         >
           <div>
-            <label className="input-label">From</label>
-            <input
-              type="month"
-              value={dateRange.from}
+            <label className="input-label">{t('date.from')}</label>
+            <input type="month" value={dateRange.from}
               onChange={(e) => setDateRange({ ...dateRange, from: e.target.value })}
-              className="input w-full"
-            />
+              className="input w-full" />
           </div>
           <div>
-            <label className="input-label">To</label>
-            <input
-              type="month"
-              value={dateRange.to}
+            <label className="input-label">{t('date.to')}</label>
+            <input type="month" value={dateRange.to}
               onChange={(e) => setDateRange({ ...dateRange, to: e.target.value })}
-              className="input w-full"
-            />
+              className="input w-full" />
           </div>
-          <button onClick={() => setOpen(false)} className="btn btn-primary btn-sm w-full">Apply</button>
+          <button onClick={() => setOpen(false)} className="btn btn-primary btn-sm w-full">
+            {t('date.apply')}
+          </button>
         </div>
       )}
     </div>
   );
 }
 
-/* ─── Inner shell (uses hooks + location context) ────────────────────────── */
+/* ─── Dark / light toggle ────────────────────────────────────────────────── */
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === 'dark';
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      className="p-1.5 rounded-lg transition"
+      style={{ color: 'var(--text-2)', background: 'transparent' }}
+      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
+      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+    >
+      {isDark ? (
+        /* Sun icon */
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="5" strokeWidth="1.8" strokeLinecap="round"/>
+          <path strokeWidth="1.8" strokeLinecap="round"
+            d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+      ) : (
+        /* Moon icon */
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+            d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"/>
+        </svg>
+      )}
+    </button>
+  );
+}
+
+/* ─── Sidebar brand / logo ───────────────────────────────────────────────── */
+function SidebarBrand() {
+  const { logoUrl, displayName } = useBrand();
+  const { t } = useLang();
+  return (
+    <div className="flex items-center gap-2.5 px-4 py-4"
+      style={{ borderBottom: '1px solid var(--sidebar-border)' }}>
+      {logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={logoUrl} alt="logo" style={{ height: 32, maxWidth: 120, objectFit: 'contain' }} />
+      ) : (
+        <>
+          <span className="text-base" aria-hidden>🚗</span>
+          <div>
+            <p className="text-sm font-semibold leading-none" style={{ color: 'var(--sidebar-active-text)' }}>
+              {displayName || t('app.name')}
+            </p>
+            <p className="text-[10px] mt-0.5" style={{ color: 'var(--sidebar-text)' }}>
+              {t('app.subtitle')}
+            </p>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ─── Inner shell ────────────────────────────────────────────────────────── */
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useLang();
   const [user, setUser] = useState<{ name: string; role: string } | null>(null);
 
   useEffect(() => {
     const tk = localStorage.getItem('accessToken');
     if (!tk) { router.replace('/login'); return; }
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
-    fetch(`${apiBase}/auth/me`, { headers: { Authorization: `Bearer ${tk}` } })
+    fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${tk}` } })
       .then(r => r.ok ? r.json() : Promise.reject('not ok'))
       .then(data => setUser({ name: data.name ?? data.email ?? 'Admin', role: data.role ?? 'ADMIN' }))
       .catch(() => {
-        // ponytail: fallback to cookie role on fetch failure
         const roleCookie = document.cookie.split('; ').find(c => c.startsWith('admin_role='));
         const role = roleCookie ? roleCookie.split('=')[1] : 'ADMIN';
         setUser({ name: '—', role });
@@ -344,7 +391,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   function logout() {
     const token = localStorage.getItem('accessToken');
     if (token) {
-      fetch(`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1'}/auth/logout`, {
+      fetch(`${API_BASE}/auth/logout`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       }).catch(() => {});
@@ -361,31 +408,27 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
 
       {/* ── Sidebar ─────────────────────────────────────────────────── */}
-      <aside className="w-52 flex-shrink-0 flex flex-col" style={{ background: 'var(--sidebar-bg)', borderRight: '1px solid var(--sidebar-border)' }}>
+      <aside className="w-52 flex-shrink-0 flex flex-col"
+        style={{ background: 'var(--sidebar-bg)', borderInlineEnd: '1px solid var(--sidebar-border)' }}>
+
         {/* Logo */}
-        <div className="flex items-center gap-2.5 px-4 py-4" style={{ borderBottom: '1px solid var(--sidebar-border)' }}>
-          <span className="text-base" aria-hidden>🚗</span>
-          <div>
-            <p className="text-sm font-semibold leading-none" style={{ color: 'var(--sidebar-active-text)' }}>DealerMS</p>
-            <p className="text-[10px] mt-0.5" style={{ color: 'var(--sidebar-text)' }}>Management Platform</p>
-          </div>
-        </div>
+        <SidebarBrand />
 
         {/* Nav */}
         <nav className="flex-1 px-2.5 py-3 space-y-0.5 overflow-y-auto">
-          {NAV.filter(n => !n.roles || (user && n.roles.includes(user.role))).map(({ href, label, icon }) => {
+          {NAV.filter(n => !n.roles || (user && n.roles.includes(user.role))).map(({ href, key, icon }) => {
             const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
             return (
               <Link key={href} href={href}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[0.8125rem] font-medium transition-all duration-150 group"
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[0.8125rem] font-medium transition-all duration-150"
                 style={{
                   background: active ? 'var(--sidebar-active-bg)' : 'transparent',
                   color: active ? 'var(--sidebar-active-text)' : 'var(--sidebar-text)',
                 }}>
                 <span className="shrink-0" style={{ opacity: active ? 1 : 0.7 }}>{icon}</span>
-                <span className="truncate">{label}</span>
+                <span className="truncate">{t(key)}</span>
                 {active && (
-                  <span className="ml-auto w-1.5 h-1.5 rounded-full shrink-0"
+                  <span className="ms-auto w-1.5 h-1.5 rounded-full shrink-0"
                     style={{ background: 'var(--sidebar-active-dot)' }} />
                 )}
               </Link>
@@ -408,7 +451,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                 {user?.role ?? '—'}
               </p>
             </div>
-            <button onClick={logout} title="Sign out"
+            <button onClick={logout} title={t('btn.signout')}
               className="p-1 rounded hover:bg-white/10 transition" style={{ color: 'var(--sidebar-text)' }}>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                 <path d="M5 7h7M9 5l2 2-2 2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
@@ -421,8 +464,6 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
       {/* ── Main area ───────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">
-
-        {/* Top bar */}
         <header className="flex items-center justify-between px-5 py-2.5 flex-shrink-0"
           style={{ background: 'var(--topbar-bg)', borderBottom: '1px solid var(--topbar-border)' }}>
           <div className="flex items-center gap-2">
@@ -431,20 +472,20 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex items-center gap-1">
             <NotificationBell />
-            <span className="avatar w-7 h-7 text-[0.625rem] cursor-pointer hover:opacity-80 transition ml-1"
-              style={{ background: 'var(--primary)', color: '#fff' }}>
+            <ThemeToggle />
+            <Link href="/profile"
+              className="avatar w-7 h-7 text-[0.625rem] hover:opacity-80 transition ms-1"
+              style={{ background: 'var(--primary)', color: '#fff', textDecoration: 'none' }}>
               {initials}
-            </span>
+            </Link>
           </div>
         </header>
 
-        {/* Page content */}
         <main className="flex-1 overflow-y-auto" style={{ background: 'var(--bg)' }}>
           {children}
         </main>
       </div>
 
-      {/* Global command palette */}
       <CommandPalette />
     </div>
   );
@@ -453,10 +494,16 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 /* ─── Root layout export ─────────────────────────────────────────────────── */
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <LocationProvider>
-      <DateRangeProvider>
-        <DashboardShell>{children}</DashboardShell>
-      </DateRangeProvider>
-    </LocationProvider>
+    <ThemeProvider>
+      <LangProvider>
+        <BrandProvider>
+          <LocationProvider>
+            <DateRangeProvider>
+              <DashboardShell>{children}</DashboardShell>
+            </DateRangeProvider>
+          </LocationProvider>
+        </BrandProvider>
+      </LangProvider>
+    </ThemeProvider>
   );
 }

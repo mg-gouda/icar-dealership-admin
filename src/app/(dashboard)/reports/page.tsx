@@ -6,6 +6,7 @@ import { apiFetch, useQuery } from '../../../lib/useApi';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 import { useLang } from '../../../lib/lang-context';
 import { translateSource } from '../../../lib/source-labels';
+import { ErrorBanner } from '@/components/ui/error-banner';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -77,13 +78,6 @@ function Spinner({ isAr }: { isAr: boolean }) {
   );
 }
 
-function ErrorMsg({ msg }: { msg: string }) {
-  return (
-    <div className="mx-6 mt-4 rounded-lg px-4 py-3" style={{ background: 'var(--danger-bg)', border: '1px solid var(--danger)' }}>
-      <p className="text-xs" style={{ color: 'var(--danger-fg)' }}>{msg}</p>
-    </div>
-  );
-}
 
 function EmptyState({ onGenerate, isAr }: { onGenerate: () => void; isAr: boolean }) {
   return (
@@ -178,7 +172,7 @@ function SalesPipelineTab() {
       {/* Content */}
       <div className="px-6 py-5 space-y-5">
         {loading && <Spinner isAr={isAr} />}
-        {error   && <ErrorMsg msg={error} />}
+        {error   && <div className="mx-6 mt-4"><ErrorBanner error={error} retry={generate} /></div>}
         {!loading && !error && !data && <EmptyState onGenerate={generate} isAr={isAr} />}
         {!loading && data && (
           <>
@@ -286,7 +280,7 @@ function InventoryAgingTab() {
       {/* Content */}
       <div className="px-6 py-5 space-y-5">
         {loading && <Spinner isAr={isAr} />}
-        {error   && <ErrorMsg msg={error} />}
+        {error   && <div className="mx-6 mt-4"><ErrorBanner error={error} retry={generate} /></div>}
         {!loading && !error && !data && <EmptyState onGenerate={generate} isAr={isAr} />}
         {!loading && data && (
           <>
@@ -401,7 +395,7 @@ function LeadConversionTab() {
       {/* Content */}
       <div className="px-6 py-5 space-y-5">
         {loading && <Spinner isAr={isAr} />}
-        {error   && <ErrorMsg msg={error} />}
+        {error   && <div className="mx-6 mt-4"><ErrorBanner error={error} retry={generate} /></div>}
         {!loading && !error && !data && <EmptyState onGenerate={generate} isAr={isAr} />}
         {!loading && data && (
           <>
@@ -534,7 +528,7 @@ function AppointmentAnalyticsTab() {
       {/* Content */}
       <div className="px-6 py-5 space-y-5">
         {loading && <Spinner isAr={isAr} />}
-        {error   && <ErrorMsg msg={error} />}
+        {error   && <div className="mx-6 mt-4"><ErrorBanner error={error} retry={generate} /></div>}
         {!loading && !error && !data && <EmptyState onGenerate={generate} isAr={isAr} />}
         {!loading && data && (
           <>

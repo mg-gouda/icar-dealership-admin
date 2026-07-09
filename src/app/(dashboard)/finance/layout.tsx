@@ -2,29 +2,31 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useLang } from '@/lib/lang-context';
 
-const TABS = [
-  { label: 'Overview',          href: '/finance' },
-  { label: 'Invoices',          href: '/finance/invoices' },
-  { label: 'Vendors',           href: '/finance/vendors' },
-  { label: 'Vendor Bills',      href: '/finance/vendor-bills' },
-  { label: 'GL Journal',        href: '/finance/gl' },
-  { label: 'Payments',          href: '/finance/payments' },
-  { label: 'Reconciliation',    href: '/finance/reconciliation' },
-  { label: 'Bank Statements',   href: '/finance/bank-statements' },
-  { label: 'Assets',            href: '/finance/assets' },
-  { label: 'Reports',           href: '/finance/reports' },
-  { label: 'Commissions',       href: '/finance/commissions' },
-  { label: 'Accounts',          href: '/finance/accounts' },
-  { label: 'Journals',          href: '/finance/journals' },
-  { label: 'Taxes',             href: '/finance/taxes' },
-  { label: 'Currencies',        href: '/finance/currencies' },
-  { label: 'Fiscal Years',      href: '/finance/fiscal-years' },
-  { label: 'Commission Plans',  href: '/finance/commission-plans' },
+const NAV_ITEMS = [
+  { href: '/finance',                  en: 'Overview',         ar: 'نظرة عامة' },
+  { href: '/finance/invoices',         en: 'Invoices',         ar: 'الفواتير' },
+  { href: '/finance/vendors',          en: 'Vendors',          ar: 'الموردون' },
+  { href: '/finance/vendor-bills',     en: 'Vendor Bills',     ar: 'فواتير الموردين' },
+  { href: '/finance/gl',               en: 'GL Journal',       ar: 'يومية الأستاذ' },
+  { href: '/finance/payments',         en: 'Payments',         ar: 'المدفوعات' },
+  { href: '/finance/reconciliation',   en: 'Reconciliation',   ar: 'التسوية' },
+  { href: '/finance/bank-statements',  en: 'Bank Statements',  ar: 'كشوف البنك' },
+  { href: '/finance/assets',           en: 'Assets',           ar: 'الأصول' },
+  { href: '/finance/reports',          en: 'Reports',          ar: 'التقارير' },
+  { href: '/finance/commissions',      en: 'Commissions',      ar: 'العمولات' },
+  { href: '/finance/accounts',         en: 'Accounts',         ar: 'الحسابات' },
+  { href: '/finance/journals',         en: 'Journals',         ar: 'الدفاتر المحاسبية' },
+  { href: '/finance/taxes',            en: 'Taxes',            ar: 'الضرائب' },
+  { href: '/finance/currencies',       en: 'Currencies',       ar: 'العملات' },
+  { href: '/finance/fiscal-years',     en: 'Fiscal Years',     ar: 'السنوات المالية' },
+  { href: '/finance/commission-plans', en: 'Commission Plans', ar: 'خطط العمولات' },
 ];
 
 export default function FinanceLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { isAr } = useLang();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -43,7 +45,7 @@ export default function FinanceLayout({ children }: { children: React.ReactNode 
           flexShrink: 0,
         }}
       >
-        {TABS.map(({ label, href }) => {
+        {NAV_ITEMS.map(({ href, en, ar }) => {
           // ponytail: Overview is exact; others are prefix
           const active = href === '/finance' ? pathname === '/finance' : pathname.startsWith(href);
           return (
@@ -57,13 +59,13 @@ export default function FinanceLayout({ children }: { children: React.ReactNode 
                 fontWeight: active ? 600 : 500,
                 whiteSpace: 'nowrap',
                 textDecoration: 'none',
-                color: active ? 'var(--primary)' : 'var(--text-2)',
-                borderBottom: active ? '2px solid var(--primary)' : '2px solid transparent',
+                color: active ? 'var(--tab-active)' : 'var(--text-2)',
+                borderBottom: active ? '2px solid var(--tab-active)' : '2px solid transparent',
                 marginBottom: '-1px',
                 transition: 'color 0.15s, border-color 0.15s',
               }}
             >
-              {label}
+              {isAr ? ar : en}
             </Link>
           );
         })}

@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+import { useLang } from '@/lib/lang-context';
+import { API_BASE as API } from '@/lib/config';
 const authHeaders = () => ({
   'Content-Type': 'application/json',
   Authorization: `Bearer ${typeof window !== 'undefined' ? (localStorage.getItem('accessToken') ?? '') : ''}`,
@@ -54,23 +54,21 @@ function LineChart({ data }: { data: MonthlyPoint[] }) {
   const innerH = H - pad.top - pad.bottom;
 
   const allVals = data.flatMap((d) => [d.revenue, d.expenses]);
-  const maxVal = Math.max(...allVals);
+  const maxVal = allVals.length > 0 ? Math.max(0, ...allVals) : 0;
   const minVal = 0;
-  const range = maxVal - minVal || 1;
+  const range = (maxVal - minVal) || 1;
 
-  const xScale = (i: number) => pad.left + (i / (data.length - 1)) * innerW;
+  const xScale = (i: number) => data.length <= 1 ? pad.left + innerW / 2 : pad.left + (i / (data.length - 1)) * innerW;
   const yScale = (v: number) => pad.top + innerH - ((v - minVal) / range) * innerH;
 
   const revenuePoints = data.map((d, i) => `${xScale(i)},${yScale(d.revenue)}`).join(' ');
   const expensePoints = data.map((d, i) => `${xScale(i)},${yScale(d.expenses)}`).join(' ');
 
-  // Y axis ticks
   const ticks = 4;
   const yTicks = Array.from({ length: ticks + 1 }, (_, i) => minVal + (range / ticks) * i);
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto' }}>
-      {/* Grid lines */}
       {yTicks.map((v, i) => (
         <g key={i}>
           <line
@@ -84,22 +82,18 @@ function LineChart({ data }: { data: MonthlyPoint[] }) {
         </g>
       ))}
 
-      {/* Revenue area fill */}
       <polygon
         points={`${xScale(0)},${pad.top + innerH} ${revenuePoints} ${xScale(data.length - 1)},${pad.top + innerH}`}
         fill="var(--primary)" fillOpacity={0.08}
       />
-      {/* Expense area fill */}
       <polygon
         points={`${xScale(0)},${pad.top + innerH} ${expensePoints} ${xScale(data.length - 1)},${pad.top + innerH}`}
         fill="var(--orange)" fillOpacity={0.08}
       />
 
-      {/* Lines */}
       <polyline points={revenuePoints} fill="none" stroke="var(--primary)" strokeWidth={2} strokeLinejoin="round" />
       <polyline points={expensePoints} fill="none" stroke="var(--orange)" strokeWidth={2} strokeLinejoin="round" />
 
-      {/* Dots */}
       {data.map((d, i) => (
         <g key={i}>
           <circle cx={xScale(i)} cy={yScale(d.revenue)} r={3} fill="var(--primary)" />
@@ -107,7 +101,6 @@ function LineChart({ data }: { data: MonthlyPoint[] }) {
         </g>
       ))}
 
-      {/* X axis labels */}
       {data.map((d, i) => (
         <text key={i} x={xScale(i)} y={H - 6} textAnchor="middle"
           style={{ fontSize: 9, fill: 'var(--text-3)' }}>
@@ -156,20 +149,21 @@ function TodoBadge({ type }: { type: TodoItem['type'] }) {
 
 /* ─── AR/AP Aging table ───────────────────────────────────────────────────── */
 function AgingTable() {
+  const { isAr } = useLang();
   const rows = [
-    { label: 'Receivables', current: 620_000, d30: 340_000, d60: 180_000, d60p: 100_000, total: 1_240_000 },
-    { label: 'Payables',    current: 200_000, d30: 180_000, d60: 200_000, d60p: 100_000, total:   680_000 },
+    { label: isAr ? 'المستحقات' : 'Receivables', current: 620_000, d30: 340_000, d60: 180_000, d60p: 100_000, total: 1_240_000 },
+    { label: isAr ? 'المطلوبات' : 'Payables',    current: 200_000, d30: 180_000, d60: 200_000, d60p: 100_000, total:   680_000 },
   ];
   return (
     <table className="data-table">
       <thead>
         <tr>
           <th></th>
-          <th>Current</th>
-          <th>1–30 days</th>
-          <th>31–60 days</th>
-          <th style={{ color: 'var(--danger-fg)' }}>60+ days</th>
-          <th>Total</th>
+          <th>{isAr ? 'الحالي' : 'Current'}</th>
+          <th>{isAr ? '1-30 يوم' : '1–30 days'}</th>
+          <th>{isAr ? '31-60 يوم' : '31–60 days'}</th>
+          <th style={{ color: 'var(--danger-fg)' }}>{isAr ? '60+ يوم' : '60+ days'}</th>
+          <th>{isAr ? 'الإجمالي' : 'Total'}</th>
         </tr>
       </thead>
       <tbody>
@@ -197,6 +191,7 @@ interface PayableCommission {
 
 /* ─── Main page ───────────────────────────────────────────────────────────── */
 export default function FinanceDashboardPage() {
+  const { isAr } = useLang();
   const [summary, setSummary] = useState<FinanceSummary | null>(null);
   const [summaryError, setSummaryError] = useState(false);
   const [todos, setTodos] = useState<TodoItem[]>([]);
@@ -213,15 +208,15 @@ export default function FinanceDashboardPage() {
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (Array.isArray(d)) setTodos(d); else if (d?.items) setTodos(d.items); })
       .catch(() => {});
-    fetch(`${API}/commissions?status=PAYABLE&limit=10`, { headers: authHeaders() })
+    fetch(`${API}/finance/commissions?status=PAYABLE&limit=10`, { headers: authHeaders() })
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (d?.items) setPayableComms(d.items); })
       .catch(() => {});
-    fetch(`${API}/reports/revenue-by-month`, { headers: authHeaders() })
+    fetch(`${API}/finance/reports/revenue-by-month`, { headers: authHeaders() })
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data?.months) setMonthly(data.months); })
       .catch(() => {});
-    fetch(`${API}/reports/branch-profit`, { headers: authHeaders() })
+    fetch(`${API}/finance/reports/branch-profit`, { headers: authHeaders() })
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data?.branches) setBranches(data.branches); })
       .catch(() => {});
@@ -230,9 +225,9 @@ export default function FinanceDashboardPage() {
   /* KPI cards — only when summary loaded */
   const KPI_CARDS = summary ? [
     {
-      label: 'AR OUTSTANDING',
+      label: isAr ? 'الذمم المدينة المستحقة' : 'AR OUTSTANDING',
       value: fmtEGP(summary.arOutstanding),
-      sub: `${summary.arInvoiceCount} invoices`,
+      sub: isAr ? `${summary.arInvoiceCount} فاتورة` : `${summary.arInvoiceCount} invoices`,
       color: 'var(--success-fg)',
       icon: (
         <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
@@ -241,9 +236,9 @@ export default function FinanceDashboardPage() {
       ),
     },
     {
-      label: 'AP OUTSTANDING',
+      label: isAr ? 'الذمم الدائنة المستحقة' : 'AP OUTSTANDING',
       value: fmtEGP(summary.apOutstanding),
-      sub: `${summary.apBillCount} bills, due`,
+      sub: isAr ? `${summary.apBillCount} فاتورة، مستحقة` : `${summary.apBillCount} bills, due`,
       color: 'var(--danger-fg)',
       icon: (
         <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
@@ -252,9 +247,9 @@ export default function FinanceDashboardPage() {
       ),
     },
     {
-      label: 'CASH & BANK BALANCE',
+      label: isAr ? 'رصيد النقد والبنك' : 'CASH & BANK BALANCE',
       value: fmtEGP(summary.cashBalance),
-      sub: `Across ${summary.bankAccountCount} accounts`,
+      sub: isAr ? `عبر ${summary.bankAccountCount} حساب` : `Across ${summary.bankAccountCount} accounts`,
       color: 'var(--info-fg)',
       icon: (
         <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
@@ -263,9 +258,9 @@ export default function FinanceDashboardPage() {
       ),
     },
     {
-      label: 'OVERDUE INSTALLMENTS',
+      label: isAr ? 'الأقساط المتأخرة' : 'OVERDUE INSTALLMENTS',
       value: String(summary.overdueInstallmentCount),
-      sub: `${fmtEGP(summary.overdueInstallmentAmount)} overdue`,
+      sub: isAr ? `${fmtEGP(summary.overdueInstallmentAmount)} متأخرة` : `${fmtEGP(summary.overdueInstallmentAmount)} overdue`,
       color: 'var(--warning-fg)',
       icon: (
         <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
@@ -280,12 +275,12 @@ export default function FinanceDashboardPage() {
       {/* Page header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Finance Dashboard</h1>
-          <p className="page-subtitle">June 2026 · All Locations · Company Overview</p>
+          <h1 className="page-title">{isAr ? 'لوحة تحكم المالية' : 'Finance Dashboard'}</h1>
+          <p className="page-subtitle">{isAr ? 'يونيو 2026 · جميع المواقع · نظرة عامة على الشركة' : 'June 2026 · All Locations · Company Overview'}</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <Link href="/finance/reports" className="btn btn-secondary btn-sm">View Reports</Link>
-          <Link href="/finance/gl?action=new" className="btn btn-primary btn-sm">+ New Journal Entry</Link>
+          <Link href="/finance/reports" className="btn btn-secondary btn-sm">{isAr ? 'عرض التقارير' : 'View Reports'}</Link>
+          <Link href="/finance/gl?action=new" className="btn btn-primary btn-sm">{isAr ? '+ قيد محاسبي جديد' : '+ New Journal Entry'}</Link>
         </div>
       </div>
 
@@ -294,7 +289,7 @@ export default function FinanceDashboardPage() {
         {/* ── KPI Row ────────────────────────────────────────────────────────── */}
         {summaryError ? (
           <div style={{ padding: '2rem', textAlign: 'center', color: '#ef4444' }}>
-            Failed to load finance summary. Please refresh or contact support.
+            {isAr ? 'فشل تحميل ملخص المالية. يرجى التحديث أو التواصل مع الدعم.' : 'Failed to load finance summary. Please refresh or contact support.'}
           </div>
         ) : !summary ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.875rem' }}>
@@ -333,15 +328,15 @@ export default function FinanceDashboardPage() {
           {/* To-Do Queue */}
           <div className="card" style={{ overflow: 'hidden' }}>
             <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>To-Do Queue</p>
-              <span className="badge badge-warning">{todos.length} pending</span>
+              <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>{isAr ? 'قائمة المهام' : 'To-Do Queue'}</p>
+              <span className="badge badge-warning">{todos.length} {isAr ? 'معلق' : 'pending'}</span>
             </div>
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Description</th>
-                  <th>Type</th>
-                  <th style={{ textAlign: 'right' }}>Action</th>
+                  <th>{isAr ? 'الوصف' : 'Description'}</th>
+                  <th>{isAr ? 'النوع' : 'Type'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'الإجراء' : 'Action'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -351,7 +346,7 @@ export default function FinanceDashboardPage() {
                     <td><TodoBadge type={t.type} /></td>
                     <td style={{ textAlign: 'right' }}>
                       <Link href={t.href} style={{ color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 500, textDecoration: 'none' }}>
-                        Load →
+                        {isAr ? 'فتح →' : 'Load →'}
                       </Link>
                     </td>
                   </tr>
@@ -363,32 +358,32 @@ export default function FinanceDashboardPage() {
           {/* AR / AP Aging */}
           <div className="card" style={{ overflow: 'hidden' }}>
             <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>AR / AP Aging Summary</p>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>As of Jun 2026</span>
+              <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>{isAr ? 'ملخص أعمار الذمم' : 'AR / AP Aging Summary'}</p>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{isAr ? 'حتى يونيو 2026' : 'As of Jun 2026'}</span>
             </div>
             <AgingTable />
           </div>
         </div>
 
-        {/* ── Commissions Payable Queue (shown when there are items) ──────────── */}
+        {/* ── Commissions Payable Queue ──────────────────────────────────────── */}
         {payableComms.length > 0 && (
           <div className="card" style={{ overflow: 'hidden' }}>
             <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
-                <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>Commissions Payable Queue</p>
+                <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>{isAr ? 'قائمة العمولات المستحقة' : 'Commissions Payable Queue'}</p>
                 <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 2 }}>
-                  {payableComms.length} commission{payableComms.length !== 1 ? 's' : ''} ready to pay out ·&nbsp;
-                  {fmtEGP(payableComms.reduce((s, c) => s + (c.calculatedAmount ?? 0), 0))} total
+                  {payableComms.length} {isAr ? (payableComms.length !== 1 ? 'عمولات جاهزة للصرف' : 'عمولة جاهزة للصرف') : `commission${payableComms.length !== 1 ? 's' : ''} ready to pay out`} ·&nbsp;
+                  {fmtEGP(payableComms.reduce((s, c) => s + (c.calculatedAmount ?? 0), 0))} {isAr ? 'إجمالي' : 'total'}
                 </p>
               </div>
-              <Link href="/finance/commissions?status=PAYABLE" className="btn btn-primary btn-sm">Process Payouts →</Link>
+              <Link href="/finance/commissions?status=PAYABLE" className="btn btn-primary btn-sm">{isAr ? 'معالجة المدفوعات →' : 'Process Payouts →'}</Link>
             </div>
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Sales Rep</th>
-                  <th>Deal</th>
-                  <th style={{ textAlign: 'right' }}>Amount</th>
+                  <th>{isAr ? 'المندوب' : 'Sales Rep'}</th>
+                  <th>{isAr ? 'الصفقة' : 'Deal'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'المبلغ' : 'Amount'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -412,15 +407,15 @@ export default function FinanceDashboardPage() {
           {/* Monthly Revenue vs Expenses */}
           <div className="card" style={{ padding: '1rem 1.25rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
-              <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>Monthly Revenue vs Expenses</p>
+              <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>{isAr ? 'الإيرادات والمصروفات الشهرية' : 'Monthly Revenue vs Expenses'}</p>
               <div style={{ display: 'flex', gap: '1rem' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.7rem', color: 'var(--text-3)' }}>
                   <span style={{ width: 12, height: 3, background: 'var(--primary)', borderRadius: 9999, display: 'inline-block' }} />
-                  Revenue
+                  {isAr ? 'إيرادات' : 'Revenue'}
                 </span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.7rem', color: 'var(--text-3)' }}>
                   <span style={{ width: 12, height: 3, background: 'var(--orange)', borderRadius: 9999, display: 'inline-block' }} />
-                  Expenses
+                  {isAr ? 'مصروفات' : 'Expenses'}
                 </span>
               </div>
             </div>
@@ -429,12 +424,12 @@ export default function FinanceDashboardPage() {
 
           {/* Per-Branch Gross Profit */}
           <div className="card" style={{ padding: '1rem 1.25rem' }}>
-            <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem', marginBottom: '1rem' }}>Per-Branch Gross Profit</p>
+            <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem', marginBottom: '1rem' }}>{isAr ? 'إجمالي الربح بالفرع' : 'Per-Branch Gross Profit'}</p>
             <BranchBarChart data={branches} />
 
             <div style={{ marginTop: '1.25rem', paddingTop: '0.875rem', borderTop: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
-                <span style={{ color: 'var(--text-3)', fontWeight: 500 }}>Total Gross</span>
+                <span style={{ color: 'var(--text-3)', fontWeight: 500 }}>{isAr ? 'إجمالي الربح' : 'Total Gross'}</span>
                 <span style={{ color: 'var(--text-1)', fontWeight: 700 }}>
                   {fmtEGP(branches.reduce((s, b) => s + b.gross, 0))}
                 </span>
@@ -444,14 +439,14 @@ export default function FinanceDashboardPage() {
 
           {/* Quick Actions */}
           <div className="card" style={{ padding: '1rem 1.25rem' }}>
-            <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem', marginBottom: '1.125rem' }}>Quick Actions</p>
+            <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem', marginBottom: '1.125rem' }}>{isAr ? 'إجراءات سريعة' : 'Quick Actions'}</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
               {[
-                { label: '+ New Customer Invoice', href: '/finance/invoices?action=new' },
-                { label: '+ Register Payment',     href: '/finance/payments?action=new' },
-                { label: '+ New Journal Entry',    href: '/finance/gl?action=new' },
-                { label: '↳ New Vendor Bill',      href: '/finance/invoices?type=VENDOR_BILL&action=new' },
-                { label: 'Import Bank Statement',  href: '/finance/bank-statements?action=import' },
+                { label: isAr ? '+ فاتورة عميل جديدة' : '+ New Customer Invoice', href: '/finance/invoices?action=new' },
+                { label: isAr ? '+ تسجيل دفعة'        : '+ Register Payment',     href: '/finance/payments?action=new' },
+                { label: isAr ? '+ قيد محاسبي جديد'   : '+ New Journal Entry',    href: '/finance/gl?action=new' },
+                { label: isAr ? '↳ فاتورة مورد جديدة' : '↳ New Vendor Bill',      href: '/finance/invoices?type=VENDOR_BILL&action=new' },
+                { label: isAr ? 'استيراد كشف بنكي'    : 'Import Bank Statement',  href: '/finance/bank-statements?action=import' },
               ].map((a) => (
                 <Link
                   key={a.href}
@@ -472,18 +467,18 @@ export default function FinanceDashboardPage() {
 
             <div style={{ marginTop: '1.5rem', paddingTop: '0.875rem', borderTop: '1px solid var(--border)' }}>
               <p style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)', marginBottom: '0.625rem' }}>
-                Finance Modules
+                {isAr ? 'وحدات المالية' : 'Finance Modules'}
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
                 {[
-                  { label: 'Chart of Accounts', href: '/finance/accounts' },
-                  { label: 'Journals',           href: '/finance/journals' },
-                  { label: 'Currencies',         href: '/finance/currencies' },
-                  { label: 'Fiscal Years',       href: '/finance/fiscal-years' },
-                  { label: 'Fixed Assets',       href: '/finance/assets' },
-                  { label: 'Taxes',              href: '/finance/taxes' },
-                  { label: 'Reconciliation',     href: '/finance/reconciliation' },
-                  { label: 'Commissions',        href: '/finance/commissions' },
+                  { label: isAr ? 'دليل الحسابات' : 'Chart of Accounts', href: '/finance/accounts' },
+                  { label: isAr ? 'الدفاتر'        : 'Journals',           href: '/finance/journals' },
+                  { label: isAr ? 'العملات'        : 'Currencies',         href: '/finance/currencies' },
+                  { label: isAr ? 'السنوات المالية': 'Fiscal Years',       href: '/finance/fiscal-years' },
+                  { label: isAr ? 'الأصول الثابتة' : 'Fixed Assets',       href: '/finance/assets' },
+                  { label: isAr ? 'الضرائب'        : 'Taxes',              href: '/finance/taxes' },
+                  { label: isAr ? 'التسوية'        : 'Reconciliation',     href: '/finance/reconciliation' },
+                  { label: isAr ? 'العمولات'       : 'Commissions',        href: '/finance/commissions' },
                 ].map((m) => (
                   <Link
                     key={m.href}

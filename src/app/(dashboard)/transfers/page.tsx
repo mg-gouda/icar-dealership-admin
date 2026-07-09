@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../lib/useApi';
+import { useLang } from '../../../lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
 
 interface Transfer {
   id: string;
@@ -27,6 +29,7 @@ const fmt = (n: number) =>
   'EGP ' + n.toLocaleString('en-EG', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 export default function TransfersPage() {
+  const { isAr } = useLang();
   const [addOpen, setAddOpen] = useState(false);
   const [acting, setActing] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -51,33 +54,18 @@ export default function TransfersPage() {
     finally { setActing(null); }
   };
 
-  const handleApprove = async (id: string) => {
-    setActing(id);
-    try {
-      await apiFetch(`/transfers/${id}/approve`, { method: 'POST', body: JSON.stringify({}) });
-      reload();
-    } catch (err: any) { alert(err.message); }
-    finally { setActing(null); }
-  };
-
-  const handleCancel = async (id: string) => {
-    if (!confirm('Cancel this transfer?')) return;
-    setActing(id + '_cancel');
-    try {
-      await apiFetch(`/transfers/${id}/cancel`, { method: 'POST', body: JSON.stringify({}) });
-      reload();
-    } catch (err: any) { alert(err.message); }
-    finally { setActing(null); }
-  };
+  // ponytail: approve/cancel not yet implemented on API — buttons disabled
+  const handleApprove = (_id: string) => {};
+  const handleCancel = (_id: string) => {};
 
   return (
     <div className="page-body">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Inter-Location Transfers</h1>
-          <p className="page-subtitle">Vehicle and fund movements between branches</p>
+          <h1 className="page-title">{isAr ? 'تحويلات السيارات' : 'Inter-Location Transfers'}</h1>
+          <p className="page-subtitle">{isAr ? 'تحويل السيارات بين الفروع' : 'Vehicle and fund movements between branches'}</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setAddOpen(true)}>+ New Transfer</button>
+        <button className="btn btn-primary" onClick={() => setAddOpen(true)}>{isAr ? '+ تحويل جديد' : '+ New Transfer'}</button>
       </div>
 
       <div className="card">
@@ -85,19 +73,19 @@ export default function TransfersPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Vehicle</th>
-                <th>From</th>
-                <th>To</th>
-                <th>Amount</th>
-                <th>Notes</th>
-                <th>Status</th>
-                <th>Date</th>
+                <th>{isAr ? 'السيارة' : 'Vehicle'}</th>
+                <th>{isAr ? 'من' : 'From'}</th>
+                <th>{isAr ? 'إلى' : 'To'}</th>
+                <th>{isAr ? 'المبلغ' : 'Amount'}</th>
+                <th>{isAr ? 'ملاحظات' : 'Notes'}</th>
+                <th>{isAr ? 'الحالة' : 'Status'}</th>
+                <th>{isAr ? 'التاريخ' : 'Date'}</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {list.length === 0 && (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-2)' }}>No transfers found</td></tr>
+                <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-2)' }}>{isAr ? 'لا توجد تحويلات' : 'No transfers found'}</td></tr>
               )}
               {list.map(t => (
                 <tr key={t.id}>
@@ -114,24 +102,24 @@ export default function TransfersPage() {
                     {t.notes ?? '—'}
                   </td>
                   <td><span className={`badge ${STATUS_BADGE[t.status] ?? 'badge-neutral'}`}>{t.status}</span></td>
-                  <td>{new Date(t.createdAt).toLocaleDateString('en-EG')}</td>
+                  <td>{fmtDate(t.createdAt, isAr)}</td>
                   <td>
                     {t.status === 'PENDING' && (
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
                         <button
                           className="btn btn-sm btn-primary"
-                          disabled={acting === t.id}
-                          onClick={() => handleApprove(t.id)}
+                          disabled
+                          title={isAr ? 'غير متاح بعد' : 'Not yet available'}
                         >
-                          {acting === t.id ? '…' : 'Approve'}
+                          {isAr ? 'اعتماد' : 'Approve'}
                         </button>
                         <button
                           className="btn btn-sm"
-                          disabled={acting === t.id + '_cancel'}
-                          onClick={() => handleCancel(t.id)}
+                          disabled
+                          title={isAr ? 'غير متاح بعد' : 'Not yet available'}
                           style={{ color: 'var(--danger)' }}
                         >
-                          Cancel
+                          {isAr ? 'إلغاء' : 'Cancel'}
                         </button>
                       </div>
                     )}
@@ -146,14 +134,14 @@ export default function TransfersPage() {
       {addOpen && (
         <div className="modal-backdrop" onClick={() => setAddOpen(false)}>
           <form className="modal" onClick={e => e.stopPropagation()} onSubmit={handleAdd}>
-            <div className="modal-header"><h3>New Transfer</h3></div>
+            <div className="modal-header"><h3>{isAr ? 'تحويل جديد' : 'New Transfer'}</h3></div>
             <div className="modal-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               {[
-                { label: 'From Location ID', key: 'fromLocationId', full: false },
-                { label: 'To Location ID', key: 'toLocationId', full: false },
-                { label: 'Vehicle ID', key: 'vehicleId', full: true },
-                { label: 'Amount (EGP)', key: 'amount', type: 'number', full: false },
-                { label: 'Notes', key: 'notes', full: true },
+                { label: isAr ? 'معرف الفرع المُرسِل' : 'From Location ID', key: 'fromLocationId', full: false },
+                { label: isAr ? 'معرف الفرع المُستقبِل' : 'To Location ID', key: 'toLocationId', full: false },
+                { label: isAr ? 'معرف السيارة' : 'Vehicle ID', key: 'vehicleId', full: true },
+                { label: isAr ? 'المبلغ (ج.م)' : 'Amount (EGP)', key: 'amount', type: 'number', full: false },
+                { label: isAr ? 'ملاحظات' : 'Notes', key: 'notes', full: true },
               ].map(f => (
                 <div key={f.key} style={{ gridColumn: f.full ? '1 / -1' : undefined }}>
                   <label className="field-label">{f.label}</label>
@@ -169,9 +157,9 @@ export default function TransfersPage() {
               ))}
             </div>
             <div className="modal-footer">
-              <button type="button" className="btn" onClick={() => setAddOpen(false)}>Cancel</button>
+              <button type="button" className="btn" onClick={() => setAddOpen(false)}>{isAr ? 'إلغاء' : 'Cancel'}</button>
               <button type="submit" className="btn btn-primary" disabled={acting === 'add'}>
-                {acting === 'add' ? 'Saving…' : 'Create Transfer'}
+                {acting === 'add' ? (isAr ? 'جارٍ الحفظ…' : 'Saving…') : (isAr ? 'إنشاء التحويل' : 'Create Transfer')}
               </button>
             </div>
           </form>

@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 import { useQuery, apiFetch } from '../../../lib/useApi';
+import { useLang } from '../../../lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Shipment {
@@ -61,17 +63,13 @@ function StatusBadge({ status }: { status: string }) {
 const fmt = (n: number | undefined | null) =>
   n != null ? 'EGP ' + Number(n).toLocaleString('en-EG', { maximumFractionDigits: 0 }) : '—';
 
-function fmtDate(s: string | undefined) {
-  if (!s) return '—';
-  return new Date(s).toLocaleDateString('en-EG', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
 // ── New Shipment Modal ────────────────────────────────────────────────────────
 function NewShipmentModal({ locations, onClose, onSuccess }: {
   locations: Location[];
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const { isAr } = useLang();
   const [form, setForm] = useState({
     shipmentNumber: '', supplier: '', origin: '',
     shipDate: '', arrivalDate: '',
@@ -85,7 +83,7 @@ function NewShipmentModal({ locations, onClose, onSuccess }: {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.shipmentNumber || !form.origin) {
-      setErr('Shipment number and origin are required.'); return;
+      setErr(isAr ? 'رقم الشحنة والمصدر مطلوبان.' : 'Shipment number and origin are required.'); return;
     }
     setSaving(true); setErr('');
     try {
@@ -114,7 +112,7 @@ function NewShipmentModal({ locations, onClose, onSuccess }: {
       <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={onClose} />
       <div className="relative w-full max-w-2xl card shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
-          <h3 style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-1)' }}>New Shipment</h3>
+          <h3 style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-1)' }}>{isAr ? 'شحنة جديدة' : 'New Shipment'}</h3>
           <button onClick={onClose} className="btn btn-ghost btn-sm" style={{ padding: '0.2rem 0.5rem', fontSize: '1.1rem', lineHeight: 1 }}>✕</button>
         </div>
         <form onSubmit={submit} style={{
@@ -123,58 +121,58 @@ function NewShipmentModal({ locations, onClose, onSuccess }: {
         }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
             <div>
-              <label className="input-label">Shipment Number *</label>
+              <label className="input-label">{isAr ? 'رقم الشحنة *' : 'Shipment Number *'}</label>
               <input className="input" value={form.shipmentNumber} onChange={(e) => set('shipmentNumber', e.target.value)} autoFocus />
             </div>
             <div>
-              <label className="input-label">Supplier</label>
+              <label className="input-label">{isAr ? 'المورد' : 'Supplier'}</label>
               <input className="input" value={form.supplier} onChange={(e) => set('supplier', e.target.value)} />
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
             <div>
-              <label className="input-label">Origin (Country) *</label>
+              <label className="input-label">{isAr ? 'بلد المنشأ *' : 'Origin (Country) *'}</label>
               <input className="input" value={form.origin} onChange={(e) => set('origin', e.target.value)} />
             </div>
             <div>
-              <label className="input-label">Location</label>
+              <label className="input-label">{isAr ? 'الفرع' : 'Location'}</label>
               <SearchableCombobox
                 options={locations.map((l) => ({ value: l.id, label: l.name }))}
                 value={form.locationId}
                 onChange={(v) => set('locationId', v)}
-                placeholder="Select location…"
+                placeholder={isAr ? 'اختر الفرع…' : 'Select location…'}
                 clearable
               />
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
             <div>
-              <label className="input-label">Ship Date</label>
+              <label className="input-label">{isAr ? 'تاريخ الشحن' : 'Ship Date'}</label>
               <input className="input" type="date" value={form.shipDate} onChange={(e) => set('shipDate', e.target.value)} />
             </div>
             <div>
-              <label className="input-label">Expected Arrival Date</label>
+              <label className="input-label">{isAr ? 'تاريخ الوصول المتوقع' : 'Expected Arrival Date'}</label>
               <input className="input" type="date" value={form.arrivalDate} onChange={(e) => set('arrivalDate', e.target.value)} />
             </div>
           </div>
 
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
-            <p className="section-label">Costs (EGP)</p>
+            <p className="section-label">{isAr ? 'التكاليف (ج.م)' : 'Costs (EGP)'}</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
               <div>
-                <label className="input-label">Port Fees</label>
+                <label className="input-label">{isAr ? 'رسوم الميناء' : 'Port Fees'}</label>
                 <input className="input" type="number" min="0" value={form.portFees} onChange={(e) => set('portFees', e.target.value)} />
               </div>
               <div>
-                <label className="input-label">Shipping Cost</label>
+                <label className="input-label">{isAr ? 'تكلفة الشحن' : 'Shipping Cost'}</label>
                 <input className="input" type="number" min="0" value={form.shippingCost} onChange={(e) => set('shippingCost', e.target.value)} />
               </div>
               <div>
-                <label className="input-label">Clearance Agent Fee</label>
+                <label className="input-label">{isAr ? 'رسوم وكيل الجمارك' : 'Clearance Agent Fee'}</label>
                 <input className="input" type="number" min="0" value={form.clearanceAgentFee} onChange={(e) => set('clearanceAgentFee', e.target.value)} />
               </div>
               <div>
-                <label className="input-label">Other Costs</label>
+                <label className="input-label">{isAr ? 'تكاليف أخرى' : 'Other Costs'}</label>
                 <input className="input" type="number" min="0" value={form.otherCosts} onChange={(e) => set('otherCosts', e.target.value)} />
               </div>
             </div>
@@ -182,9 +180,9 @@ function NewShipmentModal({ locations, onClose, onSuccess }: {
 
           {err && <p style={{ color: 'var(--danger)', fontSize: '0.75rem' }}>{err}</p>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', paddingTop: '0.5rem' }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>{isAr ? 'إلغاء' : 'Cancel'}</button>
             <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? 'Saving…' : 'Create Shipment'}
+              {saving ? (isAr ? 'جارٍ الحفظ…' : 'Saving…') : (isAr ? 'إنشاء الشحنة' : 'Create Shipment')}
             </button>
           </div>
         </form>
@@ -199,6 +197,7 @@ function ShipmentDetailModal({ shipmentId, onClose, onChanged }: {
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const { isAr } = useLang();
   const { data: ship, loading, reload } =
     useQuery<Shipment>(`/import-shipments/${shipmentId}`, [shipmentId]);
 
@@ -253,12 +252,12 @@ function ShipmentDetailModal({ shipmentId, onClose, onChanged }: {
   }
 
   const costCards = [
-    { label: 'Port Fees',      val: ship?.portFees },
-    { label: 'Shipping',       val: ship?.shippingCost },
-    { label: 'Clearance Fee',  val: ship?.clearanceAgentFee },
-    { label: 'Other Costs',    val: ship?.otherCosts },
-    { label: 'Total Shared',   val: totalShared,   bold: true },
-    { label: 'Avg / Vehicle',  val: vehicles.length ? totalShared / vehicles.length : undefined, bold: true },
+    { label: isAr ? 'رسوم الميناء'     : 'Port Fees',      val: ship?.portFees },
+    { label: isAr ? 'تكلفة الشحن'      : 'Shipping',       val: ship?.shippingCost },
+    { label: isAr ? 'رسوم الجمارك'     : 'Clearance Fee',  val: ship?.clearanceAgentFee },
+    { label: isAr ? 'تكاليف أخرى'      : 'Other Costs',    val: ship?.otherCosts },
+    { label: isAr ? 'إجمالي مشترك'     : 'Total Shared',   val: totalShared,   bold: true },
+    { label: isAr ? 'متوسط / مركبة'    : 'Avg / Vehicle',  val: vehicles.length ? totalShared / vehicles.length : undefined, bold: true },
   ];
 
   return (
@@ -285,7 +284,7 @@ function ShipmentDetailModal({ shipmentId, onClose, onChanged }: {
                   {ship.origin}
                   {ship.supplier ? ` · ${ship.supplier}` : ''}
                   {(ship.arrivalDate || ship.expectedArrivalDate)
-                    ? ` · Arrival: ${fmtDate(ship.arrivalDate ?? ship.expectedArrivalDate)}`
+                    ? ` ${isAr ? '· الوصول:' : '· Arrival:'} ${fmtDate(ship.arrivalDate ?? ship.expectedArrivalDate, isAr, { day: 'numeric', month: 'short', year: 'numeric' })}`
                     : ''}
                 </p>
               )}
@@ -312,9 +311,9 @@ function ShipmentDetailModal({ shipmentId, onClose, onChanged }: {
         {/* Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           {loading ? (
-            <p style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>Loading shipment…</p>
+            <p style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>{isAr ? 'جارٍ تحميل الشحنة…' : 'Loading shipment…'}</p>
           ) : !ship ? (
-            <p style={{ color: 'var(--danger)', fontSize: '0.875rem' }}>Shipment not found.</p>
+            <p style={{ color: 'var(--danger)', fontSize: '0.875rem' }}>{isAr ? 'الشحنة غير موجودة.' : 'Shipment not found.'}</p>
           ) : (
             <>
               {/* Cost summary cards */}
@@ -338,27 +337,27 @@ function ShipmentDetailModal({ shipmentId, onClose, onChanged }: {
                   padding: '0.625rem 1rem', borderBottom: '1px solid var(--border)',
                 }}>
                   <span className="section-label" style={{ margin: 0 }}>
-                    Vehicles ({vehicles.length})
+                    {isAr ? `السيارات (${vehicles.length})` : `Vehicles (${vehicles.length})`}
                   </span>
                   <button className="btn btn-secondary btn-sm" disabled={allocating} onClick={allocate}>
-                    {allocating ? 'Allocating…' : 'Allocate Costs'}
+                    {allocating ? (isAr ? 'جارٍ التوزيع…' : 'Allocating…') : (isAr ? 'توزيع التكاليف' : 'Allocate Costs')}
                   </button>
                 </div>
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>VIN / Vehicle</th>
-                      <th style={{ textAlign: 'right' }}>Customs Duty</th>
-                      <th style={{ textAlign: 'right' }}>Allocated Landed</th>
-                      <th style={{ textAlign: 'right' }}>Total Landed Cost</th>
-                      <th style={{ width: '7rem' }}>Actions</th>
+                      <th>{isAr ? 'رقم الشاسيه / السيارة' : 'VIN / Vehicle'}</th>
+                      <th style={{ textAlign: 'right' }}>{isAr ? 'رسوم الجمارك' : 'Customs Duty'}</th>
+                      <th style={{ textAlign: 'right' }}>{isAr ? 'التكلفة المخصصة' : 'Allocated Landed'}</th>
+                      <th style={{ textAlign: 'right' }}>{isAr ? 'إجمالي التكلفة' : 'Total Landed Cost'}</th>
+                      <th style={{ width: '7rem' }}>{isAr ? 'الإجراءات' : 'Actions'}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {vehicles.length === 0 ? (
                       <tr>
                         <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)' }}>
-                          No vehicles in this shipment.
+                          {isAr ? 'لا توجد مركبات في هذه الشحنة.' : 'No vehicles in this shipment.'}
                         </td>
                       </tr>
                     ) : (
@@ -384,7 +383,7 @@ function ShipmentDetailModal({ shipmentId, onClose, onChanged }: {
                                   onKeyDown={(e) => { if (e.key === 'Enter') saveDuty(v.id); if (e.key === 'Escape') setEditVehicleId(null); }}
                                 />
                                 <button className="btn btn-primary btn-sm" disabled={savingDuty} onClick={() => saveDuty(v.id)}>
-                                  {savingDuty ? '…' : 'Save'}
+                                  {savingDuty ? '…' : (isAr ? 'حفظ' : 'Save')}
                                 </button>
                                 <button className="btn btn-ghost btn-sm" onClick={() => setEditVehicleId(null)}>✕</button>
                               </div>
@@ -404,7 +403,7 @@ function ShipmentDetailModal({ shipmentId, onClose, onChanged }: {
                                 className="btn btn-ghost btn-sm"
                                 onClick={() => { setEditVehicleId(v.id); setEditDuty(String(v.customsDuty ?? '')); }}
                               >
-                                Edit Duty
+                                {isAr ? 'تعديل الجمارك' : 'Edit Duty'}
                               </button>
                             )}
                           </td>
@@ -424,6 +423,7 @@ function ShipmentDetailModal({ shipmentId, onClose, onChanged }: {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function ImportPage() {
+  const { isAr } = useLang();
   const [showNewModal, setShowNewModal] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -441,40 +441,40 @@ export default function ImportPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Vehicle Imports & Customs</h1>
+          <h1 className="page-title">{isAr ? 'شحنات الاستيراد والجمارك' : 'Vehicle Imports & Customs'}</h1>
           <p className="page-subtitle">
-            {shipments.length} shipment{shipments.length !== 1 ? 's' : ''} · {fmt(totalCosts)} total costs
+            {shipments.length} {isAr ? (shipments.length !== 1 ? 'شحنات' : 'شحنة') : (shipments.length !== 1 ? 'shipments' : 'shipment')} · {fmt(totalCosts)} {isAr ? 'إجمالي التكاليف' : 'total costs'}
           </p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowNewModal(true)}>
-          + New Shipment
+          {isAr ? '+ شحنة جديدة' : '+ New Shipment'}
         </button>
       </div>
 
       <div className="page-body">
         {loading ? (
-          <p style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>Loading…</p>
+          <p style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</p>
         ) : (
           <div className="card" style={{ overflow: 'hidden' }}>
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Shipment #</th>
-                  <th>Origin</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: 'right' }}>Vehicles</th>
-                  <th style={{ textAlign: 'right' }}>Port Fees</th>
-                  <th style={{ textAlign: 'right' }}>Shipping</th>
-                  <th style={{ textAlign: 'right' }}>Clearance</th>
-                  <th style={{ textAlign: 'right' }}>Total Costs</th>
-                  <th>Arrival Date</th>
+                  <th>{isAr ? 'رقم الشحنة' : 'Shipment #'}</th>
+                  <th>{isAr ? 'بلد المنشأ' : 'Origin'}</th>
+                  <th>{isAr ? 'الحالة' : 'Status'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'السيارات' : 'Vehicles'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'رسوم الميناء' : 'Port Fees'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'الشحن' : 'Shipping'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'الجمارك' : 'Clearance'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'إجمالي التكاليف' : 'Total Costs'}</th>
+                  <th>{isAr ? 'تاريخ الوصول' : 'Arrival Date'}</th>
                 </tr>
               </thead>
               <tbody>
                 {shipments.length === 0 ? (
                   <tr>
                     <td colSpan={9} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-3)' }}>
-                      No shipments found.
+                      {isAr ? 'لا توجد شحنات.' : 'No shipments found.'}
                     </td>
                   </tr>
                 ) : (
@@ -495,7 +495,7 @@ export default function ImportPage() {
                       <td style={{ textAlign: 'right', color: 'var(--text-2)' }}>{fmt(s.clearanceAgentFee)}</td>
                       <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(s.totalCosts)}</td>
                       <td style={{ color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
-                        {fmtDate(s.arrivalDate ?? s.expectedArrivalDate)}
+                        {fmtDate(s.arrivalDate ?? s.expectedArrivalDate, isAr, { day: 'numeric', month: 'short', year: 'numeric' })}
                       </td>
                     </tr>
                   ))

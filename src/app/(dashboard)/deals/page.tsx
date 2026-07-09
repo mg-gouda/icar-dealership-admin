@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+import { useLang } from '@/lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
+import { API_BASE as API } from '@/lib/config';
 const token = () => (typeof window !== 'undefined' ? localStorage.getItem('accessToken') ?? '' : '');
 const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
 const fmt = (n: number) => 'EGP ' + n.toLocaleString('en-EG', { maximumFractionDigits: 0 });
@@ -80,6 +81,7 @@ function DealCard({ deal, onDragStart, onDragEnd }: {
   onDragEnd: () => void;
 }) {
   const router = useRouter();
+  const { isAr } = useLang();
   const dragged = useRef(false);
   const custName = deal.customer?.name ?? '—';
   const m = deal.paymentMethod ?? deal.purchaseMethod ?? '';
@@ -97,7 +99,7 @@ function DealCard({ deal, onDragStart, onDragEnd }: {
         </span>
         <span style={{ fontWeight: 600, fontSize: '0.8125rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{custName}</span>
         {m && <span className={`badge ${deal.purchaseMethod === 'BANK_FINANCING' ? 'badge-info' : deal.purchaseMethod === 'CASH' ? 'badge-success' : 'badge-purple'}`} style={{ fontSize: '0.625rem' }}>
-          {m === 'BANK_FINANCING' ? 'Bank' : m === 'CASH' ? 'Cash' : 'Install'}
+          {m === 'BANK_FINANCING' ? (isAr ? 'بنكي' : 'Bank') : m === 'CASH' ? (isAr ? 'كاش' : 'Cash') : (isAr ? 'تقسيط' : 'Install')}
         </span>}
       </div>
       <p style={{ fontSize: '0.75rem', color: 'var(--text-2)', margin: '0 0 0.375rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -108,7 +110,7 @@ function DealCard({ deal, onDragStart, onDragEnd }: {
           {fmt(Number(deal.salePrice ?? 0))}
         </span>
         <span style={{ fontSize: '0.6875rem', color: 'var(--text-3)' }}>
-          {new Date(deal.createdAt).toLocaleDateString('en-EG', { day: 'numeric', month: 'short' })}
+          {fmtDate(deal.createdAt, isAr, { day: 'numeric', month: 'short' })}
         </span>
       </div>
     </div>
@@ -137,6 +139,7 @@ function ListIcon() {
 
 export default function DealsPage() {
   const router = useRouter();
+  const { isAr } = useLang();
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [activeTab, setActiveTab] = useState('');
   const [deals, setDeals] = useState<Deal[]>([]);
@@ -205,16 +208,16 @@ export default function DealsPage() {
         body: JSON.stringify({ ids, action, ...(value !== undefined ? { value } : {}) }),
       });
       if (!res.ok) throw new Error('Failed');
-      showToast(`Updated ${ids.length} record${ids.length > 1 ? 's' : ''}`);
+      showToast(isAr ? `تم تحديث ${ids.length} سجل` : `Updated ${ids.length} record${ids.length > 1 ? 's' : ''}`);
       setSelectedIds(new Set());
       load();
       loadCounts();
     } catch {
-      showToast('Bulk action failed');
+      showToast(isAr ? 'فشل الإجراء الجماعي' : 'Bulk action failed');
     }
   // ponytail: showToast is stable (no deps), load/loadCounts are callbacks
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIds, load, loadCounts]);
+  }, [selectedIds, load, loadCounts, isAr]);
 
   const allSelected = deals.length > 0 && deals.every((d) => selectedIds.has(d.id));
   const someSelected = !allSelected && deals.some((d) => selectedIds.has(d.id));
@@ -249,8 +252,8 @@ export default function DealsPage() {
     const allowed = DRAG_ALLOWED[deal.status] ?? [];
     if (!allowed.includes(targetStatus)) {
       showToast(targetStatus === 'FINALIZED' || targetStatus === 'CANCELLED'
-        ? 'Use the Deal detail page for this action'
-        : `Cannot move from ${deal.status.replace(/_/g,' ')} to ${targetStatus.replace(/_/g,' ')}`);
+        ? (isAr ? 'استخدم صفحة تفاصيل الصفقة لهذا الإجراء' : 'Use the Deal detail page for this action')
+        : (isAr ? `لا يمكن الانتقال من ${deal.status.replace(/_/g,' ')} إلى ${targetStatus.replace(/_/g,' ')}` : `Cannot move from ${deal.status.replace(/_/g,' ')} to ${targetStatus.replace(/_/g,' ')}`));
       return;
     }
     setDeals((prev) => prev.map((d) => d.id === id ? { ...d, status: targetStatus } : d));
@@ -260,10 +263,10 @@ export default function DealsPage() {
         body: JSON.stringify({ status: targetStatus }),
       });
       if (!res.ok) throw new Error('Failed');
-      showToast('Status updated');
+      showToast(isAr ? 'تم تحديث الحالة' : 'Status updated');
       loadCounts();
     } catch {
-      showToast('Status update failed');
+      showToast(isAr ? 'فشل تحديث الحالة' : 'Status update failed');
       load();
     }
   };
@@ -282,23 +285,23 @@ export default function DealsPage() {
       {/* Page header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Deals Pipeline</h1>
+          <h1 className="page-title">{isAr ? 'خط صفقات المبيعات' : 'Deals Pipeline'}</h1>
           <p className="page-subtitle">
-            {Object.values(counts).reduce((a, b) => a + b, 0)} deals · {fmt(totalValue)} total value
+            {Object.values(counts).reduce((a, b) => a + b, 0)} {isAr ? 'صفقة' : 'deals'} · {fmt(totalValue)} {isAr ? 'إجمالي القيمة' : 'total value'}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <div style={{ display: 'flex', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '6px', overflow: 'hidden' }}>
-            <button onClick={() => setViewMode('list')} title="Table view"
+            <button onClick={() => setViewMode('list')} title={isAr ? 'عرض جدول' : 'Table view'}
               style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', padding: '0.4rem 0.75rem', border: 'none', cursor: 'pointer', fontSize: '0.8125rem', background: viewMode === 'list' ? 'var(--primary)' : 'transparent', color: viewMode === 'list' ? '#fff' : 'var(--text-2)', transition: 'background 150ms, color 150ms' }}>
-              <ListIcon /> Table
+              <ListIcon /> {isAr ? 'جدول' : 'Table'}
             </button>
-            <button onClick={() => setViewMode('kanban')} title="Kanban view"
+            <button onClick={() => setViewMode('kanban')} title={isAr ? 'عرض كانبان' : 'Kanban view'}
               style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', padding: '0.4rem 0.75rem', border: 'none', cursor: 'pointer', fontSize: '0.8125rem', background: viewMode === 'kanban' ? 'var(--primary)' : 'transparent', color: viewMode === 'kanban' ? '#fff' : 'var(--text-2)', transition: 'background 150ms, color 150ms' }}>
-              <KanbanIcon /> Kanban
+              <KanbanIcon /> {isAr ? 'كانبان' : 'Kanban'}
             </button>
           </div>
-          <Link href="/deals/new" className="btn btn-primary">+ New Deal</Link>
+          <Link href="/deals/new" className="btn btn-primary">{isAr ? '+ صفقة جديدة' : '+ New Deal'}</Link>
         </div>
       </div>
 
@@ -319,7 +322,7 @@ export default function DealsPage() {
                 <div style={{ padding: '0.75rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: stage.color, flexShrink: 0 }} />
-                    <span style={{ fontWeight: 600, fontSize: '0.8125rem' }}>{stage.label}</span>
+                    <span style={{ fontWeight: 600, fontSize: '0.8125rem' }}>{isAr ? ({ DRAFT: 'مسودة', PENDING_FINANCE: 'قيد المراجعة', APPROVED: 'موافق عليها', FINALIZED: 'مكتملة', CANCELLED: 'ملغاة' } as Record<string,string>)[stage.key] ?? stage.label : stage.label}</span>
                   </div>
                   <span style={{ fontSize: '0.6875rem', fontWeight: 600, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '0.1rem 0.4rem', color: 'var(--text-2)' }}>{colDeals.length}</span>
                 </div>
@@ -331,7 +334,7 @@ export default function DealsPage() {
                 <div style={{ padding: '0.625rem', flex: 1, overflowY: 'auto' }}>
                   {colDeals.length === 0 ? (
                     <div style={{ border: '1.5px dashed var(--border)', borderRadius: '6px', padding: '1.5rem 0.75rem', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.75rem', opacity: isDragOver ? 0.7 : 0.5 }}>
-                      {isDragOver ? 'Drop here' : 'No deals'}
+                      {isDragOver ? (isAr ? 'أفلت هنا' : 'Drop here') : (isAr ? 'لا صفقات' : 'No deals')}
                     </div>
                   ) : colDeals.map((deal) => (
                     <DealCard key={deal.id} deal={deal} onDragStart={handleDragStart} onDragEnd={handleDragEnd} />
@@ -352,7 +355,7 @@ export default function DealsPage() {
             return (
               <button key={t.key} className={`tab ${activeTab === t.key ? 'active' : ''}`}
                 onClick={() => { setActiveTab(t.key); setSelectedIds(new Set()); }}>
-                {t.label}{count > 0 ? ` (${count})` : ''}
+                {isAr ? ({ '': 'كل الصفقات', DRAFT: 'مسودة', PENDING_FINANCE: 'قيد المراجعة', APPROVED: 'موافق عليها', FINALIZED: 'مكتملة', CANCELLED: 'ملغاة' } as Record<string,string>)[t.key] ?? t.label : t.label}{count > 0 ? ` (${count})` : ''}
               </button>
             );
           })}
@@ -362,7 +365,7 @@ export default function DealsPage() {
       {/* Table */}
       <div className="page-body">
         {loading ? (
-          <p style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>Loading…</p>
+          <p style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>{isAr ? 'جاري التحميل…' : 'Loading…'}</p>
         ) : (
           <div className="card" style={{ overflow: 'hidden' }}>
             <table className="data-table">
@@ -378,15 +381,15 @@ export default function DealsPage() {
                       style={{ cursor: 'pointer' }}
                     />
                   </th>
-                  <th>Deal #</th>
-                  <th>Customer</th>
-                  <th>Vehicle</th>
-                  <th>Sales Rep</th>
-                  <th style={{ textAlign: 'right' }}>Sale Price</th>
-                  <th>Payment Method</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  <th>Actions</th>
+                  <th>{isAr ? 'رقم الصفقة' : 'Deal #'}</th>
+                  <th>{isAr ? 'العميل' : 'Customer'}</th>
+                  <th>{isAr ? 'السيارة' : 'Vehicle'}</th>
+                  <th>{isAr ? 'مندوب المبيعات' : 'Sales Rep'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'سعر البيع' : 'Sale Price'}</th>
+                  <th>{isAr ? 'طريقة الدفع' : 'Payment Method'}</th>
+                  <th>{isAr ? 'الحالة' : 'Status'}</th>
+                  <th>{isAr ? 'التاريخ' : 'Created'}</th>
+                  <th>{isAr ? 'إجراءات' : 'Actions'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -433,15 +436,15 @@ export default function DealsPage() {
                         {fmt(Number(d.salePrice ?? 0))}
                       </td>
                       <td>
-                        {m ? <span className={`badge ${methodBadgeClass(m)}`}>{methodLabel(m)}</span> : '—'}
+                        {m ? <span className={`badge ${methodBadgeClass(m)}`}>{isAr ? ({ BANK_FINANCING: 'تمويل بنكي', CASH: 'كاش', DEALERSHIP_INSTALLMENT: 'تقسيط' } as Record<string,string>)[m] ?? m : methodLabel(m)}</span> : '—'}
                       </td>
                       <td>
                         <span className={`badge ${statusBadgeClass(d.status)}`}>
-                          {d.status.replace(/_/g, ' ')}
+                          {isAr ? ({ DRAFT: 'مسودة', PENDING_FINANCE: 'قيد المراجعة', APPROVED: 'موافق عليها', FINALIZED: 'مكتملة', CANCELLED: 'ملغاة' } as Record<string,string>)[d.status] ?? d.status : d.status.replace(/_/g, ' ')}
                         </span>
                       </td>
                       <td style={{ color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
-                        {new Date(d.createdAt).toLocaleDateString('en-EG', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {fmtDate(d.createdAt, isAr, { day: 'numeric', month: 'short', year: 'numeric' })}
                       </td>
                       <td>
                         <Link
@@ -449,7 +452,7 @@ export default function DealsPage() {
                           style={{ color: 'var(--primary)', fontWeight: 500, fontSize: '0.75rem', textDecoration: 'none' }}
                           onClick={(e) => e.stopPropagation()}
                         >
-                          Open →
+                          {isAr ? 'عرض' : 'Open →'}
                         </Link>
                       </td>
                     </tr>
@@ -458,7 +461,7 @@ export default function DealsPage() {
                 {deals.length === 0 && (
                   <tr>
                     <td colSpan={10} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-3)' }}>
-                      No deals found{activeTab ? ` in "${activeTab.replace(/_/g, ' ')}"` : ''}.
+                      {isAr ? `لا توجد صفقات${activeTab ? ` في "${activeTab.replace(/_/g, ' ')}"` : ''}` : `No deals found${activeTab ? ` in "${activeTab.replace(/_/g, ' ')}"` : ''}.`}
                     </td>
                   </tr>
                 )}
@@ -480,7 +483,7 @@ export default function DealsPage() {
           whiteSpace: 'nowrap',
         }}>
           <span style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-1)' }}>
-            {selectedIds.size} selected
+            {selectedIds.size} {isAr ? 'محدد' : 'selected'}
           </span>
           <div style={{ width: '1px', height: '1.25rem', background: 'var(--border)' }} />
           {/* Assign Rep */}
@@ -488,7 +491,7 @@ export default function DealsPage() {
             options={salesReps.map((r) => ({ value: r.id, label: r.name }))}
             value=""
             onChange={(v) => { if (v) executeBulk('ASSIGN_REP', v); }}
-            placeholder="Assign Rep…"
+            placeholder={isAr ? 'تعيين مندوب…' : 'Assign Rep…'}
             className="w-44"
           />
           {/* Cancel */}
@@ -496,18 +499,18 @@ export default function DealsPage() {
             className="btn btn-danger"
             style={{ fontSize: '0.8125rem', padding: '0.35rem 0.75rem' }}
             onClick={() => {
-              if (window.confirm(`Cancel ${selectedIds.size} deal${selectedIds.size > 1 ? 's' : ''}?`)) {
+              if (window.confirm(isAr ? `إلغاء ${selectedIds.size} صفقة؟` : `Cancel ${selectedIds.size} deal${selectedIds.size > 1 ? 's' : ''}?`)) {
                 executeBulk('CANCEL');
               }
             }}
           >
-            Cancel Deals
+            {isAr ? 'إلغاء الصفقات' : 'Cancel Deals'}
           </button>
           {/* Clear */}
           <button
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: '1rem', lineHeight: 1, padding: '0.2rem 0.3rem' }}
             onClick={() => setSelectedIds(new Set())}
-            title="Clear selection"
+            title={isAr ? 'إلغاء التحديد' : 'Clear selection'}
           >
             ✕
           </button>

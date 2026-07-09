@@ -7,8 +7,7 @@ import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 import { useLang } from '@/lib/lang-context';
 import { fmtDate, fmtDateTime } from '@/lib/fmt';
 import jsPDF from 'jspdf';
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+import { API_BASE as API } from '@/lib/config';
 const token = () => (typeof window !== 'undefined' ? localStorage.getItem('accessToken') ?? '' : '');
 const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
 const fmt = (n: number) => 'EGP ' + Number(n).toLocaleString('en-EG', { maximumFractionDigits: 0 });
@@ -230,11 +229,6 @@ export default function DealDetailPage() {
   ] : [
     { value: 'FLAT_RATE', label: 'Flat Rate' }, { value: 'REDUCING_BALANCE', label: 'Amortizing' },
   ];
-  const NOTE_TYPE_OPTS = isAr ? [
-    { value: 'NOTE', label: 'ملاحظة' }, { value: 'CALL', label: 'مكالمة' }, { value: 'EMAIL', label: 'بريد' },
-  ] : [
-    { value: 'NOTE', label: 'Note' }, { value: 'CALL', label: 'Call' }, { value: 'EMAIL', label: 'Email' },
-  ];
   const [deal, setDeal] = useState<Deal | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -263,11 +257,8 @@ export default function DealDetailPage() {
   const [finalizeError, setFinalizeError] = useState('');
   const [disbursingBank, setDisbursingBank] = useState(false);
 
-  // Activity / notes
+  // Activity / notes (read-only display)
   const [notes, setNotes] = useState<Note[]>([]);
-  const [noteType, setNoteType] = useState('NOTE');
-  const [noteBody, setNoteBody] = useState('');
-  const [postingNote, setPostingNote] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -405,18 +396,6 @@ export default function DealDetailPage() {
     finally { setDisbursingBank(false); }
   }
 
-  async function addNote(e: React.FormEvent) {
-    e.preventDefault();
-    if (!noteBody.trim()) return;
-    setPostingNote(true);
-    try {
-      await apiFetch(`/deals/${id}/notes`, { method: 'POST', body: JSON.stringify({ type: noteType, body: noteBody }) });
-      setNoteBody('');
-      loadNotes();
-    } catch {
-      setNoteBody('');
-    } finally { setPostingNote(false); }
-  }
 
   if (loading) return <div style={{ padding: '2rem', color: 'var(--text-3)' }}>{isAr ? 'جاري التحميل…' : 'Loading…'}</div>;
   if (error) return <div style={{ padding: '2rem', color: 'var(--danger-fg)' }}>{error}</div>;
@@ -917,32 +896,6 @@ export default function DealDetailPage() {
       {/* ── Activity Timeline ───────────────────────────────────────────── */}
       <div style={{ marginTop: '1.5rem' }}>
         <p className="section-label" style={{ marginBottom: '1rem' }}>{isAr ? 'النشاط' : 'Activity'}</p>
-
-        {/* Add Note form */}
-        <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
-          <form onSubmit={addNote} style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
-            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end' }}>
-              <div style={{ width: 160 }}>
-                <label className="input-label">{isAr ? 'النوع' : 'Type'}</label>
-                <SearchableCombobox options={NOTE_TYPE_OPTS} value={noteType} onChange={setNoteType} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label className="input-label">{isAr ? 'ملاحظة' : 'Note'}</label>
-                <textarea
-                  value={noteBody}
-                  onChange={(e) => setNoteBody(e.target.value)}
-                  placeholder={isAr ? 'سجّل مكالمة، أضف ملاحظة، أو وثّق بريدًا إلكترونيًا…' : 'Log a call, add a note, or record an email…'}
-                  rows={2}
-                  className="input"
-                  style={{ resize: 'vertical', width: '100%', boxSizing: 'border-box' }}
-                />
-              </div>
-              <button type="submit" disabled={postingNote || !noteBody.trim()} className="btn btn-primary btn-sm" style={{ flexShrink: 0, marginBottom: '2px' }}>
-                {postingNote ? '…' : (isAr ? 'إضافة' : 'Add')}
-              </button>
-            </div>
-          </form>
-        </div>
 
         {/* Timeline */}
         <div className="card" style={{ overflow: 'hidden' }}>

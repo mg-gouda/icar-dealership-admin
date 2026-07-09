@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../../lib/useApi';
 import SearchableCombobox from '../../../../../components/ui/SearchableCombobox';
+import { useLang } from '@/lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -69,6 +71,7 @@ function statusBadge(status: string) {
 function RegisterPaymentDialog({ invoice, onClose, onSuccess }: {
   invoice: Invoice; onClose: () => void; onSuccess: () => void;
 }) {
+  const { isAr } = useLang();
   const [form, setForm] = useState({
     amount: Number(invoice.amountResidual).toFixed(2),
     date: new Date().toISOString().split('T')[0],
@@ -84,15 +87,15 @@ function RegisterPaymentDialog({ invoice, onClose, onSuccess }: {
 
   const journalOpts = (journalsRaw?.items ?? []).map((j) => ({ value: j.id, label: `${j.code} — ${j.name}` }));
   const METHODS = [
-    { value: 'TRANSFER', label: 'Bank Transfer' },
-    { value: 'CHECK', label: 'Cheque' },
-    { value: 'CASH', label: 'Cash' },
-    { value: 'CARD', label: 'Card' },
+    { value: 'TRANSFER', label: isAr ? 'تحويل بنكي' : 'Bank Transfer' },
+    { value: 'CHECK', label: isAr ? 'شيك' : 'Cheque' },
+    { value: 'CASH', label: isAr ? 'نقداً' : 'Cash' },
+    { value: 'CARD', label: isAr ? 'بطاقة' : 'Card' },
   ];
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.journalId) { setErr('Select a journal.'); return; }
+    if (!form.journalId) { setErr(isAr ? 'اختر دفتراً.' : 'Select a journal.'); return; }
     setSaving(true); setErr('');
     try {
       await apiFetch('/finance/payments', {
@@ -122,13 +125,15 @@ function RegisterPaymentDialog({ invoice, onClose, onSuccess }: {
       />
       <div className="relative w-full card shadow-2xl" style={{ maxWidth: 480, background: 'var(--surface)', zIndex: 10 }}>
         <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
-          <h2 style={{ fontWeight: 600, fontSize: '0.9375rem', color: 'var(--text-1)' }}>Register Payment</h2>
+          <h2 style={{ fontWeight: 600, fontSize: '0.9375rem', color: 'var(--text-1)' }}>
+            {isAr ? 'تسجيل دفعة' : 'Register Payment'}
+          </h2>
           <button onClick={onClose} className="btn btn-ghost btn-sm" style={{ fontSize: '1.2rem' }}>×</button>
         </div>
         <form onSubmit={submit} className="p-6 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="input-label">Amount (EGP) *</label>
+              <label className="input-label">{isAr ? 'المبلغ (ج.م) *' : 'Amount (EGP) *'}</label>
               <input
                 type="number" step="0.01" required className="input"
                 value={form.amount}
@@ -136,7 +141,7 @@ function RegisterPaymentDialog({ invoice, onClose, onSuccess }: {
               />
             </div>
             <div>
-              <label className="input-label">Date *</label>
+              <label className="input-label">{isAr ? 'التاريخ *' : 'Date *'}</label>
               <input
                 type="date" required className="input"
                 value={form.date}
@@ -145,16 +150,16 @@ function RegisterPaymentDialog({ invoice, onClose, onSuccess }: {
             </div>
           </div>
           <div>
-            <label className="input-label">Journal *</label>
+            <label className="input-label">{isAr ? 'الدفتر *' : 'Journal *'}</label>
             <SearchableCombobox
               options={journalOpts}
               value={form.journalId}
               onChange={(v) => setForm((p) => ({ ...p, journalId: v }))}
-              placeholder="Select journal…"
+              placeholder={isAr ? 'اختر دفتراً…' : 'Select journal…'}
             />
           </div>
           <div>
-            <label className="input-label">Method</label>
+            <label className="input-label">{isAr ? 'طريقة الدفع' : 'Method'}</label>
             <SearchableCombobox
               options={METHODS}
               value={form.method}
@@ -162,18 +167,20 @@ function RegisterPaymentDialog({ invoice, onClose, onSuccess }: {
             />
           </div>
           <div>
-            <label className="input-label">Memo</label>
+            <label className="input-label">{isAr ? 'ملاحظة' : 'Memo'}</label>
             <input
-              className="input" placeholder="Optional reference…"
+              className="input" placeholder={isAr ? 'مرجع اختياري…' : 'Optional reference…'}
               value={form.memo}
               onChange={(e) => setForm((p) => ({ ...p, memo: e.target.value }))}
             />
           </div>
           {err && <p style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>{err}</p>}
           <div className="flex gap-3 pt-2" style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-            <button type="button" className="btn btn-secondary flex-1" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn btn-secondary flex-1" onClick={onClose}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </button>
             <button type="submit" disabled={saving} className="btn btn-primary flex-1">
-              {saving ? 'Saving…' : 'Register Payment'}
+              {saving ? (isAr ? 'جارٍ الحفظ…' : 'Saving…') : (isAr ? 'تسجيل الدفعة' : 'Register Payment')}
             </button>
           </div>
         </form>
@@ -186,6 +193,7 @@ function RegisterPaymentDialog({ invoice, onClose, onSuccess }: {
 function AddLineRow({ invoiceId, onSuccess, onCancel }: {
   invoiceId: string; onSuccess: () => void; onCancel: () => void;
 }) {
+  const { isAr } = useLang();
   const { data: accountsRaw } = useQuery<{ items?: { id: string; code: string; name: string }[] } | { id: string; code: string; name: string }[]>('/finance/accounts?limit=200');
   const { data: taxesRaw } = useQuery<{ items?: { id: string; name: string }[] } | { id: string; name: string }[]>('/finance/taxes?limit=50');
 
@@ -195,7 +203,7 @@ function AddLineRow({ invoiceId, onSuccess, onCancel }: {
   })();
   const taxOpts = (() => {
     const arr = Array.isArray(taxesRaw) ? taxesRaw : (taxesRaw as any)?.items ?? [];
-    return [{ value: '', label: 'No tax' }, ...(arr as { id: string; name: string }[]).map((t) => ({ value: t.id, label: t.name }))];
+    return [{ value: '', label: isAr ? 'بدون ضريبة' : 'No tax' }, ...(arr as { id: string; name: string }[]).map((t) => ({ value: t.id, label: t.name }))];
   })();
 
   const [form, setForm] = useState({ description: '', quantity: '1', unitPrice: '', accountId: '', taxId: '' });
@@ -204,7 +212,7 @@ function AddLineRow({ invoiceId, onSuccess, onCancel }: {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.accountId) { setErr('Select an account.'); return; }
+    if (!form.accountId) { setErr(isAr ? 'اختر حساباً.' : 'Select an account.'); return; }
     setSaving(true); setErr('');
     try {
       await apiFetch(`/finance/invoices/${invoiceId}/lines`, {
@@ -230,41 +238,41 @@ function AddLineRow({ invoiceId, onSuccess, onCancel }: {
         <form onSubmit={submit}>
           <div className="grid gap-3 mb-3" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr' }}>
             <div>
-              <label className="input-label">Description *</label>
+              <label className="input-label">{isAr ? 'الوصف *' : 'Description *'}</label>
               <input required className="input" style={{ fontSize: '0.8rem' }}
-                value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder="Line item…" />
+                value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder={isAr ? 'بند…' : 'Line item…'} />
             </div>
             <div>
-              <label className="input-label">Qty *</label>
+              <label className="input-label">{isAr ? 'الكمية *' : 'Qty *'}</label>
               <input required type="number" min="0.01" step="0.01" className="input" style={{ fontSize: '0.8rem' }}
                 value={form.quantity} onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))} />
             </div>
             <div>
-              <label className="input-label">Unit Price *</label>
+              <label className="input-label">{isAr ? 'سعر الوحدة *' : 'Unit Price *'}</label>
               <input required type="number" min="0" step="0.01" className="input" style={{ fontSize: '0.8rem' }}
                 value={form.unitPrice} onChange={(e) => setForm((p) => ({ ...p, unitPrice: e.target.value }))} placeholder="0.00" />
             </div>
             <div>
-              <label className="input-label">Account *</label>
+              <label className="input-label">{isAr ? 'الحساب *' : 'Account *'}</label>
               <SearchableCombobox options={accountOpts} value={form.accountId}
-                onChange={(v) => setForm((p) => ({ ...p, accountId: v }))} placeholder="Account…" />
+                onChange={(v) => setForm((p) => ({ ...p, accountId: v }))} placeholder={isAr ? 'الحساب…' : 'Account…'} />
             </div>
             <div>
-              <label className="input-label">Tax</label>
+              <label className="input-label">{isAr ? 'الضريبة' : 'Tax'}</label>
               <SearchableCombobox options={taxOpts} value={form.taxId}
-                onChange={(v) => setForm((p) => ({ ...p, taxId: v }))} placeholder="No tax" />
+                onChange={(v) => setForm((p) => ({ ...p, taxId: v }))} placeholder={isAr ? 'بدون ضريبة' : 'No tax'} />
             </div>
           </div>
           <div className="flex items-center justify-between">
             <div className="flex gap-2">
-              <button type="button" className="btn btn-secondary btn-sm" onClick={onCancel}>Cancel</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={onCancel}>{isAr ? 'إلغاء' : 'Cancel'}</button>
               <button type="submit" disabled={saving} className="btn btn-primary btn-sm">
-                {saving ? 'Adding…' : 'Add Line'}
+                {saving ? (isAr ? 'جارٍ الإضافة…' : 'Adding…') : (isAr ? 'إضافة بند' : 'Add Line')}
               </button>
             </div>
             {previewAmt > 0 && (
               <span style={{ fontSize: '0.8rem', color: 'var(--text-2)' }}>
-                Subtotal: <strong style={{ color: 'var(--text-1)' }}>{egp(previewAmt)}</strong>
+                {isAr ? 'المجموع الجزئي:' : 'Subtotal:'} <strong style={{ color: 'var(--text-1)' }}>{egp(previewAmt)}</strong>
               </span>
             )}
           </div>
@@ -279,6 +287,7 @@ function AddLineRow({ invoiceId, onSuccess, onCancel }: {
 export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { isAr } = useLang();
   const { data: invoice, loading, error, reload } = useQuery<Invoice>(`/finance/invoices/${id}`, [id]);
 
   const [posting, setPosting] = useState(false);
@@ -298,7 +307,7 @@ export default function InvoiceDetailPage() {
   }
 
   async function cancel() {
-    if (!confirm('Cancel this invoice? This cannot be undone.')) return;
+    if (!confirm(isAr ? 'إلغاء هذه الفاتورة؟ لا يمكن التراجع عن هذا الإجراء.' : 'Cancel this invoice? This cannot be undone.')) return;
     setCancelling(true); setActionErr('');
     try { await apiFetch(`/finance/invoices/${id}/cancel`, { method: 'PATCH' }); await reload(); }
     catch (e: unknown) { setActionErr(e instanceof Error ? e.message : 'Error'); }
@@ -306,7 +315,7 @@ export default function InvoiceDetailPage() {
   }
 
   async function reverse() {
-    if (!confirm('Reverse this invoice? A reversing journal entry will be created and the invoice marked Cancelled.')) return;
+    if (!confirm(isAr ? 'عكس هذه الفاتورة؟ سيُنشأ قيد عكسي وتُلغى الفاتورة.' : 'Reverse this invoice? A reversing journal entry will be created and the invoice marked Cancelled.')) return;
     setReversing(true); setActionErr('');
     try { await apiFetch(`/finance/invoices/${id}/reverse`, { method: 'PATCH' }); await reload(); }
     catch (e: unknown) { setActionErr(e instanceof Error ? e.message : 'Error'); }
@@ -356,11 +365,13 @@ export default function InvoiceDetailPage() {
     doc.save(`invoice-${invoice.number ?? invoice.id.slice(0, 8)}.pdf`);
   }
 
-  if (loading) return <div className="page-body" style={{ color: 'var(--text-3)' }}>Loading invoice…</div>;
+  if (loading) return <div className="page-body" style={{ color: 'var(--text-3)' }}>{isAr ? 'تحميل الفاتورة…' : 'Loading invoice…'}</div>;
   if (error || !invoice) return (
     <div className="page-body">
-      <p style={{ color: 'var(--danger)', marginBottom: '0.75rem', fontSize: '0.875rem' }}>{error ?? 'Invoice not found'}</p>
-      <Link href="/finance/invoices" style={{ color: 'var(--primary)', fontSize: '0.875rem' }}>← Back to invoices</Link>
+      <p style={{ color: 'var(--danger)', marginBottom: '0.75rem', fontSize: '0.875rem' }}>{error ?? (isAr ? 'الفاتورة غير موجودة' : 'Invoice not found')}</p>
+      <Link href="/finance/invoices" style={{ color: 'var(--primary)', fontSize: '0.875rem' }}>
+        {isAr ? '← العودة للفواتير' : '← Back to invoices'}
+      </Link>
     </div>
   );
 
@@ -376,11 +387,11 @@ export default function InvoiceDetailPage() {
       <div className="flex items-start justify-between mb-6">
         <div>
           <Link href="/finance/invoices" style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
-            ← Customer Invoices
+            {isAr ? '← فواتير العملاء' : '← Customer Invoices'}
           </Link>
           <div className="flex items-center gap-3 mt-1">
             <h1 className="page-title">
-              Customer Invoice — {invoice.number ?? invoice.id.slice(0, 8).toUpperCase()}
+              {isAr ? 'فاتورة عميل' : 'Customer Invoice'} — {invoice.number ?? invoice.id.slice(0, 8).toUpperCase()}
             </h1>
             <span className={statusBadge(invoice.status)}>{invoice.status}</span>
           </div>
@@ -388,27 +399,27 @@ export default function InvoiceDetailPage() {
             <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>
               {invoice.partner.name}
               {invoice.partner.email && ` · ${invoice.partner.email}`}
-              {invoice.deal?.ref && ` · Deal ${invoice.deal.ref}`}
+              {invoice.deal?.ref && ` · ${isAr ? 'صفقة' : 'Deal'} ${invoice.deal.ref}`}
             </p>
           )}
         </div>
         <div className="flex gap-2 flex-shrink-0">
-          <button className="btn btn-secondary btn-sm" onClick={printPdf}>Print PDF</button>
+          <button className="btn btn-secondary btn-sm" onClick={printPdf}>{isAr ? 'طباعة PDF' : 'Print PDF'}</button>
           {isDraft && (
             <button className="btn btn-primary" onClick={post} disabled={posting}>
-              {posting ? 'Posting…' : 'Validate & Post'}
+              {posting ? (isAr ? 'جارٍ الترحيل…' : 'Posting…') : (isAr ? 'التحقق والترحيل' : 'Validate & Post')}
             </button>
           )}
           {canPay && (
             <button className="btn btn-primary" onClick={() => setShowPayDialog(true)}
               style={{ background: 'var(--success)', borderColor: 'var(--success)' }}>
-              + Register Payment
+              {isAr ? '+ تسجيل دفعة' : '+ Register Payment'}
             </button>
           )}
           {isDraft && (
             <button className="btn btn-ghost btn-sm" onClick={cancel} disabled={cancelling}
               style={{ color: 'var(--danger)' }}>
-              {cancelling ? '…' : 'Cancel'}
+              {cancelling ? '…' : (isAr ? 'إلغاء' : 'Cancel')}
             </button>
           )}
           {isPosted && isCustomerInvoice && (
@@ -419,13 +430,13 @@ export default function InvoiceDetailPage() {
               title={etaSubmissionId ? `ETA ID: ${etaSubmissionId}` : 'Submit to ETA e-invoicing'}
               style={{ borderColor: etaSubmissionId ? 'var(--success)' : 'var(--border)', color: etaSubmissionId ? 'var(--success)' : 'var(--text-2)' }}
             >
-              {submittingEta ? 'Submitting…' : etaSubmissionId ? '✓ ETA Submitted' : '⇪ Submit to ETA'}
+              {submittingEta ? (isAr ? 'جارٍ الإرسال…' : 'Submitting…') : etaSubmissionId ? '✓ ETA Submitted' : '⇪ Submit to ETA'}
             </button>
           )}
           {isPosted && (
             <button className="btn btn-ghost btn-sm" onClick={reverse} disabled={reversing}
               style={{ color: 'var(--danger)' }}>
-              {reversing ? '…' : 'Reverse'}
+              {reversing ? '…' : (isAr ? 'عكس' : 'Reverse')}
             </button>
           )}
         </div>
@@ -471,37 +482,37 @@ export default function InvoiceDetailPage() {
         <div className="space-y-5">
           {/* Meta */}
           <div className="card p-5">
-            <p className="section-label">Invoice Details</p>
+            <p className="section-label">{isAr ? 'تفاصيل الفاتورة' : 'Invoice Details'}</p>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="input-label">Customer</p>
+                <p className="input-label">{isAr ? 'العميل' : 'Customer'}</p>
                 <p style={{ fontWeight: 600, color: 'var(--text-1)' }}>{invoice.partner?.name ?? '—'}</p>
                 {invoice.partner?.email && <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{invoice.partner.email}</p>}
                 {invoice.partner?.phone && <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{invoice.partner.phone}</p>}
               </div>
               <div>
-                <p className="input-label">Deal Reference</p>
+                <p className="input-label">{isAr ? 'مرجع الصفقة' : 'Deal Reference'}</p>
                 <p style={{ color: 'var(--text-1)' }}>{invoice.deal?.ref ?? '—'}</p>
               </div>
               <div>
-                <p className="input-label">Invoice Date</p>
-                <p style={{ color: 'var(--text-1)' }}>{new Date(invoice.date).toLocaleDateString('en-EG')}</p>
+                <p className="input-label">{isAr ? 'تاريخ الفاتورة' : 'Invoice Date'}</p>
+                <p style={{ color: 'var(--text-1)' }}>{fmtDate(invoice.date, isAr)}</p>
               </div>
               <div>
-                <p className="input-label">Due Date</p>
+                <p className="input-label">{isAr ? 'تاريخ الاستحقاق' : 'Due Date'}</p>
                 <p style={{ color: 'var(--text-1)' }}>
-                  {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('en-EG') : '—'}
+                  {invoice.dueDate ? fmtDate(invoice.dueDate, isAr) : '—'}
                 </p>
               </div>
               <div>
-                <p className="input-label">Sales Journal</p>
+                <p className="input-label">{isAr ? 'دفتر المبيعات' : 'Sales Journal'}</p>
                 <p style={{ color: 'var(--text-1)' }}>
                   {invoice.journal ? `${invoice.journal.code} — ${invoice.journal.name}` : '—'}
                 </p>
               </div>
               {invoice.notes && (
                 <div className="col-span-2">
-                  <p className="input-label">Notes</p>
+                  <p className="input-label">{isAr ? 'ملاحظات' : 'Notes'}</p>
                   <p style={{ color: 'var(--text-2)', fontSize: '0.8rem' }}>{invoice.notes}</p>
                 </div>
               )}
@@ -511,20 +522,22 @@ export default function InvoiceDetailPage() {
           {/* Invoice lines */}
           <div className="card" style={{ overflow: 'hidden' }}>
             <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
-              <p className="section-label" style={{ margin: 0 }}>Invoice Lines</p>
+              <p className="section-label" style={{ margin: 0 }}>{isAr ? 'بنود الفاتورة' : 'Invoice Lines'}</p>
               {isDraft && !showAddLine && (
-                <button className="btn btn-ghost btn-sm" onClick={() => setShowAddLine(true)}>+ Add Line</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowAddLine(true)}>
+                  {isAr ? '+ إضافة بند' : '+ Add Line'}
+                </button>
               )}
             </div>
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Description</th>
-                  <th>Category</th>
-                  <th className="text-right">Qty</th>
-                  <th className="text-right">Unit Price</th>
-                  <th className="text-right">Tax</th>
-                  <th className="text-right">Subtotal</th>
+                  <th>{isAr ? 'الوصف' : 'Description'}</th>
+                  <th>{isAr ? 'الفئة' : 'Category'}</th>
+                  <th className="text-right">{isAr ? 'الكمية' : 'Qty'}</th>
+                  <th className="text-right">{isAr ? 'سعر الوحدة' : 'Unit Price'}</th>
+                  <th className="text-right">{isAr ? 'الضريبة' : 'Tax'}</th>
+                  <th className="text-right">{isAr ? 'المجموع الجزئي' : 'Subtotal'}</th>
                   {isDraft && <th />}
                 </tr>
               </thead>
@@ -540,7 +553,7 @@ export default function InvoiceDetailPage() {
                     <td className="text-right tabular-nums" style={{ color: 'var(--text-2)' }}>{l.quantity}</td>
                     <td className="text-right tabular-nums">{egp(l.unitPrice)}</td>
                     <td className="text-right" style={{ color: 'var(--text-3)', fontSize: '0.75rem' }}>
-                      {l.tax ? `${l.tax.name} ${l.tax.rate}%` : 'Exempt'}
+                      {l.tax ? `${l.tax.name} ${l.tax.rate}%` : (isAr ? 'معفاة' : 'Exempt')}
                     </td>
                     <td className="text-right tabular-nums" style={{ fontWeight: 600 }}>{egp(l.subtotal)}</td>
                     {isDraft && <td />}
@@ -559,15 +572,15 @@ export default function InvoiceDetailPage() {
             <div className="flex justify-end px-5 py-4" style={{ borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}>
               <div style={{ minWidth: 260 }} className="space-y-2">
                 <div className="flex justify-between text-sm" style={{ color: 'var(--text-2)' }}>
-                  <span>Subtotal</span>
+                  <span>{isAr ? 'المجموع الجزئي' : 'Subtotal'}</span>
                   <span className="tabular-nums">{egp(Number(invoice.amountUntaxed))}</span>
                 </div>
                 <div className="flex justify-between text-sm" style={{ color: 'var(--text-2)' }}>
-                  <span>Sales Tax (14%)</span>
+                  <span>{isAr ? 'ضريبة المبيعات (14%)' : 'Sales Tax (14%)'}</span>
                   <span className="tabular-nums">{egp(Number(invoice.amountTax))}</span>
                 </div>
                 <div className="flex justify-between" style={{ fontWeight: 700, fontSize: '1rem', borderTop: '2px solid var(--border-strong)', paddingTop: '0.5rem' }}>
-                  <span>Total</span>
+                  <span>{isAr ? 'الإجمالي' : 'Total'}</span>
                   <span className="tabular-nums">{egp(Number(invoice.amountTotal))}</span>
                 </div>
               </div>
@@ -579,7 +592,7 @@ export default function InvoiceDetailPage() {
             <div className="card" style={{ overflow: 'hidden' }}>
               <div className="px-5 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
                 <p className="section-label" style={{ margin: 0 }}>
-                  Journal Entry
+                  {isAr ? 'القيد المحاسبي' : 'Journal Entry'}
                   <span style={{ fontWeight: 400, marginLeft: '0.5rem', color: 'var(--text-3)' }}>
                     {invoice.journalEntry.ref}
                   </span>
@@ -588,9 +601,9 @@ export default function InvoiceDetailPage() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Account</th>
-                    <th className="text-right">Debit</th>
-                    <th className="text-right">Credit</th>
+                    <th>{isAr ? 'الحساب' : 'Account'}</th>
+                    <th className="text-right">{isAr ? 'مدين' : 'Debit'}</th>
+                    <th className="text-right">{isAr ? 'دائن' : 'Credit'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -617,22 +630,22 @@ export default function InvoiceDetailPage() {
         <div className="space-y-4">
           {/* Invoice totals card */}
           <div className="card p-5">
-            <p className="section-label">Invoice Totals</p>
+            <p className="section-label">{isAr ? 'إجماليات الفاتورة' : 'Invoice Totals'}</p>
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
-                <span style={{ color: 'var(--text-2)' }}>Untaxed Amount</span>
+                <span style={{ color: 'var(--text-2)' }}>{isAr ? 'المبلغ قبل الضريبة' : 'Untaxed Amount'}</span>
                 <span className="tabular-nums" style={{ fontWeight: 500 }}>{egp(Number(invoice.amountUntaxed))}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span style={{ color: 'var(--text-2)' }}>Sales Tax (14%)</span>
+                <span style={{ color: 'var(--text-2)' }}>{isAr ? 'ضريبة المبيعات (14%)' : 'Sales Tax (14%)'}</span>
                 <span className="tabular-nums" style={{ fontWeight: 500 }}>{egp(Number(invoice.amountTax))}</span>
               </div>
               <div className="flex justify-between" style={{ borderTop: '2px solid var(--border-strong)', paddingTop: '0.75rem', fontWeight: 700, fontSize: '1rem' }}>
-                <span>Total</span>
+                <span>{isAr ? 'الإجمالي' : 'Total'}</span>
                 <span className="tabular-nums">{egp(Number(invoice.amountTotal))}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span style={{ color: 'var(--text-2)' }}>Amount Paid</span>
+                <span style={{ color: 'var(--text-2)' }}>{isAr ? 'المبلغ المدفوع' : 'Amount Paid'}</span>
                 <span className="tabular-nums" style={{ color: 'var(--success-fg)', fontWeight: 500 }}>
                   {egp(Number(invoice.amountTotal) - Number(invoice.amountResidual))}
                 </span>
@@ -645,7 +658,7 @@ export default function InvoiceDetailPage() {
                 }}
               >
                 <span style={{ color: Number(invoice.amountResidual) > 0 ? 'var(--danger-fg)' : 'var(--success-fg)' }}>
-                  Amount Due
+                  {isAr ? 'المبلغ المستحق' : 'Amount Due'}
                 </span>
                 <span
                   className="tabular-nums"
@@ -659,10 +672,10 @@ export default function InvoiceDetailPage() {
 
           {/* Payments applied */}
           <div className="card p-5">
-            <p className="section-label">Payments Applied</p>
+            <p className="section-label">{isAr ? 'المدفوعات المطبقة' : 'Payments Applied'}</p>
             {invoice.paymentAllocations.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '1.5rem 0', color: 'var(--text-3)', fontSize: '0.8rem' }}>
-                No payments yet.
+                {isAr ? 'لا توجد مدفوعات بعد.' : 'No payments yet.'}
               </div>
             ) : (
               <div className="space-y-2">
@@ -670,7 +683,7 @@ export default function InvoiceDetailPage() {
                   <div key={pa.id} className="flex items-center justify-between text-sm">
                     <div>
                       <p style={{ fontWeight: 500, color: 'var(--text-1)' }}>
-                        {new Date(pa.payment.date).toLocaleDateString('en-EG')}
+                        {fmtDate(pa.payment.date, isAr)}
                       </p>
                       <p style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{pa.payment.method}</p>
                     </div>
@@ -686,14 +699,14 @@ export default function InvoiceDetailPage() {
                 className="btn btn-primary w-full mt-4"
                 onClick={() => setShowPayDialog(true)}
               >
-                + Register Payment
+                {isAr ? '+ تسجيل دفعة' : '+ Register Payment'}
               </button>
             )}
           </div>
 
           {/* Tax breakdown */}
           <div className="card p-5">
-            <p className="section-label">Tax Breakdown</p>
+            <p className="section-label">{isAr ? 'تفاصيل الضريبة' : 'Tax Breakdown'}</p>
             <div className="space-y-2 text-sm">
               {/* ponytail: group lines by tax rate */}
               {(() => {
@@ -705,18 +718,18 @@ export default function InvoiceDetailPage() {
                   <>
                     {taxableTotal > 0 && (
                       <div className="flex justify-between">
-                        <span style={{ color: 'var(--text-2)' }}>VAT 14% — Vehicle &amp; Warranty</span>
+                        <span style={{ color: 'var(--text-2)' }}>{isAr ? 'ضريبة القيمة المضافة 14% — سيارة وضمان' : 'VAT 14% — Vehicle & Warranty'}</span>
                         <span className="tabular-nums" style={{ fontWeight: 500 }}>{egp(Number(invoice.amountTax))}</span>
                       </div>
                     )}
                     {exemptTotal > 0 && (
                       <div className="flex justify-between">
-                        <span style={{ color: 'var(--text-2)' }}>Exempt — Fees &amp; Insurance</span>
+                        <span style={{ color: 'var(--text-2)' }}>{isAr ? 'معفاة — رسوم وتأمين' : 'Exempt — Fees & Insurance'}</span>
                         <span className="tabular-nums" style={{ color: 'var(--text-3)' }}>EGP 0</span>
                       </div>
                     )}
                     {taxableTotal === 0 && exemptTotal === 0 && (
-                      <p style={{ color: 'var(--text-3)', fontSize: '0.8rem' }}>No tax lines.</p>
+                      <p style={{ color: 'var(--text-3)', fontSize: '0.8rem' }}>{isAr ? 'لا توجد بنود ضريبية.' : 'No tax lines.'}</p>
                     )}
                   </>
                 );

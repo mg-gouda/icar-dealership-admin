@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../../lib/useApi';
 import SearchableCombobox from '../../../../../components/ui/SearchableCombobox';
+import { useLang } from '@/lib/lang-context';
+import { ErrorBanner } from '@/components/ui/error-banner';
 
 interface Account { id: string; code: string; name: string; }
 interface Journal { id: string; code: string; name: string; }
@@ -32,6 +34,7 @@ function AccountSelect({
   const [q, setQ] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { isAr } = useLang();
 
   const selected = accounts.find((a) => a.id === value);
   const filtered = accounts.filter(
@@ -72,7 +75,7 @@ function AccountSelect({
               type="text"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search accounts…"
+              placeholder={isAr ? 'بحث في الحسابات…' : 'Search accounts…'}
               className="w-full px-3 py-1.5 text-xs rounded-lg border border-[--border] bg-[--surface-2] text-[--text-1] outline-none focus:border-[--primary]"
             />
           </div>
@@ -89,7 +92,7 @@ function AccountSelect({
               </button>
             ))}
             {filtered.length === 0 && (
-              <p className="px-3 py-3 text-xs text-[--text-3] text-center">No results</p>
+              <p className="px-3 py-3 text-xs text-[--text-3] text-center">{isAr ? 'لا توجد نتائج' : 'No results'}</p>
             )}
           </div>
         </div>
@@ -100,9 +103,10 @@ function AccountSelect({
 
 export default function NewJournalEntryPage() {
   const router = useRouter();
+  const { isAr } = useLang();
 
-  const { data: journalsRaw } = useQuery<{ items: Journal[] }>('/finance/journals?limit=50');
-  const { data: accountsRaw } = useQuery<{ items: Account[] }>('/finance/accounts?limit=300');
+  const { data: journalsRaw, error: journalsError } = useQuery<{ items: Journal[] }>('/finance/journals?limit=50');
+  const { data: accountsRaw, error: accountsError } = useQuery<{ items: Account[] }>('/finance/accounts?limit=300');
 
   const journals: Journal[] = journalsRaw?.items ?? [];
   const accounts: Account[] = accountsRaw?.items ?? [];
@@ -138,13 +142,11 @@ export default function NewJournalEntryPage() {
   const balanced = totalDr > 0 && Math.abs(totalDr - totalCr) < 0.005;
   const diff = totalDr - totalCr;
 
-  const selectedJournal = journals.find((j) => j.id === form.journalId);
-
   async function save(andPost = false) {
-    if (!form.journalId) { setSaveErr('Select a journal.'); return; }
+    if (!form.journalId) { setSaveErr(isAr ? 'اختر دفتراً.' : 'Select a journal.'); return; }
     const validLines = lines.filter((l) => l.accountId && (Number(l.debit) > 0 || Number(l.credit) > 0));
-    if (validLines.length < 2) { setSaveErr('At least 2 lines required.'); return; }
-    if (!balanced) { setSaveErr('Debits must equal credits.'); return; }
+    if (validLines.length < 2) { setSaveErr(isAr ? 'مطلوب بندان على الأقل.' : 'At least 2 lines required.'); return; }
+    if (!balanced) { setSaveErr(isAr ? 'المدين يجب أن يساوي الدائن.' : 'Debits must equal credits.'); return; }
 
     const action = andPost ? setPosting : setSaving;
     action(true);
@@ -189,37 +191,39 @@ export default function NewJournalEntryPage() {
     <div className="flex gap-5 p-6 min-h-screen bg-[--bg]">
       {/* Main form */}
       <div className="flex-1 space-y-5 min-w-0">
-        {/* Page title */}
         <div>
           <button onClick={() => router.back()} className="text-xs text-[--text-3] hover:text-[--text-1] transition mb-2 inline-flex items-center gap-1">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            Journal Entries
+            {isAr ? 'القيود المحاسبية' : 'Journal Entries'}
           </button>
-          <h1 className="page-title">New Journal Entry</h1>
-          <p className="page-subtitle">General Ledger — Manual Entry</p>
+          <h1 className="page-title">{isAr ? 'قيد محاسبي جديد' : 'New Journal Entry'}</h1>
+          <p className="page-subtitle">{isAr ? 'دفتر الأستاذ العام — إدخال يدوي' : 'General Ledger — Manual Entry'}</p>
+          {(journalsError || accountsError) && (
+            <div className="mt-3">
+              <ErrorBanner error={journalsError ?? accountsError} retry={() => window.location.reload()} />
+            </div>
+          )}
         </div>
 
         {/* Entry Details card */}
         <div className="card p-5 space-y-4">
-          <p className="section-label">Entry Details</p>
+          <p className="section-label">{isAr ? 'تفاصيل القيد' : 'Entry Details'}</p>
 
           <div className="grid grid-cols-2 gap-4">
-            {/* Journal */}
             <div>
-              <label className="input-label">Journal</label>
+              <label className="input-label">{isAr ? 'الدفتر' : 'Journal'}</label>
               <SearchableCombobox
                 options={journals.map((j) => ({ value: j.id, label: j.name }))}
                 value={form.journalId}
                 onChange={(v) => setForm({ ...form, journalId: v })}
-                placeholder="Select journal…"
+                placeholder={isAr ? 'اختر دفتراً…' : 'Select journal…'}
               />
             </div>
 
-            {/* Date */}
             <div>
-              <label className="input-label">Date</label>
+              <label className="input-label">{isAr ? 'التاريخ' : 'Date'}</label>
               <input
                 type="date"
                 value={form.date}
@@ -228,21 +232,19 @@ export default function NewJournalEntryPage() {
               />
             </div>
 
-            {/* Reference / Description */}
             <div>
-              <label className="input-label">Reference / Description</label>
+              <label className="input-label">{isAr ? 'المرجع / الوصف' : 'Reference / Description'}</label>
               <input
                 type="text"
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Monthly accrual — Rent expense"
+                placeholder={isAr ? 'استحقاق شهري — مصروف إيجار' : 'Monthly accrual — Rent expense'}
                 className="input"
               />
             </div>
 
-            {/* Currency */}
             <div>
-              <label className="input-label">Currency</label>
+              <label className="input-label">{isAr ? 'العملة' : 'Currency'}</label>
               <SearchableCombobox
                 options={CURRENCY_OPTS}
                 value={form.currency}
@@ -255,19 +257,19 @@ export default function NewJournalEntryPage() {
         {/* Journal Lines card */}
         <div className="card overflow-hidden">
           <div className="px-5 py-3 border-b border-[--border] bg-[--surface-2]">
-            <p className="section-label mb-0">Journal Lines</p>
+            <p className="section-label mb-0">{isAr ? 'بنود القيد' : 'Journal Lines'}</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[--border] bg-[--surface-2] text-[11px] font-semibold uppercase tracking-wider text-[--text-3]">
                   <td className="px-4 py-2.5 w-8 text-center">#</td>
-                  <td className="px-3 py-2.5">Account</td>
-                  <td className="px-3 py-2.5 w-28">Partner</td>
-                  <td className="px-3 py-2.5">Label</td>
-                  <td className="px-3 py-2.5 w-24">Branch</td>
-                  <td className="px-3 py-2.5 w-32 text-right">Debit (EGP)</td>
-                  <td className="px-3 py-2.5 w-32 text-right">Credit (EGP)</td>
+                  <td className="px-3 py-2.5">{isAr ? 'الحساب' : 'Account'}</td>
+                  <td className="px-3 py-2.5 w-28">{isAr ? 'الشريك' : 'Partner'}</td>
+                  <td className="px-3 py-2.5">{isAr ? 'البيان' : 'Label'}</td>
+                  <td className="px-3 py-2.5 w-24">{isAr ? 'الفرع' : 'Branch'}</td>
+                  <td className="px-3 py-2.5 w-32 text-right">{isAr ? 'مدين (ج.م)' : 'Debit (EGP)'}</td>
+                  <td className="px-3 py-2.5 w-32 text-right">{isAr ? 'دائن (ج.م)' : 'Credit (EGP)'}</td>
                   <td className="px-3 py-2.5 w-8"></td>
                 </tr>
               </thead>
@@ -280,6 +282,7 @@ export default function NewJournalEntryPage() {
                         accounts={accounts}
                         value={line.accountId}
                         onChange={(v) => setLine(i, 'accountId', v)}
+                        placeholder={isAr ? 'اختر حساباً…' : 'Select account…'}
                       />
                     </td>
                     <td className="px-3 py-2">
@@ -290,7 +293,7 @@ export default function NewJournalEntryPage() {
                         type="text"
                         value={line.description}
                         onChange={(e) => setLine(i, 'description', e.target.value)}
-                        placeholder="Label…"
+                        placeholder={isAr ? 'بيان…' : 'Label…'}
                         className="input text-xs py-1.5"
                       />
                     </td>
@@ -340,7 +343,7 @@ export default function NewJournalEntryPage() {
                       onClick={() => setLines((prev) => [...prev, EMPTY_LINE()])}
                       className="text-xs text-[--primary] hover:underline font-medium"
                     >
-                      + Add Line
+                      {isAr ? '+ إضافة بند' : '+ Add Line'}
                     </button>
                   </td>
                   <td className="px-3 py-2.5 text-right text-sm font-semibold tabular-nums text-[--primary]">
@@ -368,42 +371,44 @@ export default function NewJournalEntryPage() {
         {/* Balance check */}
         <div className={`card p-5 text-center ${balanced ? 'bg-success-bg border-success' : ''}`}>
           <p className="section-label mb-3">
-            {balanced ? '✅ Balance Check' : 'Balance Check'}
+            {balanced ? '✅' : ''} {isAr ? 'فحص التوازن' : 'Balance Check'}
           </p>
           <p className={`text-3xl font-bold tabular-nums ${balanced ? 'text-success-fg' : diff === 0 && totalDr === 0 ? 'text-[--text-3]' : 'text-danger-fg'}`}>
             {balanced ? 'EGP 0' : egp(Math.abs(diff))}
           </p>
           <p className={`text-xs mt-1 ${balanced ? 'text-success-fg' : 'text-[--text-3]'}`}>
             {balanced
-              ? 'Difference — Ready to Post'
+              ? (isAr ? 'الفرق — جاهز للترحيل' : 'Difference — Ready to Post')
               : totalDr === 0
-              ? 'Add journal lines'
-              : `Difference: ${diff > 0 ? 'Debit' : 'Credit'} exceeds`}
+              ? (isAr ? 'أضف بنود القيد' : 'Add journal lines')
+              : isAr
+                ? `فرق: ${diff > 0 ? 'المدين' : 'الدائن'} أكبر`
+                : `Difference: ${diff > 0 ? 'Debit' : 'Credit'} exceeds`}
           </p>
         </div>
 
         {/* Actions */}
         <div className="card p-4 space-y-2">
-          <p className="section-label">Actions</p>
+          <p className="section-label">{isAr ? 'الإجراءات' : 'Actions'}</p>
           <button
             onClick={() => save(true)}
             disabled={posting || !balanced}
             className="btn btn-primary w-full"
           >
-            {posting ? 'Posting…' : '✅ Post Entry'}
+            {posting ? (isAr ? 'جارٍ الترحيل…' : 'Posting…') : (isAr ? '✅ ترحيل القيد' : '✅ Post Entry')}
           </button>
           <button
             onClick={() => save(false)}
             disabled={saving}
             className="btn btn-secondary w-full"
           >
-            {saving ? 'Saving…' : '🗒 Save as Draft'}
+            {saving ? (isAr ? 'جارٍ الحفظ…' : 'Saving…') : (isAr ? '🗒 حفظ كمسودة' : '🗒 Save as Draft')}
           </button>
           <button
             onClick={() => router.back()}
             className="btn btn-ghost w-full"
           >
-            Cancel
+            {isAr ? 'إلغاء' : 'Cancel'}
           </button>
         </div>
 
@@ -412,12 +417,12 @@ export default function NewJournalEntryPage() {
           <div className="flex items-start gap-2">
             <span className="text-sm">💡</span>
             <div>
-              <p className="text-xs font-semibold text-[--text-1] mb-1">Fiscal Period</p>
+              <p className="text-xs font-semibold text-[--text-1] mb-1">{isAr ? 'الفترة المالية' : 'Fiscal Period'}</p>
               <p className="text-xs text-[--text-2]">
-                {new Date().toLocaleDateString('en-EG', { month: 'short', year: 'numeric' })} — Open
+                {new Date().toLocaleDateString('en-EG', { month: 'short', year: 'numeric' })} — {isAr ? 'مفتوحة' : 'Open'}
               </p>
               <p className="text-xs text-[--text-3] mt-0.5">
-                Lock date: {new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toLocaleDateString('en-EG', { month: 'short', day: 'numeric' })} at EOD
+                {isAr ? 'تاريخ القفل:' : 'Lock date:'} {new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toLocaleDateString('en-EG', { month: 'short', day: 'numeric' })} {isAr ? 'نهاية اليوم' : 'at EOD'}
               </p>
             </div>
           </div>

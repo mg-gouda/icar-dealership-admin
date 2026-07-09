@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/useApi';
+import { useLang } from '@/lib/lang-context';
 
 /* ── types ──────────────────────────────────────────────────────────────── */
 interface BranchRow {
@@ -68,13 +69,13 @@ function fmtEGP(n: number) {
   return `EGP ${n.toLocaleString()}`;
 }
 function fmtPct(n: number) { return `${n.toFixed(1)}%`; }
-function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString('en-EG', { month: 'short', day: 'numeric' });
+function fmtDate(s: string, ar: boolean) {
+  return new Date(s).toLocaleDateString(ar ? 'ar-EG' : 'en-EG', { month: 'short', day: 'numeric' });
 }
-function methodLabel(m: string) {
-  if (m === 'CASH') return 'Cash';
-  if (m === 'BANK_FINANCING') return 'Bank';
-  return 'Install.';
+function methodLabel(m: string, ar: boolean) {
+  if (m === 'CASH') return ar ? 'نقداً' : 'Cash';
+  if (m === 'BANK_FINANCING') return ar ? 'بنك' : 'Bank';
+  return ar ? 'تقسيط' : 'Install.';
 }
 
 /* ── TrendArrow ─────────────────────────────────────────────────────────── */
@@ -116,6 +117,7 @@ function KpiCell({ label, value, trend, invertTrend }: KpiCellProps) {
 
 /* ── main page ───────────────────────────────────────────────────────────── */
 export default function ExecutivePage() {
+  const { isAr } = useLang();
   const [kpis,      setKpis]      = useState(DEMO_KPIS);
   const [branches,  setBranches]  = useState<BranchRow[]>(DEMO_BRANCHES);
   const [recent,    setRecent]    = useState<RecentDeal[]>(DEMO_RECENT);
@@ -123,7 +125,7 @@ export default function ExecutivePage() {
 
   useEffect(() => {
     // revenue by month — extract current month total
-    apiFetch<{ months?: Array<{ revenue: number; expenses: number; month: string }> }>('/reports/revenue-by-month')
+    apiFetch<{ months?: Array<{ revenue: number; expenses: number; month: string }> }>('/finance/reports/revenue-by-month')
       .then(d => {
         if (d?.months?.length) {
           const last = d.months[d.months.length - 1];
@@ -133,7 +135,7 @@ export default function ExecutivePage() {
       .catch(() => {});
 
     // branch profit
-    apiFetch<{ branches?: BranchRow[] }>('/reports/branch-profit')
+    apiFetch<{ branches?: BranchRow[] }>('/finance/reports/branch-profit')
       .then(d => { if (d?.branches) setBranches(d.branches); })
       .catch(() => {});
 
@@ -169,7 +171,8 @@ export default function ExecutivePage() {
       .catch(() => {});
   }, []);
 
-  const nowLabel = new Date().toLocaleDateString('en-EG', { month: 'long', year: 'numeric' });
+  const locale   = isAr ? 'ar-EG' : 'en-EG';
+  const nowLabel = new Date().toLocaleDateString(locale, { month: 'long', year: 'numeric' });
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
@@ -177,12 +180,14 @@ export default function ExecutivePage() {
       {/* header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Executive View</h1>
-          <p className="page-subtitle">{nowLabel} · All Locations · Command Overview</p>
+          <h1 className="page-title">{isAr ? 'عرض المديرين' : 'Executive View'}</h1>
+          <p className="page-subtitle">
+            {nowLabel} · {isAr ? 'جميع الفروع · نظرة شاملة' : 'All Locations · Command Overview'}
+          </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <Link href="/reports" className="btn btn-secondary btn-sm">Reports</Link>
-          <Link href="/finance" className="btn btn-secondary btn-sm">Finance</Link>
+          <Link href="/reports" className="btn btn-secondary btn-sm">{isAr ? 'التقارير' : 'Reports'}</Link>
+          <Link href="/finance" className="btn btn-secondary btn-sm">{isAr ? 'المالية' : 'Finance'}</Link>
         </div>
       </div>
 
@@ -200,11 +205,13 @@ export default function ExecutivePage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
               </svg>
               <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--warning-fg)' }}>
-                {kpis.overdueCount} overdue installment{kpis.overdueCount !== 1 ? 's' : ''} totaling {fmtEGP(kpis.overdueAmount)}
+                {isAr
+                  ? `${kpis.overdueCount} قسط${kpis.overdueCount !== 1 ? ' متأخرة' : ' متأخر'} بإجمالي ${fmtEGP(kpis.overdueAmount)}`
+                  : `${kpis.overdueCount} overdue installment${kpis.overdueCount !== 1 ? 's' : ''} totaling ${fmtEGP(kpis.overdueAmount)}`}
               </span>
             </div>
             <Link href="/deals?filter=overdue_installments" style={{ fontSize: '0.8rem', color: 'var(--warning-fg)', fontWeight: 600, textDecoration: 'none' }}>
-              View →
+              {isAr ? 'عرض →' : 'View →'}
             </Link>
           </div>
         )}
@@ -212,14 +219,14 @@ export default function ExecutivePage() {
         {/* KPI strip */}
         <div className="card" style={{ overflow: 'hidden' }}>
           <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
-            <KpiCell label="Revenue MTD"        value={fmtEGP(kpis.totalRevenueMTD)} trend={kpis.revTrend}   />
-            <KpiCell label="Units Sold MTD"     value={String(kpis.unitsSoldMTD)}    trend={kpis.unitsTrend} />
-            <KpiCell label="Gross Margin"       value={fmtPct(kpis.grossMarginPct)}  trend={kpis.marginTrend}/>
-            <KpiCell label="Avg Days to Sale"   value={`${kpis.avgDaysToSale} days`} trend={kpis.daysTrend}  invertTrend />
-            <KpiCell label="Lead Conv. Rate"    value={fmtPct(kpis.leadConvRate)}    trend={kpis.convTrend}  />
+            <KpiCell label={isAr ? 'الإيرادات (الشهر)' : 'Revenue MTD'}      value={fmtEGP(kpis.totalRevenueMTD)} trend={kpis.revTrend}   />
+            <KpiCell label={isAr ? 'وحدات مباعة (الشهر)' : 'Units Sold MTD'} value={String(kpis.unitsSoldMTD)}    trend={kpis.unitsTrend} />
+            <KpiCell label={isAr ? 'هامش الربح' : 'Gross Margin'}            value={fmtPct(kpis.grossMarginPct)}  trend={kpis.marginTrend}/>
+            <KpiCell label={isAr ? 'متوسط أيام البيع' : 'Avg Days to Sale'}  value={isAr ? `${kpis.avgDaysToSale} يوم` : `${kpis.avgDaysToSale} days`} trend={kpis.daysTrend} invertTrend />
+            <KpiCell label={isAr ? 'معدل التحويل' : 'Lead Conv. Rate'}       value={fmtPct(kpis.leadConvRate)}    trend={kpis.convTrend}  />
             <div style={{ flex: '1 1 0', minWidth: 0, padding: '0.875rem 1rem', display: 'flex', flexDirection: 'column', gap: 3 }}>
               <p style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)' }}>
-                Overdue Exposure
+                {isAr ? 'الأقساط المتأخرة' : 'Overdue Exposure'}
               </p>
               <p style={{ fontSize: '1.375rem', fontWeight: 600, color: kpis.overdueCount > 0 ? 'var(--warning-fg)' : 'var(--text-1)', lineHeight: 1.15, fontVariantNumeric: 'tabular-nums' }}>
                 {fmtEGP(kpis.overdueAmount)}
@@ -235,16 +242,18 @@ export default function ExecutivePage() {
           {/* branch table */}
           <div className="card" style={{ overflow: 'hidden' }}>
             <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)' }}>
-              <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>Branch Performance</p>
+              <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>
+                {isAr ? 'أداء الفروع' : 'Branch Performance'}
+              </p>
             </div>
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Location</th>
-                  <th style={{ textAlign: 'right' }}>Revenue MTD</th>
-                  <th style={{ textAlign: 'right' }}>Gross Profit</th>
-                  <th style={{ textAlign: 'right' }}>Units</th>
-                  <th>Top Model</th>
+                  <th>{isAr ? 'الفرع' : 'Location'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'الإيرادات (الشهر)' : 'Revenue MTD'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'إجمالي الربح' : 'Gross Profit'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'الوحدات' : 'Units'}</th>
+                  <th>{isAr ? 'أكثر طراز مباعاً' : 'Top Model'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -260,7 +269,7 @@ export default function ExecutivePage() {
               </tbody>
               <tfoot>
                 <tr style={{ borderTop: '2px solid var(--border)' }}>
-                  <td style={{ fontWeight: 700, color: 'var(--text-1)', fontSize: '0.8125rem' }}>Total</td>
+                  <td style={{ fontWeight: 700, color: 'var(--text-1)', fontSize: '0.8125rem' }}>{isAr ? 'الإجمالي' : 'Total'}</td>
                   <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-1)', fontVariantNumeric: 'tabular-nums' }}>
                     {fmtEGP(branches.reduce((s, b) => s + b.revenueMTD, 0))}
                   </td>
@@ -279,18 +288,22 @@ export default function ExecutivePage() {
           {/* recent deals */}
           <div className="card" style={{ overflow: 'hidden' }}>
             <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>Recent Finalized Deals</p>
-              <Link href="/deals?status=FINALIZED" style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 500, textDecoration: 'none' }}>View all →</Link>
+              <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>
+                {isAr ? 'الصفقات المنجزة مؤخراً' : 'Recent Finalized Deals'}
+              </p>
+              <Link href="/deals?status=FINALIZED" style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 500, textDecoration: 'none' }}>
+                {isAr ? 'عرض الكل →' : 'View all →'}
+              </Link>
             </div>
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Vehicle</th>
-                  <th>Customer</th>
-                  <th style={{ textAlign: 'right' }}>Amount</th>
-                  <th>Method</th>
-                  <th>Date</th>
-                  <th>Rep</th>
+                  <th>{isAr ? 'السيارة' : 'Vehicle'}</th>
+                  <th>{isAr ? 'العميل' : 'Customer'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'المبلغ' : 'Amount'}</th>
+                  <th>{isAr ? 'طريقة الدفع' : 'Method'}</th>
+                  <th>{isAr ? 'التاريخ' : 'Date'}</th>
+                  <th>{isAr ? 'المندوب' : 'Rep'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -308,10 +321,10 @@ export default function ExecutivePage() {
                         background: d.purchaseMethod === 'CASH' ? 'var(--success-bg)' : d.purchaseMethod === 'BANK_FINANCING' ? 'var(--info-bg)' : 'var(--warning-bg)',
                         color:      d.purchaseMethod === 'CASH' ? 'var(--success-fg)' : d.purchaseMethod === 'BANK_FINANCING' ? 'var(--info-fg)'    : 'var(--warning-fg)',
                       }}>
-                        {methodLabel(d.purchaseMethod)}
+                        {methodLabel(d.purchaseMethod, isAr)}
                       </span>
                     </td>
-                    <td style={{ fontSize: '0.8rem', color: 'var(--text-3)' }}>{fmtDate(d.finalizedAt ?? d.createdAt)}</td>
+                    <td style={{ fontSize: '0.8rem', color: 'var(--text-3)' }}>{fmtDate(d.finalizedAt ?? d.createdAt, isAr)}</td>
                     <td style={{ fontSize: '0.8rem', color: 'var(--text-3)' }}>{d.user?.name ?? '—'}</td>
                   </tr>
                 ))}

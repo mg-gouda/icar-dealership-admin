@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { API_BASE } from './config';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+const BASE = API_BASE;
 
 function token() {
   if (typeof window === 'undefined') return '';

@@ -7,6 +7,7 @@ import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 import ScannerModal, { VIN_FORMATS } from '../../../../components/ScannerModal';
 import { useLang } from '@/lib/lang-context';
+import { API_BASE } from '@/lib/config';
 
 interface Location {
   id: string;
@@ -339,7 +340,6 @@ export default function NewVehiclePage() {
         }),
       };
       const v = await apiFetch<{ id: string }>('/vehicles', { method: 'POST', body: JSON.stringify(body) });
-      const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
       const token = typeof window !== 'undefined' ? (localStorage.getItem('accessToken') ?? '') : '';
       for (let i = 0; i < photos.length; i++) {
         const p = photos[i];
@@ -347,7 +347,7 @@ export default function NewVehiclePage() {
         if (p.file) {
           const fd = new FormData();
           fd.append('file', p.file);
-          const res = await fetch(`${BASE}/upload/file`, {
+          const res = await fetch(`${API_BASE}/upload/file`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` },
             body: fd,

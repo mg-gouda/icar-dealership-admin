@@ -4,6 +4,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../../lib/useApi';
+import { useLang } from '@/lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
 
 interface JELine {
   id: string; debit: number; credit: number;
@@ -26,17 +28,17 @@ interface JournalEntry {
 const egp = (n: number) =>
   'EGP ' + Number(n).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const fmtDate = (d: string) =>
-  new Date(d).toLocaleDateString('en-EG', { day: '2-digit', month: 'long', year: 'numeric' });
-
 function StatusBadge({ status }: { status: string }) {
+  const { isAr } = useLang();
   const map: Record<string, string> = {
     DRAFT: 'badge badge-neutral',
     POSTED: 'badge badge-info',
     CANCELLED: 'badge badge-danger',
   };
   const labels: Record<string, string> = {
-    DRAFT: 'Draft', POSTED: 'Posted', CANCELLED: 'Cancelled',
+    DRAFT: isAr ? 'مسودة' : 'Draft',
+    POSTED: isAr ? 'مرحل' : 'Posted',
+    CANCELLED: isAr ? 'ملغى' : 'Cancelled',
   };
   return <span className={map[status] ?? 'badge badge-neutral'}>{labels[status] ?? status}</span>;
 }
@@ -44,6 +46,7 @@ function StatusBadge({ status }: { status: string }) {
 export default function GlDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { isAr } = useLang();
   const { data: entry, loading, error, reload } = useQuery<JournalEntry>(
     `/finance/gl/${id}`,
     [id],
@@ -65,7 +68,7 @@ export default function GlDetailPage() {
   }
 
   async function reverse() {
-    if (!confirm('Create a reversal entry for this journal entry?')) return;
+    if (!confirm(isAr ? 'إنشاء قيد عكسي لهذا القيد المحاسبي؟' : 'Create a reversal entry for this journal entry?')) return;
     setReversing(true); setActionErr('');
     try {
       const rev = await apiFetch<{ id: string }>(`/finance/gl/${id}/reverse`, { method: 'POST' });
@@ -84,7 +87,7 @@ export default function GlDetailPage() {
   }
 
   async function del() {
-    if (!confirm('Delete this journal entry? This cannot be undone.')) return;
+    if (!confirm(isAr ? 'حذف هذا القيد المحاسبي؟ لا يمكن التراجع عن هذا الإجراء.' : 'Delete this journal entry? This cannot be undone.')) return;
     setDeleting(true); setActionErr('');
     try {
       await apiFetch(`/finance/gl/${id}`, { method: 'DELETE' });
@@ -100,7 +103,7 @@ export default function GlDetailPage() {
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
         </svg>
-        Loading journal entry…
+        {isAr ? 'تحميل القيد المحاسبي…' : 'Loading journal entry…'}
       </div>
     );
   }
@@ -108,8 +111,10 @@ export default function GlDetailPage() {
   if (error || !entry) {
     return (
       <div className="p-8">
-        <p className="text-danger-fg text-sm mb-3">{error ?? 'Entry not found'}</p>
-        <Link href="/finance/gl" className="btn btn-secondary btn-sm">← Back to Journal Entries</Link>
+        <p className="text-danger-fg text-sm mb-3">{error ?? (isAr ? 'القيد غير موجود' : 'Entry not found')}</p>
+        <Link href="/finance/gl" className="btn btn-secondary btn-sm">
+          {isAr ? '← العودة للقيود المحاسبية' : '← Back to Journal Entries'}
+        </Link>
       </div>
     );
   }
@@ -129,7 +134,7 @@ export default function GlDetailPage() {
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            Journal Entries
+            {isAr ? 'القيود المحاسبية' : 'Journal Entries'}
           </Link>
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="page-title font-mono">
@@ -137,11 +142,11 @@ export default function GlDetailPage() {
             </h1>
             <StatusBadge status={entry.status} />
             {!balanced && (
-              <span className="badge badge-danger">Unbalanced</span>
+              <span className="badge badge-danger">{isAr ? 'غير متوازن' : 'Unbalanced'}</span>
             )}
           </div>
           <p className="page-subtitle mt-1">
-            {entry.journal?.name ?? entry.journal?.code ?? 'General Ledger'} — {fmtDate(entry.date)}
+            {entry.journal?.name ?? entry.journal?.code ?? (isAr ? 'دفتر الأستاذ العام' : 'General Ledger')} — {fmtDate(entry.date, isAr, { day: '2-digit', month: 'long', year: 'numeric' })}
           </p>
         </div>
 
@@ -153,23 +158,23 @@ export default function GlDetailPage() {
 
         {/* Entry Details card */}
         <div className="card p-5">
-          <p className="section-label">Entry Details</p>
+          <p className="section-label">{isAr ? 'تفاصيل القيد' : 'Entry Details'}</p>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="input-label">Journal</label>
+              <label className="input-label">{isAr ? 'الدفتر' : 'Journal'}</label>
               <p className="text-sm text-[--text-1] font-medium">{entry.journal?.name ?? '—'}</p>
             </div>
             <div>
-              <label className="input-label">Date</label>
-              <p className="text-sm text-[--text-1] font-medium">{fmtDate(entry.date)}</p>
+              <label className="input-label">{isAr ? 'التاريخ' : 'Date'}</label>
+              <p className="text-sm text-[--text-1] font-medium">{fmtDate(entry.date, isAr, { day: '2-digit', month: 'long', year: 'numeric' })}</p>
             </div>
             <div>
-              <label className="input-label">Reference / Description</label>
+              <label className="input-label">{isAr ? 'المرجع / الوصف' : 'Reference / Description'}</label>
               <p className="text-sm text-[--text-1]">{entry.description ?? entry.ref ?? '—'}</p>
             </div>
             <div>
-              <label className="input-label">Currency</label>
-              <p className="text-sm text-[--text-1] font-medium">{entry.currency?.code ?? 'EGP'} — Egyptian Pound</p>
+              <label className="input-label">{isAr ? 'العملة' : 'Currency'}</label>
+              <p className="text-sm text-[--text-1] font-medium">{entry.currency?.code ?? 'EGP'} — {isAr ? 'جنيه مصري' : 'Egyptian Pound'}</p>
             </div>
           </div>
         </div>
@@ -177,18 +182,18 @@ export default function GlDetailPage() {
         {/* Journal Lines card */}
         <div className="card overflow-hidden">
           <div className="px-5 py-3 border-b border-[--border] bg-[--surface-2]">
-            <p className="section-label mb-0">Journal Lines</p>
+            <p className="section-label mb-0">{isAr ? 'بنود القيد' : 'Journal Lines'}</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[--border] bg-[--surface-2] text-[11px] font-semibold uppercase tracking-wider text-[--text-3]">
-                  <td className="px-4 py-2.5">Account</td>
-                  <td className="px-3 py-2.5">Partner</td>
-                  <td className="px-3 py-2.5">Label</td>
-                  <td className="px-3 py-2.5">Branch</td>
-                  <td className="px-3 py-2.5 text-right">Debit (EGP)</td>
-                  <td className="px-3 py-2.5 text-right">Credit (EGP)</td>
+                  <td className="px-4 py-2.5">{isAr ? 'الحساب' : 'Account'}</td>
+                  <td className="px-3 py-2.5">{isAr ? 'الشريك' : 'Partner'}</td>
+                  <td className="px-3 py-2.5">{isAr ? 'البيان' : 'Label'}</td>
+                  <td className="px-3 py-2.5">{isAr ? 'الفرع' : 'Branch'}</td>
+                  <td className="px-3 py-2.5 text-right">{isAr ? 'مدين (ج.م)' : 'Debit (EGP)'}</td>
+                  <td className="px-3 py-2.5 text-right">{isAr ? 'دائن (ج.م)' : 'Credit (EGP)'}</td>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[--border]">
@@ -217,7 +222,7 @@ export default function GlDetailPage() {
               <tfoot>
                 <tr className="border-t border-[--border-strong] bg-[--surface-2]">
                   <td colSpan={4} className="px-4 py-2.5 text-xs font-semibold text-[--text-2] uppercase tracking-wider">
-                    Total
+                    {isAr ? 'الإجمالي' : 'Total'}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-sm font-bold text-[--primary]">
                     {egp(totalDebit)}
@@ -237,35 +242,39 @@ export default function GlDetailPage() {
         {/* Balance check */}
         <div className={`card p-5 text-center ${balanced ? 'bg-success-bg border-success' : 'bg-danger-bg border-danger'}`}>
           <p className={`section-label mb-3 ${balanced ? 'text-success-fg' : 'text-danger-fg'}`}>
-            {balanced ? '✅ Balance Check' : '⚠ Balance Check'}
+            {balanced ? '✅' : '⚠'} {isAr ? 'فحص التوازن' : 'Balance Check'}
           </p>
           <p className={`text-3xl font-bold tabular-nums ${balanced ? 'text-success-fg' : 'text-danger-fg'}`}>
             {balanced ? 'EGP 0' : egp(Math.abs(totalDebit - totalCredit))}
           </p>
           <p className={`text-xs mt-1 ${balanced ? 'text-success-fg' : 'text-danger-fg'}`}>
-            {balanced ? 'Difference — Ready to Post' : `Unbalanced by ${egp(Math.abs(totalDebit - totalCredit))}`}
+            {balanced
+              ? (isAr ? 'الفرق — جاهز للترحيل' : 'Difference — Ready to Post')
+              : isAr
+                ? `فرق بمقدار ${egp(Math.abs(totalDebit - totalCredit))}`
+                : `Unbalanced by ${egp(Math.abs(totalDebit - totalCredit))}`}
           </p>
         </div>
 
         {/* Actions */}
         <div className="card p-4 space-y-2">
-          <p className="section-label">Actions</p>
+          <p className="section-label">{isAr ? 'الإجراءات' : 'Actions'}</p>
           {entry.status === 'DRAFT' && (
             <button onClick={post} disabled={posting || !balanced} className="btn btn-primary w-full">
-              {posting ? 'Posting…' : '✅ Post Entry'}
+              {posting ? (isAr ? 'جارٍ الترحيل…' : 'Posting…') : (isAr ? '✅ ترحيل القيد' : '✅ Post Entry')}
             </button>
           )}
           {entry.status === 'POSTED' && (
             <button onClick={reverse} disabled={reversing} className="btn btn-secondary w-full">
-              {reversing ? '…' : '↩ Reverse Entry'}
+              {reversing ? '…' : (isAr ? '↩ عكس القيد' : '↩ Reverse Entry')}
             </button>
           )}
           <button onClick={duplicate} disabled={duplicating} className="btn btn-secondary w-full">
-            {duplicating ? '…' : '⎘ Duplicate'}
+            {duplicating ? '…' : (isAr ? '⎘ تكرار' : '⎘ Duplicate')}
           </button>
           {entry.status === 'DRAFT' && (
             <button onClick={del} disabled={deleting} className="btn btn-danger w-full">
-              {deleting ? 'Deleting…' : 'Delete'}
+              {deleting ? (isAr ? 'جارٍ الحذف…' : 'Deleting…') : (isAr ? 'حذف' : 'Delete')}
             </button>
           )}
         </div>
@@ -275,12 +284,12 @@ export default function GlDetailPage() {
           <div className="flex items-start gap-2">
             <span className="text-sm">💡</span>
             <div>
-              <p className="text-xs font-semibold text-[--text-1] mb-1">Fiscal Period</p>
+              <p className="text-xs font-semibold text-[--text-1] mb-1">{isAr ? 'الفترة المالية' : 'Fiscal Period'}</p>
               <p className="text-xs text-[--text-2]">
-                {new Date(entry.date).toLocaleDateString('en-EG', { month: 'short', year: 'numeric' })} — Open
+                {fmtDate(entry.date, isAr, { month: 'short', year: 'numeric' })} — {isAr ? 'مفتوحة' : 'Open'}
               </p>
               <p className="text-xs text-[--text-3] mt-0.5">
-                Lock date: {new Date(new Date(entry.date).getFullYear(), new Date(entry.date).getMonth() + 1, 0).toLocaleDateString('en-EG', { month: 'short', day: 'numeric' })} at EOD
+                {isAr ? 'تاريخ القفل:' : 'Lock date:'} {entry.date ? new Date(new Date(entry.date).getFullYear(), new Date(entry.date).getMonth() + 1, 0).toLocaleDateString(isAr ? 'ar-EG' : 'en-EG', { month: 'short', day: 'numeric' }) : '—'} {isAr ? 'نهاية اليوم' : 'at EOD'}
               </p>
             </div>
           </div>
@@ -289,7 +298,7 @@ export default function GlDetailPage() {
         {/* Created by */}
         {entry.createdBy && (
           <div className="card p-4">
-            <p className="section-label">Created By</p>
+            <p className="section-label">{isAr ? 'أنشأه' : 'Created By'}</p>
             <p className="text-xs text-[--text-1]">{entry.createdBy.name}</p>
           </div>
         )}

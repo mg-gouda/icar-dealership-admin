@@ -4,8 +4,10 @@ import Link from 'next/link';
 import { useState, useEffect, useCallback, useRef, type DragEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+import { useLang } from '@/lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
+import { translateSource } from '@/lib/source-labels';
+import { API_BASE as API } from '@/lib/config';
 const token = () => (typeof window !== 'undefined' ? localStorage.getItem('accessToken') ?? '' : '');
 const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
 
@@ -40,6 +42,11 @@ const SOURCE_OPTIONS = [
   { value: 'MARKETPLACE', label: 'Marketplace' },
   { value: 'OTHER', label: 'Other' },
 ];
+
+const STATUS_AR: Record<string, string> = {
+  NEW: 'جديد', CONTACTED: 'تم التواصل', QUALIFIED: 'مؤهل',
+  NEGOTIATING: 'قيد التفاوض', CLOSED_WON: 'صفقة مكتملة', CLOSED_LOST: 'صفقة خسارة',
+};
 
 const AVATAR_COLORS = [
   'var(--primary)', 'var(--success)', 'var(--warning)',
@@ -82,6 +89,7 @@ function LeadCard({
   onDragEnd: () => void;
 }) {
   const router = useRouter();
+  const { isAr } = useLang();
   const dragged = useRef(false);
   const days = daysInStage(lead);
   const repName = lead.assignedTo?.name ?? '';
@@ -119,7 +127,7 @@ function LeadCard({
       {/* Source */}
       {lead.source && (
         <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginBottom: '0.35rem' }}>
-          {sourceIcon(lead.source)} {lead.source.replace(/_/g, ' ')}
+          {sourceIcon(lead.source)} {translateSource(lead.source, isAr)}
         </p>
       )}
       {/* Days in stage */}
@@ -128,7 +136,7 @@ function LeadCard({
           <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2"/>
           <path d="M6 3.5V6l2 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
         </svg>
-        {days} {days === 1 ? 'day' : 'days'} in stage
+        {isAr ? `${days} يوم في المرحلة` : `${days} ${days === 1 ? 'day' : 'days'} in stage`}
       </div>
     </div>
   );
@@ -136,6 +144,7 @@ function LeadCard({
 
 export default function CrmPage() {
   const router = useRouter();
+  const { isAr } = useLang();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -220,14 +229,29 @@ export default function CrmPage() {
         body: JSON.stringify({ ids, action, ...(value !== undefined ? { value } : {}) }),
       });
       if (!res.ok) throw new Error('Failed');
-      showToast(`Updated ${ids.length} record${ids.length > 1 ? 's' : ''}`);
+      showToast(isAr ? `تم تحديث ${ids.length} سجل` : `Updated ${ids.length} record${ids.length > 1 ? 's' : ''}`);
       setSelectedIds(new Set());
       load();
     } catch {
-      showToast('Bulk action failed');
+      showToast(isAr ? 'فشل الإجراء الجماعي' : 'Bulk action failed');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIds, load]);
+
+  const sourceOptsI18n = isAr ? [
+    { value: '', label: 'كل المصادر' },
+    { value: 'WEBSITE', label: 'الموقع اللإليكتروني' },
+    { value: 'PHONE', label: 'هاتف' },
+    { value: 'FACEBOOK', label: 'فيسبوك' },
+    { value: 'WALK_IN', label: 'زيارة مباشرة' },
+    { value: 'REFERRAL', label: 'إحالة' },
+    { value: 'MARKETPLACE', label: 'سوق إلكتروني' },
+    { value: 'OTHER', label: 'أخرى' },
+  ] : SOURCE_OPTIONS;
+  const colLabel = (status: string, en: string) => (isAr ? ({
+    NEW: 'جديد', CONTACTED: 'تم التواصل', QUALIFIED: 'مؤهل',
+    NEGOTIATING: 'تفاوض', CLOSED_WON: 'فوز', CLOSED_LOST: 'خسارة',
+  } as Record<string, string>)[status] ?? en : en);
 
   const filtered = leads.filter((l) => {
     if (search) {
@@ -245,7 +269,7 @@ export default function CrmPage() {
   }, {});
 
   const branchOptions = [
-    { value: '', label: 'All Branches' },
+    { value: '', label: isAr ? 'كل الفروع' : 'All Branches' },
     ...Array.from(new Set(leads.map((l) => l.location?.name).filter(Boolean) as string[])).map((n) => ({ value: n, label: n })),
   ];
 
@@ -294,11 +318,11 @@ export default function CrmPage() {
       {/* Page header */}
       <div className="page-header" style={{ flexShrink: 0 }}>
         <div>
-          <h1 className="page-title">Leads &amp; CRM</h1>
-          <p className="page-subtitle">{leads.length} active leads · Auto-assigned by branch</p>
+          <h1 className="page-title">{isAr ? 'العملاء المحتملون' : 'Leads & CRM'}</h1>
+          <p className="page-subtitle">{isAr ? `${leads.length} عملاء نشطون · توزيع تلقائي حسب الفرع` : `${leads.length} active leads · Auto-assigned by branch`}</p>
         </div>
         <Link href="/crm/new" className="btn btn-primary">
-          + New Lead
+          {isAr ? '+ عميل محتمل جديد' : '+ New Lead'}
         </Link>
       </div>
 
@@ -312,34 +336,34 @@ export default function CrmPage() {
           <input
             className="input"
             style={{ paddingLeft: '2rem' }}
-            placeholder="Search leads…"
+            placeholder={isAr ? 'بحث في العملاء…' : 'Search leads…'}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
         <SearchableCombobox
-          options={SOURCE_OPTIONS}
+          options={sourceOptsI18n}
           value={source}
           onChange={setSource}
-          placeholder="Source ▾"
+          placeholder={isAr ? 'المصدر ▾' : 'Source ▾'}
           clearable
-          clearLabel="All Sources"
+          clearLabel={isAr ? 'كل المصادر' : 'All Sources'}
           className="w-36"
         />
         <SearchableCombobox
           options={branchOptions}
           value={branch}
           onChange={setBranch}
-          placeholder="Branch ▾"
+          placeholder={isAr ? 'الفرع ▾' : 'Branch ▾'}
           clearable
-          clearLabel="All Branches"
+          clearLabel={isAr ? 'كل الفروع' : 'All Branches'}
           className="w-36"
         />
         {/* View toggle */}
         <div style={{ display: 'flex', borderRadius: '6px', border: '1px solid var(--border)', overflow: 'hidden', flexShrink: 0 }}>
           <button
             onClick={() => switchView('kanban')}
-            title="Kanban view"
+            title={isAr ? 'عرض كانبان' : 'Kanban view'}
             style={{
               display: 'flex', alignItems: 'center', gap: '0.3rem',
               padding: '0.35rem 0.625rem', border: 'none', cursor: 'pointer',
@@ -349,11 +373,11 @@ export default function CrmPage() {
               transition: 'background 120ms, color 120ms',
             }}
           >
-            <KanbanIcon /> Kanban
+            <KanbanIcon /> {isAr ? 'كانبان' : 'Kanban'}
           </button>
           <button
             onClick={() => switchView('list')}
-            title="List view"
+            title={isAr ? 'عرض قائمة' : 'List view'}
             style={{
               display: 'flex', alignItems: 'center', gap: '0.3rem',
               padding: '0.35rem 0.625rem', border: 'none', borderLeft: '1px solid var(--border)', cursor: 'pointer',
@@ -363,7 +387,7 @@ export default function CrmPage() {
               transition: 'background 120ms, color 120ms',
             }}
           >
-            <ListIcon /> List
+            <ListIcon /> {isAr ? 'قائمة' : 'List'}
           </button>
         </div>
       </div>
@@ -372,7 +396,7 @@ export default function CrmPage() {
       {viewMode === 'kanban' && (
         <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', padding: '1rem 1.5rem' }}>
           {loading ? (
-            <p style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>Loading…</p>
+            <p style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>{isAr ? 'جاري التحميل…' : 'Loading…'}</p>
           ) : (
             <div style={{ display: 'flex', gap: '0.875rem', height: '100%', minWidth: 'max-content' }}>
               {COLUMNS.map((col) => {
@@ -403,7 +427,7 @@ export default function CrmPage() {
                     {/* Column header */}
                     <div style={{ padding: '0.625rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
                       <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: col.dotColor, flexShrink: 0 }} />
-                      <span style={{ fontWeight: 600, fontSize: '0.8125rem', color: 'var(--text-1)', flex: 1 }}>{col.label}</span>
+                      <span style={{ fontWeight: 600, fontSize: '0.8125rem', color: 'var(--text-1)', flex: 1 }}>{colLabel(col.status, col.label)}</span>
                       <span className={`badge ${col.badgeClass}`} style={{ fontSize: '0.625rem', padding: '0.1rem 0.45rem' }}>
                         {cards.length}
                       </span>
@@ -412,7 +436,7 @@ export default function CrmPage() {
                     <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem' }}>
                       {cards.map((lead) => <LeadCard key={lead.id} lead={lead} onDragStart={handleDragStart} onDragEnd={handleDragEnd} />)}
                       {cards.length === 0 && (
-                        <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', textAlign: 'center', marginTop: '1.5rem' }}>No leads</p>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', textAlign: 'center', marginTop: '1.5rem' }}>{isAr ? 'لا يوجد عملاء' : 'No leads'}</p>
                       )}
                     </div>
                   </div>
@@ -427,7 +451,7 @@ export default function CrmPage() {
       {viewMode === 'list' && (
         <div className="page-body" style={{ flex: 1, overflowY: 'auto' }}>
           {loading ? (
-            <p style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>Loading…</p>
+            <p style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>{isAr ? 'جاري التحميل…' : 'Loading…'}</p>
           ) : (
             <div className="card" style={{ overflow: 'hidden' }}>
               <table className="data-table">
@@ -443,14 +467,14 @@ export default function CrmPage() {
                         style={{ cursor: 'pointer' }}
                       />
                     </th>
-                    <th>Name</th>
-                    <th>Status</th>
-                    <th>Source</th>
-                    <th>Assigned Rep</th>
-                    <th>Vehicle Interest</th>
-                    <th>Days in Stage</th>
-                    <th>Created</th>
-                    <th>Actions</th>
+                    <th>{isAr ? 'الاسم' : 'Name'}</th>
+                    <th>{isAr ? 'الحالة' : 'Status'}</th>
+                    <th>{isAr ? 'المصدر' : 'Source'}</th>
+                    <th>{isAr ? 'المندوب' : 'Assigned Rep'}</th>
+                    <th>{isAr ? 'السيارة المطلوبة' : 'Vehicle Interest'}</th>
+                    <th>{isAr ? 'أيام في المرحلة' : 'Days in Stage'}</th>
+                    <th>{isAr ? 'التاريخ' : 'Created'}</th>
+                    <th>{isAr ? 'إجراءات' : 'Actions'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -494,11 +518,11 @@ export default function CrmPage() {
                         </td>
                         <td>
                           <span className={`badge ${statusBadgeClass(l.status)}`}>
-                            {l.status.replace(/_/g, ' ')}
+                            {isAr ? (STATUS_AR[l.status] ?? l.status.replace(/_/g, ' ')) : l.status.replace(/_/g, ' ')}
                           </span>
                         </td>
                         <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>
-                          {l.source ? `${sourceIcon(l.source)} ${l.source.replace(/_/g, ' ')}` : '—'}
+                          {l.source ? `${sourceIcon(l.source)} ${translateSource(l.source, isAr)}` : '—'}
                         </td>
                         <td style={{ color: 'var(--text-2)' }}>
                           {repName ? (
@@ -512,10 +536,10 @@ export default function CrmPage() {
                         </td>
                         <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>{vehicleLabel}</td>
                         <td style={{ color: days > 7 ? 'var(--danger-fg)' : 'var(--text-3)', fontSize: '0.8125rem' }}>
-                          {days}d
+                          {isAr ? `${days} ي` : `${days}d`}
                         </td>
                         <td style={{ color: 'var(--text-3)', whiteSpace: 'nowrap', fontSize: '0.8125rem' }}>
-                          {new Date(l.createdAt).toLocaleDateString('en-EG', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {fmtDate(l.createdAt, isAr, { day: 'numeric', month: 'short', year: 'numeric' })}
                         </td>
                         <td>
                           <Link
@@ -523,7 +547,7 @@ export default function CrmPage() {
                             style={{ color: 'var(--primary)', fontWeight: 500, fontSize: '0.75rem', textDecoration: 'none' }}
                             onClick={(e) => e.stopPropagation()}
                           >
-                            Open →
+                            {isAr ? 'فتح ←' : 'Open →'}
                           </Link>
                         </td>
                       </tr>
@@ -532,7 +556,7 @@ export default function CrmPage() {
                   {filtered.length === 0 && (
                     <tr>
                       <td colSpan={9} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-3)' }}>
-                        No leads found.
+                        {isAr ? 'لا يوجد عملاء محتملون' : 'No leads found.'}
                       </td>
                     </tr>
                   )}
@@ -554,7 +578,7 @@ export default function CrmPage() {
           whiteSpace: 'nowrap',
         }}>
           <span style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-1)' }}>
-            {selectedIds.size} selected
+            {isAr ? `${selectedIds.size} محدد` : `${selectedIds.size} selected`}
           </span>
           <div style={{ width: '1px', height: '1.25rem', background: 'var(--border)' }} />
           {/* Assign Rep */}
@@ -562,15 +586,15 @@ export default function CrmPage() {
             options={salesReps.map((r) => ({ value: r.id, label: r.name }))}
             value=""
             onChange={(v) => { if (v) executeBulk('ASSIGN_REP', v); }}
-            placeholder="Assign Rep…"
+            placeholder={isAr ? 'تعيين مندوب…' : 'Assign Rep…'}
             className="w-44"
           />
           {/* Change Status */}
           <SearchableCombobox
-            options={COLUMNS.map((c) => ({ value: c.status, label: c.label }))}
+            options={COLUMNS.map((c) => ({ value: c.status, label: colLabel(c.status, c.label) }))}
             value=""
             onChange={(v) => { if (v) executeBulk('CHANGE_STATUS', v); }}
-            placeholder="Change Status…"
+            placeholder={isAr ? 'تغيير الحالة…' : 'Change Status…'}
             className="w-44"
           />
           {/* Close Lost */}
@@ -578,18 +602,18 @@ export default function CrmPage() {
             className="btn btn-danger"
             style={{ fontSize: '0.8125rem', padding: '0.35rem 0.75rem' }}
             onClick={() => {
-              if (window.confirm(`Mark ${selectedIds.size} lead${selectedIds.size > 1 ? 's' : ''} as Closed Lost?`)) {
+              if (window.confirm(isAr ? `تعيين ${selectedIds.size} عميل كـ خسارة؟` : `Mark ${selectedIds.size} lead${selectedIds.size > 1 ? 's' : ''} as Closed Lost?`)) {
                 executeBulk('CLOSE_LOST');
               }
             }}
           >
-            Close Lost
+            {isAr ? 'إغلاق خسارة' : 'Close Lost'}
           </button>
           {/* Clear */}
           <button
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: '1rem', lineHeight: 1, padding: '0.2rem 0.3rem' }}
             onClick={() => setSelectedIds(new Set())}
-            title="Clear selection"
+            title={isAr ? 'إلغاء التحديد' : 'Clear selection'}
           >
             ✕
           </button>

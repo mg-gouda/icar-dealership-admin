@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import { useLang } from '@/lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
 
 interface Invoice {
   id: string;
@@ -27,21 +29,6 @@ interface InvLine {
 
 const EMPTY_LINE = (): InvLine => ({ description: '', qty: '1', unitPrice: '', taxRate: '14' });
 
-const STATUS_OPTS = [
-  { value: '', label: 'All statuses' },
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'POSTED', label: 'Posted' },
-  { value: 'PAID', label: 'Paid' },
-  { value: 'PARTIAL', label: 'Partial' },
-  { value: 'CANCELLED', label: 'Cancelled' },
-];
-
-const PAYMENT_TERM_OPTS = [
-  { value: 'NET_30', label: 'Net 30' },
-  { value: 'NET_60', label: 'Net 60' },
-  { value: 'DUE_ON_RECEIPT', label: 'Due on Receipt' },
-  { value: 'CUSTOM', label: 'Custom' },
-];
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -58,6 +45,7 @@ const egp = (n: number) =>
   'EGP ' + n.toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function ApPaymentRunModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const { isAr } = useLang();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
   const [journalId, setJournalId] = useState('');
@@ -97,28 +85,30 @@ function ApPaymentRunModal({ onClose, onSuccess }: { onClose: () => void; onSucc
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" style={{ maxWidth: 700 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>AP Payment Run</h3>
+          <h3>{isAr ? 'تشغيل مدفوعات الموردين' : 'AP Payment Run'}</h3>
           <p style={{ fontSize: '0.8125rem', color: 'var(--text-2)', marginTop: '0.25rem' }}>
-            Select posted vendor bills to pay in batch
+            {isAr ? 'اختر فواتير الموردين المرحلة للدفع الجماعي' : 'Select posted vendor bills to pay in batch'}
           </p>
         </div>
         <div className="modal-body">
           {result ? (
             <div style={{ padding: '1rem', textAlign: 'center' }}>
               <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{result.errors === 0 ? '✓' : '⚠'}</div>
-              <p style={{ fontWeight: 600 }}>{result.processed} bill{result.processed !== 1 ? 's' : ''} paid</p>
-              {result.errors > 0 && <p style={{ color: 'var(--danger)', fontSize: '0.875rem' }}>{result.errors} errors</p>}
+              <p style={{ fontWeight: 600 }}>
+                {result.processed} {isAr ? (result.processed !== 1 ? 'فواتير مدفوعة' : 'فاتورة مدفوعة') : `bill${result.processed !== 1 ? 's' : ''} paid`}
+              </p>
+              {result.errors > 0 && <p style={{ color: 'var(--danger)', fontSize: '0.875rem' }}>{result.errors} {isAr ? 'أخطاء' : 'errors'}</p>}
             </div>
           ) : (
             <>
               <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
                 <div style={{ flex: 1 }}>
-                  <label className="field-label">Payment Date</label>
+                  <label className="field-label">{isAr ? 'تاريخ الدفع' : 'Payment Date'}</label>
                   <input className="input" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
                 </div>
                 <div style={{ flex: 2 }}>
-                  <label className="field-label">Bank Journal</label>
-                  <SearchableCombobox options={journalOpts} value={journalId} onChange={setJournalId} placeholder="Select bank" />
+                  <label className="field-label">{isAr ? 'دفتر البنك' : 'Bank Journal'}</label>
+                  <SearchableCombobox options={journalOpts} value={journalId} onChange={setJournalId} placeholder={isAr ? 'اختر البنك' : 'Select bank'} />
                 </div>
               </div>
               <div style={{ overflowX: 'auto', maxHeight: 280, overflowY: 'auto' }}>
@@ -129,12 +119,15 @@ function ApPaymentRunModal({ onClose, onSuccess }: { onClose: () => void; onSucc
                         <input type="checkbox" checked={selectedIds.length === bills.length && bills.length > 0}
                           onChange={toggleAll} />
                       </th>
-                      <th>Vendor</th><th>Invoice #</th><th>Due</th><th>Amount</th>
+                      <th>{isAr ? 'المورد' : 'Vendor'}</th>
+                      <th>{isAr ? 'رقم الفاتورة' : 'Invoice #'}</th>
+                      <th>{isAr ? 'الاستحقاق' : 'Due'}</th>
+                      <th>{isAr ? 'المبلغ' : 'Amount'}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bills.length === 0 && (
-                      <tr><td colSpan={5} style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-2)' }}>No posted vendor bills</td></tr>
+                      <tr><td colSpan={5} style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-2)' }}>{isAr ? 'لا توجد فواتير موردين مرحلة' : 'No posted vendor bills'}</td></tr>
                     )}
                     {bills.map(b => (
                       <tr key={b.id} style={{ background: selectedIds.includes(b.id) ? 'color-mix(in srgb, var(--primary) 5%, transparent)' : undefined }}>
@@ -142,7 +135,7 @@ function ApPaymentRunModal({ onClose, onSuccess }: { onClose: () => void; onSucc
                         <td>{b.partner?.name ?? '—'}</td>
                         <td style={{ fontFamily: 'monospace' }}>{b.number ?? b.id.slice(0,8)}</td>
                         <td style={{ color: b.dueDate && new Date(b.dueDate) < new Date() ? 'var(--danger)' : undefined }}>
-                          {b.dueDate ? new Date(b.dueDate).toLocaleDateString('en-EG') : '—'}
+                          {b.dueDate ? fmtDate(b.dueDate, isAr) : '—'}
                         </td>
                         <td>{egp(Number(b.amountTotal))}</td>
                       </tr>
@@ -152,7 +145,7 @@ function ApPaymentRunModal({ onClose, onSuccess }: { onClose: () => void; onSucc
               </div>
               {selectedIds.length > 0 && (
                 <div style={{ marginTop: '0.75rem', fontSize: '0.8125rem', color: 'var(--text-2)' }}>
-                  {selectedIds.length} bill{selectedIds.length !== 1 ? 's' : ''} selected · Total:{' '}
+                  {selectedIds.length} {isAr ? (selectedIds.length !== 1 ? 'فواتير محددة' : 'فاتورة محددة') : `bill${selectedIds.length !== 1 ? 's' : ''} selected`} · {isAr ? 'الإجمالي:' : 'Total:'}{' '}
                   <strong>{egp(bills.filter(b => selectedIds.includes(b.id)).reduce((s, b) => s + Number(b.amountTotal), 0))}</strong>
                 </div>
               )}
@@ -160,10 +153,14 @@ function ApPaymentRunModal({ onClose, onSuccess }: { onClose: () => void; onSucc
           )}
         </div>
         <div className="modal-footer">
-          <button className="btn" onClick={onClose}>{result ? 'Close' : 'Cancel'}</button>
+          <button className="btn" onClick={onClose}>{result ? (isAr ? 'إغلاق' : 'Close') : (isAr ? 'إلغاء' : 'Cancel')}</button>
           {!result && (
             <button className="btn btn-primary" disabled={running || !selectedIds.length || !journalId} onClick={run}>
-              {running ? 'Processing…' : `Pay ${selectedIds.length} Bill${selectedIds.length !== 1 ? 's' : ''}`}
+              {running
+                ? (isAr ? 'جارٍ المعالجة…' : 'Processing…')
+                : isAr
+                  ? `دفع ${selectedIds.length} ${selectedIds.length !== 1 ? 'فواتير' : 'فاتورة'}`
+                  : `Pay ${selectedIds.length} Bill${selectedIds.length !== 1 ? 's' : ''}`}
             </button>
           )}
         </div>
@@ -174,10 +171,36 @@ function ApPaymentRunModal({ onClose, onSuccess }: { onClose: () => void; onSucc
 
 export default function CustomerInvoicesPage() {
   const router = useRouter();
+  const { isAr } = useLang();
+
+  const PAYMENT_TERM_OPTS = [
+    { value: 'NET_30', label: isAr ? 'صافي 30 يوم' : 'Net 30' },
+    { value: 'NET_60', label: isAr ? 'صافي 60 يوم' : 'Net 60' },
+    { value: 'DUE_ON_RECEIPT', label: isAr ? 'عند الاستلام' : 'Due on Receipt' },
+    { value: 'CUSTOM', label: isAr ? 'مخصص' : 'Custom' },
+  ];
+
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showApRun, setShowApRun] = useState(false);
+
+  const STATUS_OPTS = [
+    { value: '', label: isAr ? 'كل الحالات' : 'All statuses' },
+    { value: 'DRAFT', label: isAr ? 'مسودة' : 'Draft' },
+    { value: 'POSTED', label: isAr ? 'مرحلة' : 'Posted' },
+    { value: 'PAID', label: isAr ? 'مدفوعة' : 'Paid' },
+    { value: 'PARTIAL', label: isAr ? 'جزئية' : 'Partial' },
+    { value: 'CANCELLED', label: isAr ? 'ملغاة' : 'Cancelled' },
+  ];
+
+  const statusLabel: Record<string, string> = {
+    DRAFT: isAr ? 'مسودة' : 'DRAFT',
+    POSTED: isAr ? 'مرحلة' : 'POSTED',
+    PAID: isAr ? 'مدفوعة' : 'PAID',
+    PARTIAL: isAr ? 'جزئية' : 'PARTIAL',
+    CANCELLED: isAr ? 'ملغاة' : 'CANCELLED',
+  };
 
   const qs = new URLSearchParams({ limit: '30', ...(statusFilter && { status: statusFilter }), ...(search && { q: search }) });
   const { data, loading, error, reload } = useQuery<{ items: Invoice[]; total: number }>(
@@ -193,11 +216,10 @@ export default function CustomerInvoicesPage() {
   const partnerOpts = (Array.isArray(partnersRaw) ? partnersRaw : []).map((p) => ({ value: p.id, label: p.name }));
   const journalOpts = (Array.isArray(journalsRaw) ? journalsRaw : []).map((j) => ({ value: j.id, label: `${j.code} — ${j.name}` }));
   const dealOpts = [
-    { value: '', label: 'No deal reference' },
+    { value: '', label: isAr ? 'بدون مرجع صفقة' : 'No deal reference' },
     ...((dealsRaw?.items ?? []).map((d) => ({ value: d.id, label: d.ref ?? d.id.slice(0, 8) }))),
   ];
 
-  // Form state
   const [form, setForm] = useState({
     partnerId: '', journalId: '', dealId: '',
     date: new Date().toISOString().split('T')[0],
@@ -231,9 +253,9 @@ export default function CustomerInvoicesPage() {
   }
 
   async function submitInvoice(targetStatus: string) {
-    if (!form.partnerId || !form.journalId) { setSaveErr('Customer and journal required.'); return; }
+    if (!form.partnerId || !form.journalId) { setSaveErr(isAr ? 'العميل والدفتر مطلوبان.' : 'Customer and journal required.'); return; }
     const valid = lines.filter((l) => l.description && Number(l.unitPrice) > 0);
-    if (!valid.length) { setSaveErr('At least one valid line required.'); return; }
+    if (!valid.length) { setSaveErr(isAr ? 'مطلوب بند صالح واحد على الأقل.' : 'At least one valid line required.'); return; }
     setSaving(true); setSaveErr('');
     try {
       const inv = await apiFetch<{ id: string }>('/finance/invoices', {
@@ -262,7 +284,7 @@ export default function CustomerInvoicesPage() {
       reload();
       router.push(`/finance/invoices/${inv.id}`);
     } catch (err: unknown) {
-      setSaveErr(err instanceof Error ? err.message : 'Error');
+      setSaveErr(err instanceof Error ? err.message : isAr ? 'خطأ' : 'Error');
     } finally {
       setSaving(false);
     }
@@ -273,12 +295,12 @@ export default function CustomerInvoicesPage() {
       {/* Page header */}
       <div className="page-header" style={{ padding: '1.25rem 0 1rem' }}>
         <div>
-          <h1 className="page-title">Customer Invoices</h1>
-          <p className="page-subtitle">{data?.total ?? 0} invoices total</p>
+          <h1 className="page-title">{isAr ? 'فواتير العملاء' : 'Customer Invoices'}</h1>
+          <p className="page-subtitle">{data?.total ?? 0} {isAr ? 'فاتورة إجمالي' : 'invoices total'}</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn" onClick={() => setShowApRun(true)}>AP Payment Run</button>
-          <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ New Invoice</button>
+          <button className="btn" onClick={() => setShowApRun(true)}>{isAr ? 'تشغيل مدفوعات الموردين' : 'AP Payment Run'}</button>
+          <button className="btn btn-primary" onClick={() => setShowForm(true)}>{isAr ? '+ فاتورة جديدة' : '+ New Invoice'}</button>
         </div>
       </div>
       {showApRun && (
@@ -293,7 +315,7 @@ export default function CustomerInvoicesPage() {
         <input
           className="input"
           style={{ maxWidth: 240 }}
-          placeholder="Search invoices…"
+          placeholder={isAr ? 'بحث في الفواتير…' : 'Search invoices…'}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -302,30 +324,30 @@ export default function CustomerInvoicesPage() {
             options={STATUS_OPTS}
             value={statusFilter}
             onChange={setStatusFilter}
-            placeholder="All statuses"
+            placeholder={isAr ? 'كل الحالات' : 'All statuses'}
             clearable
-            clearLabel="All statuses"
+            clearLabel={isAr ? 'كل الحالات' : 'All statuses'}
           />
         </div>
       </div>
 
       {/* Table */}
       <div className="card" style={{ overflow: 'hidden' }}>
-        {loading && <p className="p-6 text-sm" style={{ color: 'var(--text-3)' }}>Loading…</p>}
+        {loading && <p className="p-6 text-sm" style={{ color: 'var(--text-3)' }}>{isAr ? 'تحميل…' : 'Loading…'}</p>}
         {error && <p className="p-6 text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
         {!loading && (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Invoice #</th>
-                <th>Customer</th>
-                <th>Date</th>
-                <th>Due Date</th>
-                <th className="text-right">Amount (EGP)</th>
-                <th className="text-right">Tax</th>
-                <th className="text-right">Total</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th>{isAr ? 'رقم الفاتورة' : 'Invoice #'}</th>
+                <th>{isAr ? 'العميل' : 'Customer'}</th>
+                <th>{isAr ? 'التاريخ' : 'Date'}</th>
+                <th>{isAr ? 'تاريخ الاستحقاق' : 'Due Date'}</th>
+                <th className="text-right">{isAr ? 'المبلغ (ج.م)' : 'Amount (EGP)'}</th>
+                <th className="text-right">{isAr ? 'الضريبة' : 'Tax'}</th>
+                <th className="text-right">{isAr ? 'الإجمالي' : 'Total'}</th>
+                <th>{isAr ? 'الحالة' : 'Status'}</th>
+                <th>{isAr ? 'الإجراءات' : 'Actions'}</th>
               </tr>
             </thead>
             <tbody>
@@ -342,10 +364,10 @@ export default function CustomerInvoicesPage() {
                   </td>
                   <td style={{ fontWeight: 500 }}>{inv.partner?.name ?? '—'}</td>
                   <td style={{ color: 'var(--text-2)', fontSize: '0.8rem' }}>
-                    {new Date(inv.date).toLocaleDateString('en-EG')}
+                    {fmtDate(inv.date, isAr)}
                   </td>
                   <td style={{ color: 'var(--text-2)', fontSize: '0.8rem' }}>
-                    {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('en-EG') : '—'}
+                    {inv.dueDate ? fmtDate(inv.dueDate, isAr) : '—'}
                   </td>
                   <td className="text-right tabular-nums">{egp(Number(inv.amountUntaxed))}</td>
                   <td className="text-right tabular-nums" style={{ color: 'var(--text-2)' }}>
@@ -355,14 +377,14 @@ export default function CustomerInvoicesPage() {
                     {egp(Number(inv.amountTotal))}
                   </td>
                   <td>
-                    <span className={statusBadge(inv.status)}>{inv.status}</span>
+                    <span className={statusBadge(inv.status)}>{statusLabel[inv.status] ?? inv.status}</span>
                   </td>
                   <td>
                     <button
                       className="btn btn-ghost btn-sm"
                       onClick={(e) => { e.stopPropagation(); router.push(`/finance/invoices/${inv.id}`); }}
                     >
-                      View
+                      {isAr ? 'عرض' : 'View'}
                     </button>
                   </td>
                 </tr>
@@ -370,7 +392,7 @@ export default function CustomerInvoicesPage() {
               {invoices.length === 0 && (
                 <tr>
                   <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-3)', padding: '2.5rem' }}>
-                    No invoices found.
+                    {isAr ? 'لا توجد فواتير.' : 'No invoices found.'}
                   </td>
                 </tr>
               )}
@@ -397,8 +419,10 @@ export default function CustomerInvoicesPage() {
               style={{ borderBottom: '1px solid var(--border)' }}
             >
               <div>
-                <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-1)' }}>New Customer Invoice</h2>
-                <p className="page-subtitle">Auto-generated number on save</p>
+                <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-1)' }}>
+                  {isAr ? 'فاتورة عميل جديدة' : 'New Customer Invoice'}
+                </h2>
+                <p className="page-subtitle">{isAr ? 'يُولَّد الرقم تلقائياً عند الحفظ' : 'Auto-generated number on save'}</p>
               </div>
               <button
                 onClick={() => setShowForm(false)}
@@ -410,19 +434,18 @@ export default function CustomerInvoicesPage() {
             </div>
 
             <div className="p-6 space-y-6">
-              {/* Top row: customer + dates */}
               <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
                 <div className="col-span-2" style={{ gridColumn: 'span 2' }}>
-                  <label className="input-label">Bill To — Customer *</label>
+                  <label className="input-label">{isAr ? 'فاتورة إلى — العميل *' : 'Bill To — Customer *'}</label>
                   <SearchableCombobox
                     options={partnerOpts}
                     value={form.partnerId}
                     onChange={(v) => setForm({ ...form, partnerId: v })}
-                    placeholder="Search customers…"
+                    placeholder={isAr ? 'بحث في العملاء…' : 'Search customers…'}
                   />
                 </div>
                 <div>
-                  <label className="input-label">Invoice Date *</label>
+                  <label className="input-label">{isAr ? 'تاريخ الفاتورة *' : 'Invoice Date *'}</label>
                   <input
                     type="date"
                     className="input"
@@ -432,7 +455,7 @@ export default function CustomerInvoicesPage() {
                   />
                 </div>
                 <div>
-                  <label className="input-label">Due Date</label>
+                  <label className="input-label">{isAr ? 'تاريخ الاستحقاق' : 'Due Date'}</label>
                   <input
                     type="date"
                     className="input"
@@ -444,27 +467,27 @@ export default function CustomerInvoicesPage() {
 
               <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
                 <div>
-                  <label className="input-label">Sales Journal *</label>
+                  <label className="input-label">{isAr ? 'دفتر المبيعات *' : 'Sales Journal *'}</label>
                   <SearchableCombobox
                     options={journalOpts}
                     value={form.journalId}
                     onChange={(v) => setForm({ ...form, journalId: v })}
-                    placeholder="Select journal…"
+                    placeholder={isAr ? 'اختر دفتراً…' : 'Select journal…'}
                   />
                 </div>
                 <div>
-                  <label className="input-label">Deal Reference (optional)</label>
+                  <label className="input-label">{isAr ? 'مرجع الصفقة (اختياري)' : 'Deal Reference (optional)'}</label>
                   <SearchableCombobox
                     options={dealOpts}
                     value={form.dealId}
                     onChange={(v) => setForm({ ...form, dealId: v })}
-                    placeholder="No deal"
+                    placeholder={isAr ? 'بدون صفقة' : 'No deal'}
                     clearable
-                    clearLabel="No deal reference"
+                    clearLabel={isAr ? 'بدون مرجع صفقة' : 'No deal reference'}
                   />
                 </div>
                 <div>
-                  <label className="input-label">Payment Terms</label>
+                  <label className="input-label">{isAr ? 'شروط الدفع' : 'Payment Terms'}</label>
                   <SearchableCombobox
                     options={PAYMENT_TERM_OPTS}
                     value={form.paymentTerms}
@@ -475,7 +498,7 @@ export default function CustomerInvoicesPage() {
 
               {/* Invoice lines */}
               <div>
-                <p className="section-label">Invoice Lines</p>
+                <p className="section-label">{isAr ? 'بنود الفاتورة' : 'Invoice Lines'}</p>
                 <div
                   className="card"
                   style={{ overflow: 'hidden', border: '1px solid var(--border)' }}
@@ -493,11 +516,11 @@ export default function CustomerInvoicesPage() {
                     <thead>
                       <tr>
                         <th>#</th>
-                        <th>Description</th>
-                        <th className="text-right">Qty</th>
-                        <th className="text-right">Unit Price</th>
-                        <th className="text-right">Tax %</th>
-                        <th className="text-right">Amount</th>
+                        <th>{isAr ? 'الوصف' : 'Description'}</th>
+                        <th className="text-right">{isAr ? 'الكمية' : 'Qty'}</th>
+                        <th className="text-right">{isAr ? 'سعر الوحدة' : 'Unit Price'}</th>
+                        <th className="text-right">{isAr ? 'الضريبة %' : 'Tax %'}</th>
+                        <th className="text-right">{isAr ? 'المبلغ' : 'Amount'}</th>
                         <th />
                       </tr>
                     </thead>
@@ -511,7 +534,7 @@ export default function CustomerInvoicesPage() {
                               <input
                                 className="input"
                                 style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
-                                placeholder="Description…"
+                                placeholder={isAr ? 'الوصف…' : 'Description…'}
                                 value={line.description}
                                 onChange={(e) => setLine(i, 'description', e.target.value)}
                               />
@@ -578,22 +601,22 @@ export default function CustomerInvoicesPage() {
                       className="btn btn-ghost btn-sm"
                       onClick={() => setLines((prev) => [...prev, EMPTY_LINE()])}
                     >
-                      + Add Line
+                      {isAr ? '+ إضافة بند' : '+ Add Line'}
                     </button>
                     <div className="space-y-1 text-right" style={{ minWidth: 220 }}>
                       <div className="flex justify-between gap-8 text-sm" style={{ color: 'var(--text-2)' }}>
-                        <span>Subtotal</span>
+                        <span>{isAr ? 'المجموع الجزئي' : 'Subtotal'}</span>
                         <span className="tabular-nums">{egp(subtotal)}</span>
                       </div>
                       <div className="flex justify-between gap-8 text-sm" style={{ color: 'var(--text-2)' }}>
-                        <span>Tax</span>
+                        <span>{isAr ? 'الضريبة' : 'Tax'}</span>
                         <span className="tabular-nums">{egp(tax)}</span>
                       </div>
                       <div
                         className="flex justify-between gap-8"
                         style={{ fontWeight: 700, fontSize: '0.9375rem', borderTop: '1px solid var(--border)', paddingTop: '0.5rem', marginTop: '0.25rem' }}
                       >
-                        <span>Total</span>
+                        <span>{isAr ? 'الإجمالي' : 'Total'}</span>
                         <span className="tabular-nums" style={{ color: 'var(--primary)' }}>{egp(total)}</span>
                       </div>
                     </div>
@@ -603,11 +626,11 @@ export default function CustomerInvoicesPage() {
 
               {/* Notes */}
               <div>
-                <label className="input-label">Notes</label>
+                <label className="input-label">{isAr ? 'ملاحظات' : 'Notes'}</label>
                 <textarea
                   className="textarea input"
                   rows={3}
-                  placeholder="Internal notes or customer-facing comments…"
+                  placeholder={isAr ? 'ملاحظات داخلية أو تعليقات للعميل…' : 'Internal notes or customer-facing comments…'}
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
                   style={{ resize: 'vertical' }}
@@ -621,7 +644,7 @@ export default function CustomerInvoicesPage() {
               {/* Actions */}
               <div className="flex items-center justify-end gap-3 pt-2" style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>
-                  Cancel
+                  {isAr ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button
                   type="button"
@@ -629,7 +652,7 @@ export default function CustomerInvoicesPage() {
                   disabled={saving}
                   onClick={saveDraft}
                 >
-                  Save Draft
+                  {isAr ? 'حفظ كمسودة' : 'Save Draft'}
                 </button>
                 <button
                   type="button"
@@ -637,7 +660,7 @@ export default function CustomerInvoicesPage() {
                   disabled={saving}
                   onClick={postInvoice}
                 >
-                  {saving ? 'Saving…' : 'Validate & Post'}
+                  {saving ? (isAr ? 'جارٍ الحفظ…' : 'Saving…') : (isAr ? 'التحقق والترحيل' : 'Validate & Post')}
                 </button>
               </div>
             </div>

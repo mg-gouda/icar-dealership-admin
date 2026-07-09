@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import SearchableCombobox from '@/components/ui/SearchableCombobox';
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+import { useLang } from '@/lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
+import { API_BASE as API } from '@/lib/config';
 const egp = (n: number) => 'EGP ' + Number(n).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-EG', { year: 'numeric', month: 'short', day: 'numeric' });
 
 interface Commission {
   id: string;
@@ -32,20 +32,22 @@ const STATUS_COLORS: Record<string, string> = {
   REVERSED: 'var(--danger-fg)',
 };
 
-const STATUS_OPTS = [
-  { value: '', label: 'All Statuses' },
-  { value: 'ACCRUED', label: 'Accrued' },
-  { value: 'PAYABLE', label: 'Payable' },
-  { value: 'PAID', label: 'Paid' },
-  { value: 'REVERSED', label: 'Reversed' },
-];
-
 function authHeader(): Record<string, string> {
-  const t = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+  const t = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
 export default function MyCommissionsPage() {
+  const { isAr } = useLang();
+
+  const STATUS_OPTS = [
+    { value: '', label: isAr ? 'جميع الحالات' : 'All Statuses' },
+    { value: 'ACCRUED', label: isAr ? 'مستحق' : 'Accrued' },
+    { value: 'PAYABLE', label: isAr ? 'واجب الدفع' : 'Payable' },
+    { value: 'PAID', label: isAr ? 'مدفوع' : 'Paid' },
+    { value: 'REVERSED', label: isAr ? 'معكوس' : 'Reversed' },
+  ];
+
   const [items, setItems] = useState<Commission[]>([]);
   const [summary, setSummary] = useState<Summary[]>([]);
   const [statusFilter, setStatusFilter] = useState('');
@@ -60,8 +62,8 @@ export default function MyCommissionsPage() {
       const qs = new URLSearchParams({ page: String(page), limit: String(LIMIT) });
       if (statusFilter) qs.set('status', statusFilter);
       const [listRes, summaryRes] = await Promise.all([
-        fetch(`${API}/v1/finance/commissions?${qs}`, { headers: authHeader() }),
-        fetch(`${API}/v1/finance/commissions/summary`, { headers: authHeader() }),
+        fetch(`${API}/finance/commissions?${qs}`, { headers: authHeader() }),
+        fetch(`${API}/finance/commissions/summary`, { headers: authHeader() }),
       ]);
       if (listRes.ok) {
         const d = await listRes.json();
@@ -83,8 +85,8 @@ export default function MyCommissionsPage() {
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">My Commissions</h1>
-          <p className="page-subtitle">Your earned commissions across all deals</p>
+          <h1 className="page-title">{isAr ? 'عمولاتي' : 'My Commissions'}</h1>
+          <p className="page-subtitle">{isAr ? 'أرباحك من العمولات عبر جميع الصفقات' : 'Your earned commissions across all deals'}</p>
         </div>
       </div>
 
@@ -92,9 +94,9 @@ export default function MyCommissionsPage() {
         {/* KPI strip */}
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: 'Total Earned', value: egp(summaryTotal), color: 'var(--text-1)' },
-            { label: 'Payable Now', value: egp(payableTotal), color: 'var(--primary)' },
-            { label: 'Paid Out', value: egp(paidTotal), color: 'var(--success-fg)' },
+            { label: isAr ? 'إجمالي المكتسب' : 'Total Earned', value: egp(summaryTotal), color: 'var(--text-1)' },
+            { label: isAr ? 'مستحق الآن' : 'Payable Now',     value: egp(payableTotal), color: 'var(--primary)' },
+            { label: isAr ? 'مدفوع' : 'Paid Out',              value: egp(paidTotal),    color: 'var(--success-fg)' },
           ].map(k => (
             <div key={k.label} className="card p-4">
               <p className="section-label mb-1">{k.label}</p>
@@ -106,7 +108,7 @@ export default function MyCommissionsPage() {
         {/* Status breakdown */}
         {summary.length > 0 && (
           <div className="card p-4">
-            <p className="section-label mb-3">Status Breakdown</p>
+            <p className="section-label mb-3">{isAr ? 'توزيع الحالات' : 'Status Breakdown'}</p>
             <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
               {summary.map(r => (
                 <div key={r.status} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -129,11 +131,11 @@ export default function MyCommissionsPage() {
                 options={STATUS_OPTS}
                 value={statusFilter}
                 onChange={v => { setStatusFilter(v); setPage(1); }}
-                placeholder="Filter by status"
+                placeholder={isAr ? 'تصفية حسب الحالة' : 'Filter by status'}
               />
             </div>
             <span style={{ fontSize: '0.8125rem', color: 'var(--text-3)', marginLeft: 'auto' }}>
-              {total} record{total !== 1 ? 's' : ''}
+              {isAr ? `${total} سجل` : `${total} record${total !== 1 ? 's' : ''}`}
             </span>
           </div>
 
@@ -141,28 +143,28 @@ export default function MyCommissionsPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Deal</th>
-                  <th>Vehicle</th>
-                  <th>Location</th>
-                  <th>Plan</th>
-                  <th>Date</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: 'right' }}>Calculated</th>
-                  <th style={{ textAlign: 'right' }}>Paid</th>
+                  <th>{isAr ? 'الصفقة' : 'Deal'}</th>
+                  <th>{isAr ? 'السيارة' : 'Vehicle'}</th>
+                  <th>{isAr ? 'الفرع' : 'Location'}</th>
+                  <th>{isAr ? 'الخطة' : 'Plan'}</th>
+                  <th>{isAr ? 'التاريخ' : 'Date'}</th>
+                  <th>{isAr ? 'الحالة' : 'Status'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'المحسوبة' : 'Calculated'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'المدفوعة' : 'Paid'}</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)' }}>Loading…</td></tr>
+                  <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)' }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</td></tr>
                 ) : items.length === 0 ? (
-                  <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)' }}>No commissions found.</td></tr>
+                  <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)' }}>{isAr ? 'لا توجد عمولات.' : 'No commissions found.'}</td></tr>
                 ) : items.map(c => (
                   <tr key={c.id}>
                     <td className="font-mono text-xs">{c.deal?.id?.slice(-8) ?? '—'}</td>
                     <td>{c.deal?.vehicle ? `${c.deal.vehicle.year} ${c.deal.vehicle.make} ${c.deal.vehicle.model}` : '—'}</td>
                     <td>{c.deal?.location?.name ?? '—'}</td>
                     <td>{c.commissionPlan?.name ?? '—'}</td>
-                    <td>{fmtDate(c.createdAt)}</td>
+                    <td>{fmtDate(c.createdAt, isAr)}</td>
                     <td>
                       <span className="badge" style={{ background: STATUS_COLORS[c.status] + '1a', color: STATUS_COLORS[c.status] ?? 'var(--text-2)' }}>
                         {c.status}
@@ -180,9 +182,9 @@ export default function MyCommissionsPage() {
 
           {totalPages > 1 && (
             <div style={{ padding: '0.875rem 1.25rem', borderTop: '1px solid var(--border)', display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'flex-end' }}>
-              <button className="btn btn-outline btn-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>‹ Prev</button>
-              <span style={{ fontSize: '0.8125rem', color: 'var(--text-3)' }}>Page {page} / {totalPages}</span>
-              <button className="btn btn-outline btn-sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next ›</button>
+              <button className="btn btn-outline btn-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>{isAr ? 'السابق ›' : '‹ Prev'}</button>
+              <span style={{ fontSize: '0.8125rem', color: 'var(--text-3)' }}>{isAr ? `صفحة ${page} / ${totalPages}` : `Page ${page} / ${totalPages}`}</span>
+              <button className="btn btn-outline btn-sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>{isAr ? '‹ التالي' : 'Next ›'}</button>
             </div>
           )}
         </div>

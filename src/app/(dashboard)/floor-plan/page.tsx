@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../lib/useApi';
+import { useLang } from '../../../lib/lang-context';
 
 interface FloorPlanNote {
   id: string;
@@ -32,6 +33,7 @@ const fmt = (n: number) =>
   'EGP ' + n.toLocaleString('en-EG', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 export default function FloorPlanPage() {
+  const { isAr } = useLang();
   const [addOpen, setAddOpen] = useState(false);
   const [payOffId, setPayOffId] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
@@ -85,10 +87,10 @@ export default function FloorPlanPage() {
     <div className="page-body">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Floor Plan Financing</h1>
-          <p className="page-subtitle">Vehicle financing notes by lender</p>
+          <h1 className="page-title">{isAr ? 'قروض المعرض' : 'Floor Plan Financing'}</h1>
+          <p className="page-subtitle">{isAr ? 'تمويل قروض المعرض للمركبات' : 'Vehicle financing notes by lender'}</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setAddOpen(true)}>+ New Note</button>
+        <button className="btn btn-primary" onClick={() => setAddOpen(true)}>{isAr ? '+ ملاحظة جديدة' : '+ New Note'}</button>
       </div>
 
       {/* Summary strip */}
@@ -98,7 +100,7 @@ export default function FloorPlanPage() {
             <div key={s.lender} className="card" style={{ flex: '1 1 200px', padding: '1rem' }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-2)', marginBottom: '0.25rem' }}>{s.lender}</div>
               <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>{fmt(s.totalPrincipal)}</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-2)' }}>{s.count} active note{s.count !== 1 ? 's' : ''}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-2)' }}>{s.count} {isAr ? 'ملاحظة نشطة' : `active note${s.count !== 1 ? 's' : ''}`}</div>
             </div>
           ))}
         </div>
@@ -109,20 +111,20 @@ export default function FloorPlanPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Vehicle</th>
-                <th>Lender</th>
-                <th>Principal</th>
-                <th>Rate</th>
-                <th>Start</th>
-                <th>Maturity</th>
-                <th>Status</th>
-                <th>Location</th>
+                <th>{isAr ? 'السيارة' : 'Vehicle'}</th>
+                <th>{isAr ? 'جهة الإقراض' : 'Lender'}</th>
+                <th>{isAr ? 'المبلغ الأصلي' : 'Principal'}</th>
+                <th>{isAr ? 'معدل الفائدة' : 'Rate'}</th>
+                <th>{isAr ? 'تاريخ البدء' : 'Start'}</th>
+                <th>{isAr ? 'تاريخ الاستحقاق' : 'Maturity'}</th>
+                <th>{isAr ? 'الحالة' : 'Status'}</th>
+                <th>{isAr ? 'الفرع' : 'Location'}</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {list.length === 0 && (
-                <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-2)' }}>No floor plan notes</td></tr>
+                <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-2)' }}>{isAr ? 'لا توجد قروض معرض' : 'No floor plan notes'}</td></tr>
               )}
               {list.map(n => (
                 <tr key={n.id}>
@@ -146,7 +148,7 @@ export default function FloorPlanPage() {
                         onClick={() => setPayOffId(n.id)}
                         style={{ fontSize: '0.75rem' }}
                       >
-                        Pay Off
+                        {isAr ? 'تسديد' : 'Pay Off'}
                       </button>
                     )}
                     {n.status === 'PAID_OFF' && n.paidOffAmount && (
@@ -164,14 +166,14 @@ export default function FloorPlanPage() {
       {payOffId && (
         <div className="modal-backdrop" onClick={() => setPayOffId(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header"><h3>Confirm Pay-Off</h3></div>
+            <div className="modal-header"><h3>{isAr ? 'تأكيد التسديد' : 'Confirm Pay-Off'}</h3></div>
             <div className="modal-body">
-              <p>Post the GL entry (DR Floor Plan Payable / CR Bank) and mark this note as Paid Off?</p>
+              <p>{isAr ? 'ترحيل قيد المحاسبة (مدين: دفتر الطابق / دائن: البنك) وتحديد الملاحظة كـ مسددة؟' : 'Post the GL entry (DR Floor Plan Payable / CR Bank) and mark this note as Paid Off?'}</p>
             </div>
             <div className="modal-footer">
-              <button className="btn" onClick={() => setPayOffId(null)}>Cancel</button>
+              <button className="btn" onClick={() => setPayOffId(null)}>{isAr ? 'إلغاء' : 'Cancel'}</button>
               <button className="btn btn-primary" disabled={acting} onClick={() => handlePayOff(payOffId)}>
-                {acting ? 'Posting…' : 'Confirm Pay-Off'}
+                {acting ? (isAr ? 'جارٍ الترحيل…' : 'Posting…') : (isAr ? 'تأكيد التسديد' : 'Confirm Pay-Off')}
               </button>
             </div>
           </div>
@@ -182,16 +184,16 @@ export default function FloorPlanPage() {
       {addOpen && (
         <div className="modal-backdrop" onClick={() => setAddOpen(false)}>
           <form className="modal" onClick={e => e.stopPropagation()} onSubmit={handleAdd}>
-            <div className="modal-header"><h3>New Floor Plan Note</h3></div>
+            <div className="modal-header"><h3>{isAr ? 'ملاحظة قرض معرض جديدة' : 'New Floor Plan Note'}</h3></div>
             <div className="modal-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               {[
-                { label: 'Lender', key: 'lender', type: 'text', full: true },
-                { label: 'Vehicle ID', key: 'vehicleId', type: 'text', full: true },
-                { label: 'Principal (EGP)', key: 'principalAmount', type: 'number' },
-                { label: 'Interest Rate (%)', key: 'interestRate', type: 'number' },
-                { label: 'Start Date', key: 'startDate', type: 'date' },
-                { label: 'Maturity Date', key: 'maturityDate', type: 'date' },
-                { label: 'Location ID', key: 'locationId', type: 'text', full: true },
+                { label: isAr ? 'جهة الإقراض' : 'Lender', key: 'lender', type: 'text', full: true },
+                { label: isAr ? 'معرف السيارة' : 'Vehicle ID', key: 'vehicleId', type: 'text', full: true },
+                { label: isAr ? 'المبلغ الأصلي (ج.م)' : 'Principal (EGP)', key: 'principalAmount', type: 'number' },
+                { label: isAr ? 'معدل الفائدة (%)' : 'Interest Rate (%)', key: 'interestRate', type: 'number' },
+                { label: isAr ? 'تاريخ البدء' : 'Start Date', key: 'startDate', type: 'date' },
+                { label: isAr ? 'تاريخ الاستحقاق' : 'Maturity Date', key: 'maturityDate', type: 'date' },
+                { label: isAr ? 'معرف الفرع' : 'Location ID', key: 'locationId', type: 'text', full: true },
               ].map(f => (
                 <div key={f.key} style={{ gridColumn: f.full ? '1 / -1' : undefined }}>
                   <label className="field-label">{f.label}</label>
@@ -207,9 +209,9 @@ export default function FloorPlanPage() {
               ))}
             </div>
             <div className="modal-footer">
-              <button type="button" className="btn" onClick={() => setAddOpen(false)}>Cancel</button>
+              <button type="button" className="btn" onClick={() => setAddOpen(false)}>{isAr ? 'إلغاء' : 'Cancel'}</button>
               <button type="submit" className="btn btn-primary" disabled={acting}>
-                {acting ? 'Saving…' : 'Create Note'}
+                {acting ? (isAr ? 'جارٍ الحفظ…' : 'Saving…') : (isAr ? 'إنشاء الملاحظة' : 'Create Note')}
               </button>
             </div>
           </form>

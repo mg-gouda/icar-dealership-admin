@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import StatusBadge from '../../../../components/StatusBadge';
+import { useLang } from '../../../../lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
 
 interface POLine { id: string; description: string; quantity: number; unitCost: number; vehicle?: { make: string; model: string; year: number; vin: string }; }
 interface Receipt { id: string; receiptDate: string; lines: { id: string; purchaseOrderLineId: string; quantityReceived: number; }[]; }
@@ -22,6 +24,7 @@ const TRANSITIONS: Record<string, string[]> = {
 };
 
 export default function PODetailPage() {
+  const { isAr } = useLang();
   const { id } = useParams<{ id: string }>();
   const { data: po, loading, reload } = useQuery<PO>(`/purchase-orders/${id}`);
   const [acting, setActing] = useState(false);
@@ -63,8 +66,8 @@ export default function PODetailPage() {
   return (
     <div className="p-6 max-w-3xl">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/purchase-orders" className="text-gray-500 hover:text-white text-xs transition">← Purchase Orders</Link>
-        <h1 className="text-lg font-semibold text-white">PO — {po.partner.name}</h1>
+        <Link href="/purchase-orders" className="text-gray-500 hover:text-white text-xs transition">{isAr ? '← أوامر الشراء' : '← Purchase Orders'}</Link>
+        <h1 className="text-lg font-semibold text-white">{isAr ? 'أمر الشراء —' : 'PO —'} {po.partner.name}</h1>
         <StatusBadge status={po.status} />
       </div>
 
@@ -80,7 +83,7 @@ export default function PODetailPage() {
           {canReceive && (
             <button onClick={() => setShowReceive(true)}
               className="px-4 py-2 text-xs font-medium text-white bg-green-600 hover:bg-green-500 rounded-lg transition">
-              Receive Goods
+              {isAr ? 'استلام البضائع' : 'Receive Goods'}
             </button>
           )}
         </div>
@@ -89,20 +92,20 @@ export default function PODetailPage() {
       {/* Info */}
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="rounded-xl border border-white/5 bg-gray-900 p-4 space-y-2">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Order</p>
-          <Row label="Vendor" value={po.partner.name} />
-          <Row label="Location" value={po.location.name} />
-          <Row label="Order Date" value={new Date(po.orderDate).toLocaleDateString('en-EG')} />
-          <Row label="Expected" value={po.expectedDate ? new Date(po.expectedDate).toLocaleDateString('en-EG') : '—'} />
-          <Row label="Total" value={`${Number(po.total).toLocaleString()} EGP`} />
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">{isAr ? 'الأمر' : 'Order'}</p>
+          <Row label={isAr ? 'المورد' : 'Vendor'} value={po.partner.name} />
+          <Row label={isAr ? 'الفرع' : 'Location'} value={po.location.name} />
+          <Row label={isAr ? 'تاريخ الأمر' : 'Order Date'} value={fmtDate(po.orderDate, isAr)} />
+          <Row label={isAr ? 'التسليم المتوقع' : 'Expected'} value={po.expectedDate ? fmtDate(po.expectedDate, isAr) : '—'} />
+          <Row label={isAr ? 'الإجمالي' : 'Total'} value={`${Number(po.total).toLocaleString()} EGP`} />
         </div>
         <div className="rounded-xl border border-white/5 bg-gray-900 p-4">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Receipts ({po.receipts.length})</p>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{isAr ? `إيصالات الاستلام (${po.receipts.length})` : `Receipts (${po.receipts.length})`}</p>
           {po.receipts.length === 0
-            ? <p className="text-gray-600 text-xs">No receipts yet.</p>
+            ? <p className="text-gray-600 text-xs">{isAr ? 'لا توجد إيصالات بعد.' : 'No receipts yet.'}</p>
             : po.receipts.map((r) => (
               <div key={r.id} className="text-xs text-gray-400 py-1 border-b border-white/5 last:border-0">
-                {new Date(r.receiptDate).toLocaleDateString('en-EG')} · {r.lines.length} lines
+                {fmtDate(r.receiptDate, isAr)} · {r.lines.length} lines
               </div>
             ))
           }
@@ -111,16 +114,16 @@ export default function PODetailPage() {
 
       {/* Lines */}
       <div className="rounded-xl border border-white/5 bg-gray-900 overflow-hidden">
-        <p className="px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-white/5">Lines</p>
+        <p className="px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-white/5">{isAr ? 'بنود الأمر' : 'Lines'}</p>
         <table className="w-full text-sm">
           <thead className="text-xs text-gray-500 border-b border-white/5">
             <tr>
-              <th className="px-4 py-2 text-left font-medium">Description</th>
-              <th className="px-4 py-2 text-left font-medium">Vehicle</th>
-              <th className="px-4 py-2 text-right font-medium">Qty</th>
-              <th className="px-4 py-2 text-right font-medium">Unit Cost</th>
-              <th className="px-4 py-2 text-right font-medium">Line Total</th>
-              <th className="px-4 py-2 text-right font-medium">Received</th>
+              <th className="px-4 py-2 text-left font-medium">{isAr ? 'الوصف' : 'Description'}</th>
+              <th className="px-4 py-2 text-left font-medium">{isAr ? 'السيارة' : 'Vehicle'}</th>
+              <th className="px-4 py-2 text-right font-medium">{isAr ? 'الكمية' : 'Qty'}</th>
+              <th className="px-4 py-2 text-right font-medium">{isAr ? 'سعر الوحدة' : 'Unit Cost'}</th>
+              <th className="px-4 py-2 text-right font-medium">{isAr ? 'إجمالي البند' : 'Line Total'}</th>
+              <th className="px-4 py-2 text-right font-medium">{isAr ? 'المستلم' : 'Received'}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
@@ -149,7 +152,7 @@ export default function PODetailPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowReceive(false)} />
           <div className="relative w-full max-w-lg rounded-2xl bg-gray-900 border border-white/10 shadow-2xl p-5">
-            <h2 className="text-sm font-semibold text-white mb-4">Receive Goods</h2>
+            <h2 className="text-sm font-semibold text-white mb-4">{isAr ? 'استلام البضائع' : 'Receive Goods'}</h2>
             <form onSubmit={receive} className="space-y-3">
               {po.lines.map((l) => {
                 const alreadyRcvd = receivedMap[l.id] ?? 0;
@@ -159,7 +162,7 @@ export default function PODetailPage() {
                   <div key={l.id} className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-white truncate">{l.description}</p>
-                      <p className="text-xs text-gray-500">{remaining} remaining</p>
+                      <p className="text-xs text-gray-500">{isAr ? `${remaining} متبقي` : `${remaining} remaining`}</p>
                     </div>
                     <input type="number" min="0" max={remaining} step="0.01"
                       value={receiveQty[l.id] ?? ''} onChange={(e) => setReceiveQty({ ...receiveQty, [l.id]: e.target.value })}
@@ -170,10 +173,10 @@ export default function PODetailPage() {
               })}
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowReceive(false)}
-                  className="flex-1 py-2 text-sm text-gray-400 border border-white/10 rounded-lg hover:text-white transition">Cancel</button>
+                  className="flex-1 py-2 text-sm text-gray-400 border border-white/10 rounded-lg hover:text-white transition">{isAr ? 'إلغاء' : 'Cancel'}</button>
                 <button type="submit" disabled={acting}
                   className="flex-1 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded-lg transition">
-                  {acting ? '…' : 'Confirm Receipt'}
+                  {acting ? '…' : (isAr ? 'تأكيد الاستلام' : 'Confirm Receipt')}
                 </button>
               </div>
             </form>

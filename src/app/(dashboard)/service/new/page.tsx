@@ -5,18 +5,20 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
-
-const SERVICE_TYPE_OPTS = [
-  { value: 'MAINTENANCE', label: 'Maintenance' },
-  { value: 'REPAIR', label: 'Repair' },
-  { value: 'PDI', label: 'PDI' },
-  { value: 'RECONDITIONING', label: 'Reconditioning' },
-  { value: 'RECALL', label: 'Recall' },
-  { value: 'WARRANTY', label: 'Warranty' },
-];
+import { useLang } from '@/lib/lang-context';
 
 export default function NewServiceOrderPage() {
   const router = useRouter();
+  const { isAr } = useLang();
+
+  const SERVICE_TYPE_OPTS = [
+    { value: 'MAINTENANCE', label: isAr ? 'صيانة' : 'Maintenance' },
+    { value: 'REPAIR', label: isAr ? 'إصلاح' : 'Repair' },
+    { value: 'PDI', label: isAr ? 'فحص ما قبل التسليم' : 'PDI' },
+    { value: 'RECONDITIONING', label: isAr ? 'تجديد' : 'Reconditioning' },
+    { value: 'RECALL', label: isAr ? 'استدعاء' : 'Recall' },
+    { value: 'WARRANTY', label: isAr ? 'ضمان' : 'Warranty' },
+  ];
 
   const { data: vehiclesRaw } = useQuery<any>('/vehicles?limit=50');
   const { data: customersRaw } = useQuery<any[]>('/partners?type=CUSTOMER&limit=50');
@@ -54,7 +56,7 @@ export default function NewServiceOrderPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.vehicleId || !form.customerId || !form.locationId) {
-      setErr('Vehicle, customer, and location are required.');
+      setErr(isAr ? 'السيارة والعميل والموقع مطلوبة.' : 'Vehicle, customer, and location are required.');
       return;
     }
     setSaving(true); setErr('');
@@ -73,7 +75,7 @@ export default function NewServiceOrderPage() {
       });
       router.push(`/service/${order.id}`);
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : 'Error creating order');
+      setErr(e instanceof Error ? e.message : (isAr ? 'خطأ في إنشاء الأمر' : 'Error creating order'));
       setSaving(false);
     }
   }
@@ -85,10 +87,10 @@ export default function NewServiceOrderPage() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
             <Link href="/service" style={{ color: 'var(--text-3)', textDecoration: 'none', fontSize: '0.875rem' }}>
-              ← Service Center
+              ← {isAr ? 'مركز الصيانة' : 'Service Center'}
             </Link>
           </div>
-          <h1 className="page-title">New Service Order</h1>
+          <h1 className="page-title">{isAr ? 'أمر صيانة جديد' : 'New Service Order'}</h1>
         </div>
       </div>
 
@@ -100,21 +102,21 @@ export default function NewServiceOrderPage() {
               {/* Vehicle + Customer */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
-                  <label className="input-label">Vehicle *</label>
+                  <label className="input-label">{isAr ? 'السيارة *' : 'Vehicle *'}</label>
                   <SearchableCombobox
                     options={vehicleOpts}
                     value={form.vehicleId}
                     onChange={(v) => setF('vehicleId', v)}
-                    placeholder="Search vehicles…"
+                    placeholder={isAr ? 'بحث في السيارات…' : 'Search vehicles…'}
                   />
                 </div>
                 <div>
-                  <label className="input-label">Customer *</label>
+                  <label className="input-label">{isAr ? 'العميل *' : 'Customer *'}</label>
                   <SearchableCombobox
                     options={customerOpts}
                     value={form.customerId}
                     onChange={(v) => setF('customerId', v)}
-                    placeholder="Search customers…"
+                    placeholder={isAr ? 'بحث في العملاء…' : 'Search customers…'}
                   />
                 </div>
               </div>
@@ -122,16 +124,16 @@ export default function NewServiceOrderPage() {
               {/* Location + Service Type */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
-                  <label className="input-label">Location *</label>
+                  <label className="input-label">{isAr ? 'الموقع *' : 'Location *'}</label>
                   <SearchableCombobox
                     options={locationOpts}
                     value={form.locationId}
                     onChange={(v) => setF('locationId', v)}
-                    placeholder="Select location…"
+                    placeholder={isAr ? 'اختر موقعاً…' : 'Select location…'}
                   />
                 </div>
                 <div>
-                  <label className="input-label">Service Type</label>
+                  <label className="input-label">{isAr ? 'نوع الخدمة' : 'Service Type'}</label>
                   <SearchableCombobox
                     options={SERVICE_TYPE_OPTS}
                     value={form.serviceType}
@@ -142,24 +144,24 @@ export default function NewServiceOrderPage() {
 
               {/* Technician */}
               <div style={{ maxWidth: 360 }}>
-                <label className="input-label">Technician</label>
+                <label className="input-label">{isAr ? 'الميكانيكي' : 'Technician'}</label>
                 <SearchableCombobox
                   options={userOpts}
                   value={form.technicianId}
                   onChange={(v) => setF('technicianId', v)}
-                  placeholder="Unassigned"
+                  placeholder={isAr ? 'غير معين' : 'Unassigned'}
                   clearable
-                  clearLabel="Unassigned"
+                  clearLabel={isAr ? 'غير معين' : 'Unassigned'}
                 />
               </div>
 
               {/* Description */}
               <div>
-                <label className="input-label">Description</label>
+                <label className="input-label">{isAr ? 'الوصف' : 'Description'}</label>
                 <textarea
                   className="input"
                   style={{ resize: 'vertical', minHeight: '80px' }}
-                  placeholder="Describe the work to be done…"
+                  placeholder={isAr ? 'وصف العمل المطلوب…' : 'Describe the work to be done…'}
                   value={form.description}
                   onChange={(e) => setF('description', e.target.value)}
                 />
@@ -167,11 +169,11 @@ export default function NewServiceOrderPage() {
 
               {/* Internal Notes */}
               <div>
-                <label className="input-label">Internal Notes</label>
+                <label className="input-label">{isAr ? 'ملاحظات داخلية' : 'Internal Notes'}</label>
                 <textarea
                   className="input"
                   style={{ resize: 'vertical', minHeight: '60px' }}
-                  placeholder="Staff-only notes…"
+                  placeholder={isAr ? 'ملاحظات للموظفين فقط…' : 'Staff-only notes…'}
                   value={form.internalNotes}
                   onChange={(e) => setF('internalNotes', e.target.value)}
                 />
@@ -189,9 +191,11 @@ export default function NewServiceOrderPage() {
                   paddingTop: '1rem',
                 }}
               >
-                <Link href="/service" className="btn btn-secondary">Cancel</Link>
+                <Link href="/service" className="btn btn-secondary">
+                  {isAr ? 'إلغاء' : 'Cancel'}
+                </Link>
                 <button type="submit" className="btn btn-primary" disabled={saving}>
-                  {saving ? 'Creating…' : 'Create Order'}
+                  {saving ? (isAr ? 'جاري الإنشاء…' : 'Creating…') : (isAr ? 'إنشاء الأمر' : 'Create Order')}
                 </button>
               </div>
 

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/useApi';
+import { useLang } from '@/lib/lang-context';
 
 interface Counts {
   draftInvoices: number;
@@ -14,6 +15,7 @@ interface Counts {
 const POLL_MS = 60_000;
 
 export default function NotificationBell() {
+  const { isAr } = useLang();
   const [counts, setCounts] = useState<Counts>({ draftInvoices: 0, payableCommissions: 0, overdueInstallments: 0, newLeads: 0 });
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -26,7 +28,7 @@ export default function NotificationBell() {
           (r) => (Array.isArray(r) ? r.length : 0),
           () => 0,
         ),
-        apiFetch<{ total?: number }>('/commissions?status=PAYABLE&limit=1').then(
+        apiFetch<{ total?: number }>('/finance/commissions?status=PAYABLE&limit=1').then(
           (r) => r?.total ?? 0,
           () => 0,
         ),
@@ -90,7 +92,7 @@ export default function NotificationBell() {
       {open && (
         <div className="absolute right-0 top-full mt-2 w-72 rounded-lg border border-white/10 bg-gray-900 shadow-xl z-50">
           <div className="px-4 py-2.5 border-b border-white/5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-            Action Items
+            {isAr ? 'الإجراءات المطلوبة' : 'Action Items'}
           </div>
           <ul className="py-1">
             <li>
@@ -99,7 +101,7 @@ export default function NotificationBell() {
                 onClick={() => setOpen(false)}
                 className="flex items-center justify-between px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition"
               >
-                <span>Draft Invoices</span>
+                <span>{isAr ? 'فواتير مسودة' : 'Draft Invoices'}</span>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${counts.draftInvoices > 0 ? 'bg-amber-500/20 text-amber-400' : 'bg-white/5 text-gray-500'}`}>
                   {counts.draftInvoices}
                 </span>
@@ -111,7 +113,7 @@ export default function NotificationBell() {
                 onClick={() => setOpen(false)}
                 className="flex items-center justify-between px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition"
               >
-                <span>Payable Commissions</span>
+                <span>{isAr ? 'عمولات مستحقة' : 'Payable Commissions'}</span>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${counts.payableCommissions > 0 ? 'bg-amber-500/20 text-amber-400' : 'bg-white/5 text-gray-500'}`}>
                   {counts.payableCommissions}
                 </span>
@@ -123,7 +125,7 @@ export default function NotificationBell() {
                 onClick={() => setOpen(false)}
                 className="flex items-center justify-between px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition"
               >
-                <span>Overdue Installments</span>
+                <span>{isAr ? 'أقساط متأخرة' : 'Overdue Installments'}</span>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${counts.overdueInstallments > 0 ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-gray-500'}`}>
                   {counts.overdueInstallments}
                 </span>
@@ -135,7 +137,7 @@ export default function NotificationBell() {
                 onClick={() => setOpen(false)}
                 className="flex items-center justify-between px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition"
               >
-                <span>New B2C Leads</span>
+                <span>{isAr ? 'عملاء محتملون جدد' : 'New B2C Leads'}</span>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${counts.newLeads > 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-gray-500'}`}>
                   {counts.newLeads}
                 </span>

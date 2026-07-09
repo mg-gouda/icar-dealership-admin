@@ -3,8 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import SearchableCombobox from '@/components/ui/SearchableCombobox';
 import { useLang } from '@/lib/lang-context';
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+import { API_BASE as API } from '@/lib/config';
 const authHeaders = () => ({
   'Content-Type': 'application/json',
   Authorization: `Bearer ${typeof window !== 'undefined' ? (localStorage.getItem('accessToken') ?? '') : ''}`,

@@ -2,9 +2,11 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useLang } from '@/lib/lang-context';
 
 export default function NotAuthorizedPage() {
   const router = useRouter();
+  const { isAr } = useLang();
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
@@ -18,16 +20,18 @@ export default function NotAuthorizedPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
           </svg>
         </div>
-        <h1 className="page-title mb-2">Access Denied</h1>
+        <h1 className="page-title mb-2">{isAr ? 'غير مصرح' : 'Access Denied'}</h1>
         <p className="page-subtitle mb-6">
-          You don&apos;t have permission to view this page. Contact your administrator if you believe this is an error.
+          {isAr
+            ? 'ليس لديك صلاحية الوصول لهذه الصفحة. تواصل مع المسؤول إذا كنت تعتقد أن هذا خطأ.'
+            : "You don't have permission to view this page. Contact your administrator if you believe this is an error."}
         </p>
         <div className="flex gap-3 justify-center">
           <button onClick={() => router.back()} className="btn btn-secondary">
-            Go Back
+            {isAr ? 'العودة' : 'Go Back'}
           </button>
           <Link href="/" className="btn btn-primary">
-            Dashboard
+            {isAr ? 'لوحة التحكم' : 'Dashboard'}
           </Link>
         </div>
       </div>

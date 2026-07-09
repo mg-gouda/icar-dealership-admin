@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+import { useLang } from '../../../lib/lang-context';
+import { API_BASE as API } from '@/lib/config';
 const token = () => (typeof window !== 'undefined' ? localStorage.getItem('accessToken') ?? '' : '');
 const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
 
@@ -20,14 +20,15 @@ interface Message {
   createdAt: string;
 }
 
-function fmtTime(s: string) {
+function fmtTime(s: string, isAr: boolean) {
   const d = new Date(s);
   const diffMs = Date.now() - d.getTime();
-  if (diffMs < 86_400_000) return d.toLocaleTimeString('en-EG', { hour: '2-digit', minute: '2-digit' });
-  return d.toLocaleDateString('en-EG', { day: 'numeric', month: 'short' });
+  if (diffMs < 86_400_000) return d.toLocaleTimeString(isAr ? 'ar-EG' : 'en-EG', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString(isAr ? 'ar-EG' : 'en-EG', { day: 'numeric', month: 'short' });
 }
 
 export default function WhatsAppPage() {
+  const { isAr } = useLang();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [search, setSearch] = useState('');
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
@@ -108,16 +109,16 @@ export default function WhatsAppPage() {
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem',
         }}>
           <h2 style={{ fontWeight: 600, fontSize: '0.9375rem', color: 'var(--text-1)' }}>
-            Conversations
+            {isAr ? 'المحادثات' : 'Conversations'}
           </h2>
-          <button className="btn btn-primary btn-sm">New Message</button>
+          <button className="btn btn-primary btn-sm">{isAr ? 'رسالة جديدة' : 'New Message'}</button>
         </div>
 
         {/* Search */}
         <div style={{ padding: '0.625rem 0.75rem', borderBottom: '1px solid var(--border)' }}>
           <input
             className="input"
-            placeholder="Search by phone…"
+            placeholder={isAr ? 'بحث برقم الهاتف…' : 'Search by phone…'}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{ padding: '0.375rem 0.625rem', fontSize: '0.8125rem' }}
@@ -128,11 +129,11 @@ export default function WhatsAppPage() {
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {loadingConvs ? (
             <p style={{ padding: '1.5rem 1rem', color: 'var(--text-3)', fontSize: '0.8125rem' }}>
-              Loading…
+              {isAr ? 'جارٍ التحميل…' : 'Loading…'}
             </p>
           ) : filteredConvs.length === 0 ? (
             <p style={{ padding: '1.5rem 1rem', color: 'var(--text-3)', fontSize: '0.8125rem' }}>
-              No conversations.
+              {isAr ? 'لا توجد محادثات.' : 'No conversations.'}
             </p>
           ) : (
             filteredConvs.map((c) => {
@@ -145,12 +146,10 @@ export default function WhatsAppPage() {
                     width: '100%', textAlign: 'left',
                     padding: '0.75rem 1rem',
                     borderBottom: '1px solid var(--border)',
-                    background: active
-                      ? 'color-mix(in srgb, var(--primary) 8%, transparent)'
-                      : 'transparent',
+                    background: active ? 'var(--surface-2)' : 'transparent',
                     cursor: 'pointer',
                     border: 'none',
-                    borderLeft: active ? '3px solid var(--primary)' : '3px solid transparent',
+                    borderLeft: active ? '3px solid var(--tab-active)' : '3px solid transparent',
                     display: 'block',
                     transition: 'background 120ms',
                   }}
@@ -160,7 +159,7 @@ export default function WhatsAppPage() {
                       {c.phone}
                     </span>
                     <span style={{ fontSize: '0.6875rem', color: 'var(--text-3)', whiteSpace: 'nowrap', marginTop: '0.1rem' }}>
-                      {fmtTime(c.lastMessageAt)}
+                      {fmtTime(c.lastMessageAt, isAr)}
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
@@ -199,8 +198,8 @@ export default function WhatsAppPage() {
               <path d="M8 38l5-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
               <path d="M13 18h18M13 24h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             </svg>
-            <p style={{ fontSize: '0.9375rem', fontWeight: 500 }}>Select a conversation</p>
-            <p style={{ fontSize: '0.8125rem' }}>Choose a contact from the sidebar</p>
+            <p style={{ fontSize: '0.9375rem', fontWeight: 500 }}>{isAr ? 'اختر محادثة' : 'Select a conversation'}</p>
+            <p style={{ fontSize: '0.8125rem' }}>{isAr ? 'اختر جهة اتصال من الشريط الجانبي' : 'Choose a contact from the sidebar'}</p>
           </div>
         ) : (
           <>
@@ -223,7 +222,7 @@ export default function WhatsAppPage() {
                 <p style={{ fontWeight: 600, fontSize: '0.9375rem', color: 'var(--text-1)', lineHeight: 1.2 }}>
                   {selectedPhone}
                 </p>
-                <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)' }}>WhatsApp</p>
+                <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)' }}>{isAr ? 'واتساب' : 'WhatsApp'}</p>
               </div>
             </div>
 
@@ -234,9 +233,9 @@ export default function WhatsAppPage() {
               display: 'flex', flexDirection: 'column', gap: '0.5rem',
             }}>
               {loadingMsgs ? (
-                <p style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>Loading messages…</p>
+                <p style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>{isAr ? 'جارٍ تحميل الرسائل…' : 'Loading messages…'}</p>
               ) : messages.length === 0 ? (
-                <p style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>No messages yet.</p>
+                <p style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>{isAr ? 'لا توجد رسائل بعد.' : 'No messages yet.'}</p>
               ) : (
                 messages.map((m) => (
                   <div key={m.id} style={{
@@ -259,7 +258,7 @@ export default function WhatsAppPage() {
                         {m.body}
                       </p>
                       <p style={{ fontSize: '0.625rem', color: 'var(--text-3)', marginTop: '0.25rem', textAlign: 'right' }}>
-                        {fmtTime(m.createdAt)}
+                        {fmtTime(m.createdAt, isAr)}
                       </p>
                     </div>
                   </div>
@@ -279,7 +278,7 @@ export default function WhatsAppPage() {
               <textarea
                 className="textarea"
                 style={{ flex: 1, minHeight: '2.5rem', maxHeight: '8rem', resize: 'vertical' }}
-                placeholder="Type a message… (Enter to send, Shift+Enter for newline)"
+                placeholder={isAr ? 'اكتب رسالة… (Enter للإرسال، Shift+Enter لسطر جديد)' : 'Type a message… (Enter to send, Shift+Enter for newline)'}
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 onKeyDown={(e) => {
@@ -293,7 +292,7 @@ export default function WhatsAppPage() {
                 disabled={!body.trim() || sending}
                 style={{ flexShrink: 0 }}
               >
-                {sending ? '…' : 'Send'}
+                {sending ? '…' : (isAr ? 'إرسال' : 'Send')}
               </button>
             </div>
           </>

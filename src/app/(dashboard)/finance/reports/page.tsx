@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import { useLang } from '@/lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
+import { ErrorBanner } from '@/components/ui/error-banner';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -71,51 +74,30 @@ function variance(curr: number, prev: number) {
   return { amount: curr - prev, pct };
 }
 
-const PERIOD_OPTS = [
-  { value: 'this-month', label: 'This Month' },
-  { value: 'last-month', label: 'Last Month' },
-  { value: 'this-quarter', label: 'This Quarter' },
-  { value: 'this-year', label: 'This Year' },
-  { value: 'custom', label: 'Custom Range' },
-];
-
-const TABS: { key: ReportTab; label: string }[] = [
-  { key: 'balance-sheet', label: 'Balance Sheet' },
-  { key: 'pl', label: 'Profit & Loss' },
-  { key: 'trial-balance', label: 'Trial Balance' },
-  { key: 'cash-flow', label: 'General Ledger' },
-  { key: 'ar-aging', label: 'Aged AR' },
-  { key: 'ap-aging', label: 'Aged AP' },
-  { key: 'tax-report', label: 'Tax Report' },
-];
-
 // ─── Spinner ─────────────────────────────────────────────────────────────────
 
-function Spinner() {
+function Spinner({ isAr }: { isAr: boolean }) {
   return (
     <div className="flex items-center gap-3 p-10 justify-center text-[--text-3] text-sm">
       <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
       </svg>
-      Generating report…
+      {isAr ? 'جاري توليد التقرير…' : 'Generating report…'}
     </div>
   );
 }
 
-function ErrorMsg({ msg }: { msg: string }) {
-  return (
-    <div className="mx-6 mt-4 rounded-lg bg-danger-bg border border-danger px-4 py-3">
-      <p className="text-xs text-danger-fg">{msg}</p>
-    </div>
-  );
-}
 
-function EmptyState({ onGenerate }: { onGenerate: () => void }) {
+function EmptyState({ onGenerate, isAr }: { onGenerate: () => void; isAr: boolean }) {
   return (
     <div className="px-6 py-12 text-center">
-      <p className="text-[--text-3] text-sm mb-4">Click Generate Report to load data for the selected period.</p>
-      <button onClick={onGenerate} className="btn btn-primary btn-sm">Generate Report</button>
+      <p className="text-[--text-3] text-sm mb-4">
+        {isAr ? 'انقر على «توليد التقرير» لتحميل بيانات الفترة المحددة.' : 'Click Generate Report to load data for the selected period.'}
+      </p>
+      <button onClick={onGenerate} className="btn btn-primary btn-sm">
+        {isAr ? 'توليد التقرير' : 'Generate Report'}
+      </button>
     </div>
   );
 }
@@ -191,6 +173,7 @@ function PLRow({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
+  const { isAr } = useLang();
   const now = new Date();
   const [tab, setTab] = useState<ReportTab>('pl');
   const [period, setPeriod] = useState('this-year');
@@ -198,6 +181,25 @@ export default function ReportsPage() {
   const [dateTo, setDateTo] = useState(now.toISOString().split('T')[0]);
   const [locationId, setLocationId] = useState('');
   const [comparePrev, setComparePrev] = useState(true);
+
+  // Bilingual tab + period definitions (inside component to use isAr)
+  const TABS: { key: ReportTab; en: string; ar: string }[] = [
+    { key: 'balance-sheet',  en: 'Balance Sheet',    ar: 'الميزانية العمومية' },
+    { key: 'pl',             en: 'Profit & Loss',    ar: 'قائمة الدخل' },
+    { key: 'trial-balance',  en: 'Trial Balance',    ar: 'ميزان المراجعة' },
+    { key: 'cash-flow',      en: 'General Ledger',   ar: 'دفتر الأستاذ العام' },
+    { key: 'ar-aging',       en: 'Aged AR',          ar: 'الذمم المدينة المتأخرة' },
+    { key: 'ap-aging',       en: 'Aged AP',          ar: 'الذمم الدائنة المتأخرة' },
+    { key: 'tax-report',     en: 'Tax Report',       ar: 'تقرير الضرائب' },
+  ];
+
+  const PERIOD_OPTS = [
+    { value: 'this-month',   label: isAr ? 'هذا الشهر'    : 'This Month' },
+    { value: 'last-month',   label: isAr ? 'الشهر الماضي' : 'Last Month' },
+    { value: 'this-quarter', label: isAr ? 'هذا الربع'    : 'This Quarter' },
+    { value: 'this-year',    label: isAr ? 'هذه السنة'    : 'This Year' },
+    { value: 'custom',       label: isAr ? 'نطاق مخصص'   : 'Custom Range' },
+  ];
 
   // P&L state
   const [plData, setPlData] = useState<PLData | null>(null);
@@ -240,20 +242,20 @@ export default function ReportsPage() {
     if (period === 'this-month') {
       return {
         from: new Date(y, m, 1).toISOString().split('T')[0],
-        to: new Date(y, m + 1, 0).toISOString().split('T')[0],
+        to:   new Date(y, m + 1, 0).toISOString().split('T')[0],
       };
     }
     if (period === 'last-month') {
       return {
         from: new Date(y, m - 1, 1).toISOString().split('T')[0],
-        to: new Date(y, m, 0).toISOString().split('T')[0],
+        to:   new Date(y, m, 0).toISOString().split('T')[0],
       };
     }
     if (period === 'this-quarter') {
       const qStart = Math.floor(m / 3) * 3;
       return {
         from: new Date(y, qStart, 1).toISOString().split('T')[0],
-        to: new Date(y, qStart + 3, 0).toISOString().split('T')[0],
+        to:   new Date(y, qStart + 3, 0).toISOString().split('T')[0],
       };
     }
     if (period === 'this-year') {
@@ -270,78 +272,64 @@ export default function ReportsPage() {
     if (tab === 'pl') {
       setPlLoading(true); setPlError('');
       try {
-        const data = await apiFetch<PLData>(
-          `/finance/reports/profit-loss?from=${from}&to=${to}${locQs}`,
-        );
+        const data = await apiFetch<PLData>(`/finance/reports/profit-loss?from=${from}&to=${to}${locQs}`);
         setPlData(data);
       } catch (e: unknown) {
-        setPlError(e instanceof Error ? e.message : 'Failed to load P&L report.');
+        setPlError(e instanceof Error ? e.message : (isAr ? 'فشل تحميل تقرير الدخل.' : 'Failed to load P&L report.'));
       } finally { setPlLoading(false); }
 
     } else if (tab === 'balance-sheet') {
       setBsLoading(true); setBsError('');
       try {
-        const data = await apiFetch<BalanceSheetData>(
-          `/finance/reports/balance-sheet?dateFrom=${from}&dateTo=${to}${locQs}`,
-        );
+        const data = await apiFetch<BalanceSheetData>(`/finance/reports/balance-sheet?dateFrom=${from}&dateTo=${to}${locQs}`);
         setBsData(data);
       } catch (e: unknown) {
-        setBsError(e instanceof Error ? e.message : 'Failed to load Balance Sheet.');
+        setBsError(e instanceof Error ? e.message : (isAr ? 'فشل تحميل الميزانية العمومية.' : 'Failed to load Balance Sheet.'));
       } finally { setBsLoading(false); }
 
     } else if (tab === 'trial-balance') {
       setTbLoading(true); setTbError('');
       try {
-        const data = await apiFetch<TrialBalanceData>(
-          `/finance/reports/trial-balance?dateFrom=${from}&dateTo=${to}${locQs}`,
-        );
+        const data = await apiFetch<TrialBalanceData>(`/finance/reports/trial-balance?dateFrom=${from}&dateTo=${to}${locQs}`);
         setTbData(data);
       } catch (e: unknown) {
-        setTbError(e instanceof Error ? e.message : 'Failed to load Trial Balance.');
+        setTbError(e instanceof Error ? e.message : (isAr ? 'فشل تحميل ميزان المراجعة.' : 'Failed to load Trial Balance.'));
       } finally { setTbLoading(false); }
 
     } else if (tab === 'cash-flow') {
       setGlLoading(true); setGlError('');
       try {
-        const data = await apiFetch<GLDetailData>(
-          `/finance/reports/gl-detail?dateFrom=${from}&dateTo=${to}${locQs}`,
-        );
+        const data = await apiFetch<GLDetailData>(`/finance/reports/gl-by-account?dateFrom=${from}&dateTo=${to}${locQs}`);
         setGlData(data);
       } catch (e: unknown) {
-        setGlError(e instanceof Error ? e.message : 'Failed to load GL Detail.');
+        setGlError(e instanceof Error ? e.message : (isAr ? 'فشل تحميل دفتر الأستاذ.' : 'Failed to load GL Detail.'));
       } finally { setGlLoading(false); }
 
     } else if (tab === 'ar-aging') {
       setArLoading(true); setArError('');
       try {
-        const data = await apiFetch<AgedData>(
-          `/finance/reports/aged-receivables?asOf=${to}${locQs}`,
-        );
+        const data = await apiFetch<AgedData>(`/finance/reports/aged-receivables?asOf=${to}${locQs}`);
         setArData(data);
       } catch (e: unknown) {
-        setArError(e instanceof Error ? e.message : 'Failed to load Aged AR report.');
+        setArError(e instanceof Error ? e.message : (isAr ? 'فشل تحميل تقرير الذمم المدينة.' : 'Failed to load Aged AR report.'));
       } finally { setArLoading(false); }
 
     } else if (tab === 'ap-aging') {
       setApLoading(true); setApError('');
       try {
-        const data = await apiFetch<AgedData>(
-          `/finance/reports/aged-ap?locationId=${locationId}&asOf=${to}`,
-        );
+        const data = await apiFetch<AgedData>(`/finance/reports/aged-ap?locationId=${locationId}&asOf=${to}`);
         setApData(data);
       } catch (e: unknown) {
-        setApError(e instanceof Error ? e.message : 'Failed to load Aged AP report.');
+        setApError(e instanceof Error ? e.message : (isAr ? 'فشل تحميل تقرير الذمم الدائنة.' : 'Failed to load Aged AP report.'));
       } finally { setApLoading(false); }
 
     } else if (tab === 'tax-report') {
       setTaxLoading(true); setTaxError('');
       try {
-        const data = await apiFetch<TaxReportData>(
-          `/finance/reports/tax-report?dateFrom=${from}&dateTo=${to}${locQs}`,
-        );
+        const data = await apiFetch<TaxReportData>(`/finance/reports/tax-report?dateFrom=${from}&dateTo=${to}${locQs}`);
         setTaxData(data);
       } catch (e: unknown) {
-        setTaxError(e instanceof Error ? e.message : 'Failed to load Tax Report.');
+        setTaxError(e instanceof Error ? e.message : (isAr ? 'فشل تحميل تقرير الضرائب.' : 'Failed to load Tax Report.'));
       } finally { setTaxLoading(false); }
     }
   }
@@ -391,21 +379,24 @@ export default function ReportsPage() {
 
   const colCount = comparePrev ? 5 : 2;
 
-  const fmtDate = (d: string) =>
-    new Date(d).toLocaleDateString('en-EG', { day: '2-digit', month: 'short', year: 'numeric' });
+  const anyLoading = plLoading || bsLoading || tbLoading || glLoading || arLoading || apLoading || taxLoading;
 
   return (
     <div className="min-h-screen bg-[--bg]">
       {/* Page header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Financial Reports</h1>
-          <p className="page-subtitle">Select a report type and generate</p>
+          <h1 className="page-title">{isAr ? 'التقارير المالية' : 'Financial Reports'}</h1>
+          <p className="page-subtitle">{isAr ? 'اختر نوع التقرير وولّده' : 'Select a report type and generate'}</p>
         </div>
         <div className="flex gap-2 items-center">
-          <button onClick={exportPdf} className="btn btn-secondary btn-sm">Export PDF</button>
+          <button onClick={exportPdf} className="btn btn-secondary btn-sm">
+            {isAr ? 'تصدير PDF' : 'Export PDF'}
+          </button>
           {tab === 'pl' && plData && (
-            <button onClick={exportExcel} className="btn btn-secondary btn-sm">Export Excel</button>
+            <button onClick={exportExcel} className="btn btn-secondary btn-sm">
+              {isAr ? 'تصدير Excel' : 'Export Excel'}
+            </button>
           )}
         </div>
       </div>
@@ -419,7 +410,7 @@ export default function ReportsPage() {
               onClick={() => setTab(t.key)}
               className={`tab ${tab === t.key ? 'active' : ''}`}
             >
-              {t.label}
+              {isAr ? t.ar : t.en}
             </button>
           ))}
         </div>
@@ -429,7 +420,7 @@ export default function ReportsPage() {
       <div className="px-6 py-3 flex flex-wrap gap-3 items-end border-b border-[--border] bg-[--surface]">
         {/* Period */}
         <div>
-          <label className="input-label">Period</label>
+          <label className="input-label">{isAr ? 'الفترة' : 'Period'}</label>
           <SearchableCombobox
             options={PERIOD_OPTS}
             value={period}
@@ -441,11 +432,11 @@ export default function ReportsPage() {
         {period === 'custom' && (
           <>
             <div>
-              <label className="input-label">From</label>
+              <label className="input-label">{isAr ? 'من تاريخ' : 'From'}</label>
               <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="input w-36" />
             </div>
             <div>
-              <label className="input-label">To</label>
+              <label className="input-label">{isAr ? 'إلى تاريخ' : 'To'}</label>
               <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="input w-36" />
             </div>
           </>
@@ -453,12 +444,12 @@ export default function ReportsPage() {
 
         {/* Location */}
         <div>
-          <label className="input-label">Location</label>
+          <label className="input-label">{isAr ? 'الفرع' : 'Location'}</label>
           <SearchableCombobox
-            options={[{ value: '', label: 'All Locations' }]}
+            options={[{ value: '', label: isAr ? 'كل الفروع' : 'All Locations' }]}
             value={locationId}
             onChange={setLocationId}
-            placeholder="All Locations"
+            placeholder={isAr ? 'كل الفروع' : 'All Locations'}
             className="w-40"
           />
         </div>
@@ -476,36 +467,46 @@ export default function ReportsPage() {
               <span className={`block w-9 h-5 rounded-full transition ${comparePrev ? 'bg-[--primary]' : 'bg-[--border-strong]'}`} />
               <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${comparePrev ? 'translate-x-4' : ''}`} />
             </span>
-            <span className="text-xs text-[--text-2]">Compare to Previous Period</span>
+            <span className="text-xs text-[--text-2]">
+              {isAr ? 'مقارنة بالفترة السابقة' : 'Compare to Previous Period'}
+            </span>
           </label>
         )}
 
         <button
           onClick={generate}
-          disabled={plLoading || bsLoading || tbLoading || glLoading || arLoading || apLoading || taxLoading}
+          disabled={anyLoading}
           className="btn btn-primary btn-sm ml-auto"
         >
-          {(plLoading || bsLoading || tbLoading || glLoading || arLoading || apLoading || taxLoading) ? 'Generating…' : 'Generate Report'}
+          {anyLoading ? (isAr ? 'جاري التوليد…' : 'Generating…') : (isAr ? 'توليد التقرير' : 'Generate Report')}
         </button>
       </div>
 
       {/* ── P&L Report ─────────────────────────────────────────────────── */}
       {tab === 'pl' && (
         <div className="px-6 py-5">
-          {plLoading && <Spinner />}
-          {plError && <ErrorMsg msg={plError} />}
-          {!plLoading && !plError && !plData && <EmptyState onGenerate={generate} />}
+          {plLoading && <Spinner isAr={isAr} />}
+          {plError && <ErrorBanner error={plError} retry={generate} />}
+          {!plLoading && !plError && !plData && <EmptyState onGenerate={generate} isAr={isAr} />}
           {!plLoading && plData && (
             <div className="card overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[--border-strong] bg-[--surface-2]">
-                    <th className="px-5 py-3 text-left font-semibold text-[--text-1] text-sm">Account</th>
-                    <th className="px-5 py-3 text-right font-semibold text-[--text-1] text-sm">Current Period</th>
+                    <th className="px-5 py-3 text-left font-semibold text-[--text-1] text-sm">
+                      {isAr ? 'الحساب' : 'Account'}
+                    </th>
+                    <th className="px-5 py-3 text-right font-semibold text-[--text-1] text-sm">
+                      {isAr ? 'الفترة الحالية' : 'Current Period'}
+                    </th>
                     {comparePrev && (
                       <>
-                        <th className="px-5 py-3 text-right font-semibold text-[--text-2] text-sm">Previous Period</th>
-                        <th className="px-5 py-3 text-right font-semibold text-[--text-2] text-sm">Variance</th>
+                        <th className="px-5 py-3 text-right font-semibold text-[--text-2] text-sm">
+                          {isAr ? 'الفترة السابقة' : 'Previous Period'}
+                        </th>
+                        <th className="px-5 py-3 text-right font-semibold text-[--text-2] text-sm">
+                          {isAr ? 'الفرق' : 'Variance'}
+                        </th>
                         <th className="px-5 py-3 text-right font-semibold text-[--text-2] text-sm">%</th>
                       </>
                     )}
@@ -513,28 +514,34 @@ export default function ReportsPage() {
                 </thead>
                 <tbody>
                   <tr className="border-b border-[--border]">
-                    <td colSpan={colCount} className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]">Revenue</td>
+                    <td colSpan={colCount} className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]">
+                      {isAr ? 'الإيرادات' : 'Revenue'}
+                    </td>
                   </tr>
                   {plData.revenue.map((r) => (
                     <PLRow key={r.label} {...r} comparePrev={comparePrev} indent />
                   ))}
-                  <PLRow label="TOTAL REVENUE" current={plData.totalRevenue} previous={plData.previousRevenue} subtotal bold comparePrev={comparePrev} />
+                  <PLRow label={isAr ? 'إجمالي الإيرادات' : 'TOTAL REVENUE'} current={plData.totalRevenue} previous={plData.previousRevenue} subtotal bold comparePrev={comparePrev} />
                   <tr className="border-b border-[--border]">
-                    <td colSpan={colCount} className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]">Cost of Revenue</td>
+                    <td colSpan={colCount} className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]">
+                      {isAr ? 'تكلفة الإيرادات' : 'Cost of Revenue'}
+                    </td>
                   </tr>
                   {plData.cogs.map((r) => (
                     <PLRow key={r.label} {...r} comparePrev={comparePrev} indent />
                   ))}
-                  <PLRow label="Total COGS" current={plData.totalCogs} previous={plData.previousCogs} subtotal bold comparePrev={comparePrev} />
-                  <PLRow label="GROSS PROFIT" current={plData.grossProfit} previous={plData.previousGrossProfit} bold highlight="blue" comparePrev={comparePrev} />
+                  <PLRow label={isAr ? 'إجمالي التكلفة' : 'Total COGS'} current={plData.totalCogs} previous={plData.previousCogs} subtotal bold comparePrev={comparePrev} />
+                  <PLRow label={isAr ? 'مجمل الربح' : 'GROSS PROFIT'} current={plData.grossProfit} previous={plData.previousGrossProfit} bold highlight="blue" comparePrev={comparePrev} />
                   <tr className="border-b border-[--border]">
-                    <td colSpan={colCount} className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]">Operating Expenses</td>
+                    <td colSpan={colCount} className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]">
+                      {isAr ? 'مصروفات التشغيل' : 'Operating Expenses'}
+                    </td>
                   </tr>
                   {plData.opex.map((r) => (
                     <PLRow key={r.label} {...r} comparePrev={comparePrev} indent />
                   ))}
-                  <PLRow label="TOTAL EXPENSES" current={plData.totalOpex} previous={plData.previousOpex} subtotal bold comparePrev={comparePrev} />
-                  <PLRow label="NET PROFIT" current={plData.netIncome} previous={plData.previousNetIncome} bold highlight={plData.netIncome >= 0 ? 'profit' : 'loss'} comparePrev={comparePrev} />
+                  <PLRow label={isAr ? 'إجمالي المصروفات' : 'TOTAL EXPENSES'} current={plData.totalOpex} previous={plData.previousOpex} subtotal bold comparePrev={comparePrev} />
+                  <PLRow label={isAr ? 'صافي الربح' : 'NET PROFIT'} current={plData.netIncome} previous={plData.previousNetIncome} bold highlight={plData.netIncome >= 0 ? 'profit' : 'loss'} comparePrev={comparePrev} />
                 </tbody>
               </table>
             </div>
@@ -545,15 +552,17 @@ export default function ReportsPage() {
       {/* ── Balance Sheet ───────────────────────────────────────────────── */}
       {tab === 'balance-sheet' && (
         <div className="px-6 py-5">
-          {bsLoading && <Spinner />}
-          {bsError && <ErrorMsg msg={bsError} />}
-          {!bsLoading && !bsError && !bsData && <EmptyState onGenerate={generate} />}
+          {bsLoading && <Spinner isAr={isAr} />}
+          {bsError && <ErrorBanner error={bsError} retry={generate} />}
+          {!bsLoading && !bsError && !bsData && <EmptyState onGenerate={generate} isAr={isAr} />}
           {!bsLoading && bsData && (
             <div className="grid grid-cols-2 gap-5">
               {/* Assets */}
               <div className="card overflow-hidden">
                 <div className="px-5 py-3 bg-[--surface-2] border-b border-[--border]">
-                  <p className="text-xs font-bold uppercase tracking-widest text-[--text-3]">Assets</p>
+                  <p className="text-xs font-bold uppercase tracking-widest text-[--text-3]">
+                    {isAr ? 'الأصول' : 'Assets'}
+                  </p>
                 </div>
                 <table className="w-full text-sm">
                   <tbody>
@@ -564,7 +573,9 @@ export default function ReportsPage() {
                       </tr>
                     ))}
                     <tr className="bg-[--surface-2]">
-                      <td className="px-5 py-3 font-semibold text-[--text-1]">TOTAL ASSETS</td>
+                      <td className="px-5 py-3 font-semibold text-[--text-1]">
+                        {isAr ? 'إجمالي الأصول' : 'TOTAL ASSETS'}
+                      </td>
                       <td className="px-5 py-3 text-right tabular-nums font-bold text-[--primary]">{egp(bsData.totalAssets)}</td>
                     </tr>
                   </tbody>
@@ -573,12 +584,16 @@ export default function ReportsPage() {
               {/* Liabilities + Equity */}
               <div className="card overflow-hidden">
                 <div className="px-5 py-3 bg-[--surface-2] border-b border-[--border]">
-                  <p className="text-xs font-bold uppercase tracking-widest text-[--text-3]">Liabilities &amp; Equity</p>
+                  <p className="text-xs font-bold uppercase tracking-widest text-[--text-3]">
+                    {isAr ? 'الالتزامات وحقوق الملكية' : 'Liabilities & Equity'}
+                  </p>
                 </div>
                 <table className="w-full text-sm">
                   <tbody>
                     <tr className="border-b border-[--border]">
-                      <td colSpan={2} className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]">Liabilities</td>
+                      <td colSpan={2} className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]">
+                        {isAr ? 'الالتزامات' : 'Liabilities'}
+                      </td>
                     </tr>
                     {bsData.liabilities.map((l) => (
                       <tr key={l.label} className="border-b border-[--border] hover:bg-[--surface-2]">
@@ -587,11 +602,15 @@ export default function ReportsPage() {
                       </tr>
                     ))}
                     <tr className="bg-[--surface-2]">
-                      <td className="px-5 py-2.5 font-semibold text-[--text-1]">Total Liabilities</td>
+                      <td className="px-5 py-2.5 font-semibold text-[--text-1]">
+                        {isAr ? 'إجمالي الالتزامات' : 'Total Liabilities'}
+                      </td>
                       <td className="px-5 py-2.5 text-right tabular-nums font-semibold text-[--primary]">{egp(bsData.totalLiabilities)}</td>
                     </tr>
                     <tr className="border-b border-[--border]">
-                      <td colSpan={2} className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]">Equity</td>
+                      <td colSpan={2} className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-[--text-3] bg-[--surface-2]">
+                        {isAr ? 'حقوق الملكية' : 'Equity'}
+                      </td>
                     </tr>
                     {bsData.equity.map((e) => (
                       <tr key={e.label} className="border-b border-[--border] hover:bg-[--surface-2]">
@@ -600,12 +619,18 @@ export default function ReportsPage() {
                       </tr>
                     ))}
                     <tr className="bg-[--surface-2]">
-                      <td className="px-5 py-2.5 font-semibold text-[--text-1]">Total Equity</td>
+                      <td className="px-5 py-2.5 font-semibold text-[--text-1]">
+                        {isAr ? 'إجمالي حقوق الملكية' : 'Total Equity'}
+                      </td>
                       <td className="px-5 py-2.5 text-right tabular-nums font-semibold text-[--primary]">{egp(bsData.totalEquity)}</td>
                     </tr>
                     <tr className="bg-info-bg">
-                      <td className="px-5 py-3 font-bold text-[--text-1]">TOTAL LIABILITIES + EQUITY</td>
-                      <td className="px-5 py-3 text-right tabular-nums font-bold text-[--primary] text-base">{egp(bsData.totalLiabilities + bsData.totalEquity)}</td>
+                      <td className="px-5 py-3 font-bold text-[--text-1]">
+                        {isAr ? 'إجمالي الالتزامات + حقوق الملكية' : 'TOTAL LIABILITIES + EQUITY'}
+                      </td>
+                      <td className="px-5 py-3 text-right tabular-nums font-bold text-[--primary] text-base">
+                        {egp(bsData.totalLiabilities + bsData.totalEquity)}
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -618,18 +643,18 @@ export default function ReportsPage() {
       {/* ── Trial Balance ───────────────────────────────────────────────── */}
       {tab === 'trial-balance' && (
         <div className="px-6 py-5">
-          {tbLoading && <Spinner />}
-          {tbError && <ErrorMsg msg={tbError} />}
-          {!tbLoading && !tbError && !tbData && <EmptyState onGenerate={generate} />}
+          {tbLoading && <Spinner isAr={isAr} />}
+          {tbError && <ErrorBanner error={tbError} retry={generate} />}
+          {!tbLoading && !tbError && !tbData && <EmptyState onGenerate={generate} isAr={isAr} />}
           {!tbLoading && tbData && (
             <div className="card overflow-hidden">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Code</th>
-                    <th>Account Name</th>
-                    <th className="text-right">Debit</th>
-                    <th className="text-right">Credit</th>
+                    <th>{isAr ? 'الكود' : 'Code'}</th>
+                    <th>{isAr ? 'اسم الحساب' : 'Account Name'}</th>
+                    <th className="text-right">{isAr ? 'مدين' : 'Debit'}</th>
+                    <th className="text-right">{isAr ? 'دائن' : 'Credit'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -644,7 +669,9 @@ export default function ReportsPage() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-[--surface-2] font-semibold">
-                    <td colSpan={2} className="px-4 py-3 text-[--text-1]">TOTALS</td>
+                    <td colSpan={2} className="px-4 py-3 text-[--text-1]">
+                      {isAr ? 'الإجماليات' : 'TOTALS'}
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(tbData.totalDebit)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(tbData.totalCredit)}</td>
                   </tr>
@@ -658,26 +685,26 @@ export default function ReportsPage() {
       {/* ── General Ledger Detail ───────────────────────────────────────── */}
       {tab === 'cash-flow' && (
         <div className="px-6 py-5">
-          {glLoading && <Spinner />}
-          {glError && <ErrorMsg msg={glError} />}
-          {!glLoading && !glError && !glData && <EmptyState onGenerate={generate} />}
+          {glLoading && <Spinner isAr={isAr} />}
+          {glError && <ErrorBanner error={glError} retry={generate} />}
+          {!glLoading && !glError && !glData && <EmptyState onGenerate={generate} isAr={isAr} />}
           {!glLoading && glData && (
             <div className="card overflow-hidden">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Date</th>
-                    <th>Journal</th>
-                    <th>Entry Ref</th>
-                    <th>Description</th>
-                    <th className="text-right">Debit</th>
-                    <th className="text-right">Credit</th>
+                    <th>{isAr ? 'التاريخ' : 'Date'}</th>
+                    <th>{isAr ? 'الدفتر' : 'Journal'}</th>
+                    <th>{isAr ? 'مرجع القيد' : 'Entry Ref'}</th>
+                    <th>{isAr ? 'البيان' : 'Description'}</th>
+                    <th className="text-right">{isAr ? 'مدين' : 'Debit'}</th>
+                    <th className="text-right">{isAr ? 'دائن' : 'Credit'}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {glData.items.map((row, i) => (
                     <tr key={i}>
-                      <td className="text-[--text-3] whitespace-nowrap">{fmtDate(row.date)}</td>
+                      <td className="text-[--text-3] whitespace-nowrap">{fmtDate(row.date, isAr, { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                       <td className="text-[--text-2]">{row.journal}</td>
                       <td className="font-mono text-xs text-[--text-3]">{row.entryRef}</td>
                       <td className="text-[--text-1]">{row.description || '—'}</td>
@@ -687,7 +714,9 @@ export default function ReportsPage() {
                   ))}
                   {glData.items.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="text-center py-8 text-[--text-3]">No entries for this period.</td>
+                      <td colSpan={6} className="text-center py-8 text-[--text-3]">
+                        {isAr ? 'لا توجد قيود لهذه الفترة.' : 'No entries for this period.'}
+                      </td>
                     </tr>
                   )}
                 </tbody>
@@ -700,20 +729,20 @@ export default function ReportsPage() {
       {/* ── Aged Receivables ────────────────────────────────────────────── */}
       {tab === 'ar-aging' && (
         <div className="px-6 py-5">
-          {arLoading && <Spinner />}
-          {arError && <ErrorMsg msg={arError} />}
-          {!arLoading && !arError && !arData && <EmptyState onGenerate={generate} />}
+          {arLoading && <Spinner isAr={isAr} />}
+          {arError && <ErrorBanner error={arError} retry={generate} />}
+          {!arLoading && !arError && !arData && <EmptyState onGenerate={generate} isAr={isAr} />}
           {!arLoading && arData && (
             <div className="card overflow-hidden">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Customer</th>
-                    <th className="text-right">Current</th>
-                    <th className="text-right">0–30 days</th>
-                    <th className="text-right">31–60 days</th>
-                    <th className="text-right" style={{ color: 'var(--danger-fg)' }}>61–90+ days</th>
-                    <th className="text-right">Total</th>
+                    <th>{isAr ? 'العميل' : 'Customer'}</th>
+                    <th className="text-right">{isAr ? 'حالي' : 'Current'}</th>
+                    <th className="text-right">{isAr ? '0–30 يوم' : '0–30 days'}</th>
+                    <th className="text-right">{isAr ? '31–60 يوم' : '31–60 days'}</th>
+                    <th className="text-right" style={{ color: 'var(--danger-fg)' }}>{isAr ? '61–90+ يوم' : '61–90+ days'}</th>
+                    <th className="text-right">{isAr ? 'الإجمالي' : 'Total'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -730,7 +759,7 @@ export default function ReportsPage() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-[--surface-2] font-semibold">
-                    <td className="px-4 py-3 text-[--text-1]">TOTALS</td>
+                    <td className="px-4 py-3 text-[--text-1]">{isAr ? 'الإجماليات' : 'TOTALS'}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(arData.totals.current)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(arData.totals.d30)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(arData.totals.d60)}</td>
@@ -747,20 +776,20 @@ export default function ReportsPage() {
       {/* ── Aged Payables ───────────────────────────────────────────────── */}
       {tab === 'ap-aging' && (
         <div className="px-6 py-5">
-          {apLoading && <Spinner />}
-          {apError && <ErrorMsg msg={apError} />}
-          {!apLoading && !apError && !apData && <EmptyState onGenerate={generate} />}
+          {apLoading && <Spinner isAr={isAr} />}
+          {apError && <ErrorBanner error={apError} retry={generate} />}
+          {!apLoading && !apError && !apData && <EmptyState onGenerate={generate} isAr={isAr} />}
           {!apLoading && apData && (
             <div className="card overflow-hidden">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Vendor</th>
-                    <th className="text-right">Total</th>
-                    <th className="text-right">0–30 days</th>
-                    <th className="text-right">31–60 days</th>
-                    <th className="text-right">61–90 days</th>
-                    <th className="text-right" style={{ color: 'var(--danger-fg)' }}>90+ days</th>
+                    <th>{isAr ? 'المورد' : 'Vendor'}</th>
+                    <th className="text-right">{isAr ? 'الإجمالي' : 'Total'}</th>
+                    <th className="text-right">{isAr ? '0–30 يوم' : '0–30 days'}</th>
+                    <th className="text-right">{isAr ? '31–60 يوم' : '31–60 days'}</th>
+                    <th className="text-right">{isAr ? '61–90 يوم' : '61–90 days'}</th>
+                    <th className="text-right" style={{ color: 'var(--danger-fg)' }}>{isAr ? '90+ يوم' : '90+ days'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -777,7 +806,7 @@ export default function ReportsPage() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-[--surface-2] font-semibold">
-                    <td className="px-4 py-3 text-[--text-1]">TOTALS</td>
+                    <td className="px-4 py-3 text-[--text-1]">{isAr ? 'الإجماليات' : 'TOTALS'}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(apData.totals.total)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(apData.totals.current)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(apData.totals.d30)}</td>
@@ -794,17 +823,17 @@ export default function ReportsPage() {
       {/* ── Tax Report ──────────────────────────────────────────────────── */}
       {tab === 'tax-report' && (
         <div className="px-6 py-5">
-          {taxLoading && <Spinner />}
-          {taxError && <ErrorMsg msg={taxError} />}
-          {!taxLoading && !taxError && !taxData && <EmptyState onGenerate={generate} />}
+          {taxLoading && <Spinner isAr={isAr} />}
+          {taxError && <ErrorBanner error={taxError} retry={generate} />}
+          {!taxLoading && !taxError && !taxData && <EmptyState onGenerate={generate} isAr={isAr} />}
           {!taxLoading && taxData && (
             <div className="card overflow-hidden">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Tax Name</th>
-                    <th className="text-right">Taxable Amount</th>
-                    <th className="text-right">Tax Amount</th>
+                    <th>{isAr ? 'اسم الضريبة' : 'Tax Name'}</th>
+                    <th className="text-right">{isAr ? 'المبلغ الخاضع للضريبة' : 'Taxable Amount'}</th>
+                    <th className="text-right">{isAr ? 'مبلغ الضريبة' : 'Tax Amount'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -817,13 +846,15 @@ export default function ReportsPage() {
                   ))}
                   {taxData.items.length === 0 && (
                     <tr>
-                      <td colSpan={3} className="text-center py-8 text-[--text-3]">No tax data for this period.</td>
+                      <td colSpan={3} className="text-center py-8 text-[--text-3]">
+                        {isAr ? 'لا توجد بيانات ضريبية لهذه الفترة.' : 'No tax data for this period.'}
+                      </td>
                     </tr>
                   )}
                 </tbody>
                 <tfoot>
                   <tr className="bg-[--surface-2] font-semibold">
-                    <td className="px-4 py-3 text-[--text-1]">TOTALS</td>
+                    <td className="px-4 py-3 text-[--text-1]">{isAr ? 'الإجماليات' : 'TOTALS'}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(taxData.totalTaxable)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-[--primary]">{egp(taxData.totalTax)}</td>
                   </tr>

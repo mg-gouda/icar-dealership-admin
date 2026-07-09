@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { apiFetch } from '@/lib/useApi';
+import { useLang } from '@/lib/lang-context';
+import { translateSource } from '@/lib/source-labels';
 
 /* ── types ──────────────────────────────────────────────────────────────── */
 interface Lead {
@@ -25,11 +27,6 @@ const STAGE_COLORS: Record<string, string> = {
   CLOSED_WON:   'hsl(213,80%,30%)',
 };
 
-const PERIOD_OPTS = [
-  { value: '30',  label: 'Last 30 Days'  },
-  { value: '90',  label: 'Last 90 Days'  },
-  { value: '180', label: 'Last 180 Days' },
-];
 
 /* ── demo data ───────────────────────────────────────────────────────────── */
 const DEMO_LEADS: Lead[] = [
@@ -41,8 +38,18 @@ const DEMO_LEADS: Lead[] = [
   ...Array.from({ length: 8  }, (_, i) => ({ id: `l${i}`, status: 'CLOSED_LOST', source: ['Website','Call Center','Walk-in','Social Media'][i % 4], createdAt: new Date(Date.now() - i * 86400_000 * 7).toISOString(), assignedTo: { id: `r${i % 3}`, name: ['Ahmed Hassan','Sara Mohamed','Omar Khaled'][i % 3] } })),
 ];
 
+const STAGE_AR: Record<string, string> = {
+  NEW:          'جديد',
+  CONTACTED:    'تم التواصل',
+  QUALIFIED:    'مؤهل',
+  NEGOTIATING:  'قيد التفاوض',
+  CLOSED_WON:   'صفقة مكتملة',
+  CLOSED_LOST:  'صفقة خسارة',
+};
+
 /* ── FunnelRow ───────────────────────────────────────────────────────────── */
 function FunnelRow({ stage, count, baseCount }: { stage: string; count: number; baseCount: number }) {
+  const { isAr } = useLang();
   const barPct  = baseCount > 0 ? (count / baseCount) * 100 : 0;
   const convPct = baseCount > 0 ? Math.round((count / baseCount) * 100) : 0;
   const color   = STAGE_COLORS[stage] ?? 'var(--primary)';
@@ -54,7 +61,7 @@ function FunnelRow({ stage, count, baseCount }: { stage: string; count: number; 
         width: 110, fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-2)',
         textTransform: 'uppercase', letterSpacing: '0.05em', flexShrink: 0,
       }}>
-        {stage.replace('_', ' ')}
+        {isAr ? (STAGE_AR[stage] ?? stage) : stage.replace('_', ' ')}
       </span>
 
       {/* bar */}
@@ -93,6 +100,14 @@ function FunnelRow({ stage, count, baseCount }: { stage: string; count: number; 
 
 /* ── main page ───────────────────────────────────────────────────────────── */
 export default function SalesFunnelPage() {
+  const { isAr } = useLang();
+
+  const PERIOD_OPTS = [
+    { value: '30',  label: isAr ? 'آخر 30 يوم'  : 'Last 30 Days'  },
+    { value: '90',  label: isAr ? 'آخر 90 يوم'  : 'Last 90 Days'  },
+    { value: '180', label: isAr ? 'آخر 180 يوم' : 'Last 180 Days' },
+  ];
+
   const [days,    setDays]    = useState('30');
   const [leads,   setLeads]   = useState<Lead[]>(DEMO_LEADS);
   const [loading, setLoading] = useState(false);
@@ -174,8 +189,8 @@ export default function SalesFunnelPage() {
       {/* header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Sales Funnel</h1>
-          <p className="page-subtitle">Lead conversion analytics · {totalLeads} leads · {wonCount} closed won</p>
+          <h1 className="page-title">{isAr ? 'مسار المبيعات' : 'Sales Funnel'}</h1>
+          <p className="page-subtitle">{isAr ? `تحليل تحويل العملاء · ${totalLeads} عميل محتمل · ${wonCount} صفقة مغلقة` : `Lead conversion analytics · ${totalLeads} leads · ${wonCount} closed won`}</p>
         </div>
         {/* period toggle */}
         <div style={{ display: 'flex', gap: 2, padding: 2, background: 'var(--surface-2)', borderRadius: '0.5rem' }}>
@@ -203,9 +218,9 @@ export default function SalesFunnelPage() {
         {/* funnel visualization */}
         <div className="card" style={{ padding: '1.25rem 1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>Funnel by Stage</p>
+            <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>{isAr ? 'المسار حسب المرحلة' : 'Funnel by Stage'}</p>
             {loading && (
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>Loading…</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</span>
             )}
           </div>
 
@@ -226,19 +241,19 @@ export default function SalesFunnelPage() {
             display: 'flex', gap: '2rem',
           }}>
             <div>
-              <p style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)' }}>Total Leads</p>
+              <p style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)' }}>{isAr ? 'إجمالي العملاء المحتملين' : 'Total Leads'}</p>
               <p style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-1)', fontVariantNumeric: 'tabular-nums' }}>{totalLeads}</p>
             </div>
             <div>
-              <p style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)' }}>Won</p>
+              <p style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)' }}>{isAr ? 'مكتسب' : 'Won'}</p>
               <p style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--success-fg)', fontVariantNumeric: 'tabular-nums' }}>{wonCount}</p>
             </div>
             <div>
-              <p style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)' }}>Lost</p>
+              <p style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)' }}>{isAr ? 'خسارة' : 'Lost'}</p>
               <p style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--danger-fg)', fontVariantNumeric: 'tabular-nums' }}>{lostCount}</p>
             </div>
             <div>
-              <p style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)' }}>Conversion Rate</p>
+              <p style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)' }}>{isAr ? 'معدل التحويل' : 'Conversion Rate'}</p>
               <p style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary)', fontVariantNumeric: 'tabular-nums' }}>
                 {totalLeads > 0 ? `${Math.round((wonCount / totalLeads) * 1000) / 10}%` : '—'}
               </p>
@@ -252,15 +267,15 @@ export default function SalesFunnelPage() {
           {/* source table */}
           <div className="card" style={{ overflow: 'hidden' }}>
             <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)' }}>
-              <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>Conversion by Source</p>
+              <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>{isAr ? 'التحويل حسب المصدر' : 'Conversion by Source'}</p>
             </div>
             <div style={{ padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
               {sourceTable.map(row => (
                 <div key={row.source}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-2)' }}>{row.source}</span>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-2)' }}>{translateSource(row.source, isAr)}</span>
                     <div style={{ display: 'flex', gap: '0.75rem' }}>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-3)', fontVariantNumeric: 'tabular-nums' }}>{row.total} leads</span>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-3)', fontVariantNumeric: 'tabular-nums' }}>{isAr ? `${row.total} عميل` : `${row.total} leads`}</span>
                       <span style={{ fontSize: '0.8rem', fontWeight: 700, color: row.convPct >= 30 ? 'var(--success-fg)' : 'var(--text-2)', minWidth: 40, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                         {row.convPct}%
                       </span>
@@ -277,7 +292,7 @@ export default function SalesFunnelPage() {
                 </div>
               ))}
               {sourceTable.length === 0 && (
-                <p style={{ fontSize: '0.8125rem', color: 'var(--text-3)' }}>No data</p>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-3)' }}>{isAr ? 'لا توجد بيانات' : 'No data'}</p>
               )}
             </div>
           </div>
@@ -285,16 +300,16 @@ export default function SalesFunnelPage() {
           {/* top reps table */}
           <div className="card" style={{ overflow: 'hidden' }}>
             <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)' }}>
-              <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>Top Performing Reps</p>
+              <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>{isAr ? 'أفضل مندوبي المبيعات' : 'Top Performing Reps'}</p>
             </div>
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Rep</th>
-                  <th style={{ textAlign: 'right' }}>Assigned</th>
-                  <th style={{ textAlign: 'right' }}>Won</th>
-                  <th style={{ textAlign: 'right' }}>Conv %</th>
-                  <th style={{ textAlign: 'right' }}>Avg Days</th>
+                  <th>{isAr ? 'المندوب' : 'Rep'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'المُسند' : 'Assigned'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'مكتسب' : 'Won'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'نسبة التحويل' : 'Conv %'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'متوسط الأيام' : 'Avg Days'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -315,7 +330,7 @@ export default function SalesFunnelPage() {
                 ))}
                 {repTable.length === 0 && (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-3)' }}>No data</td>
+                    <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-3)' }}>{isAr ? 'لا توجد بيانات' : 'No data'}</td>
                   </tr>
                 )}
               </tbody>

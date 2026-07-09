@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
+import { useLang } from '@/lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
+import { ErrorBanner } from '@/components/ui/error-banner';
 
 interface BankAccount { id: string; name: string; accountNumber?: string; }
 interface StatementLine {
@@ -16,15 +19,13 @@ interface BookEntry {
 const egp = (n: number) =>
   'EGP ' + Math.abs(n).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const fmtDate = (d: string) =>
-  new Date(d).toLocaleDateString('en-EG', { day: '2-digit', month: 'short', year: 'numeric' });
-
 // ponytail: empty — real data comes from API once account is selected
 const PLACEHOLDER_STATEMENT: StatementLine[] = [];
 const PLACEHOLDER_BOOK: BookEntry[] = [];
 
 export default function ReconciliationPage() {
-  const { data: accountsRaw, loading: accLoading } = useQuery<{ items: BankAccount[] }>('/finance/bank-accounts?limit=50');
+  const { isAr } = useLang();
+  const { data: accountsRaw, loading: accLoading, error: accError } = useQuery<{ items: BankAccount[] }>('/finance/bank-statements/bank-accounts');
   const accounts: BankAccount[] = accountsRaw?.items ?? [];
 
   const [accountId, setAccountId] = useState('');
@@ -88,7 +89,7 @@ export default function ReconciliationPage() {
       });
       setSelectedStmt(null);
       setSelectedBook(null);
-      setMsg('Matched successfully.');
+      setMsg(isAr ? 'تمت المطابقة بنجاح.' : 'Matched successfully.');
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : 'Match failed');
     } finally {
@@ -97,7 +98,7 @@ export default function ReconciliationPage() {
   }
 
   async function handleComplete() {
-    if (!accountId || !month) { setMsg('Select account and month first.'); return; }
+    if (!accountId || !month) { setMsg(isAr ? 'اختر الحساب والشهر أولًا.' : 'Select account and month first.'); return; }
     setCompleting(true);
     setMsg('');
     try {
@@ -105,7 +106,7 @@ export default function ReconciliationPage() {
         method: 'POST',
         body: JSON.stringify({ accountId, month, endingBalance: Number(endingBalance.replace(/,/g, '')) || stmtBalance }),
       });
-      setMsg('Reconciliation completed!');
+      setMsg(isAr ? 'اكتملت التسوية!' : 'Reconciliation completed!');
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : 'Failed');
     } finally {
@@ -118,15 +119,15 @@ export default function ReconciliationPage() {
       {/* Page header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Bank Reconciliation</h1>
+          <h1 className="page-title">{isAr ? 'التسوية البنكية' : 'Bank Reconciliation'}</h1>
           <p className="page-subtitle">
-            {selectedAcc ? `${selectedAcc.name} — ${month}` : 'Match bank statement items to GL entries'}
+            {selectedAcc ? `${selectedAcc.name} — ${month}` : (isAr ? 'تسوية كشوف البنك مع دفتر الأستاذ' : 'Match bank statement items to GL entries')}
           </p>
         </div>
         <div className="flex gap-2 items-center">
           {msg && (
             <span className={`text-xs px-3 py-1.5 rounded-lg ${
-              msg.includes('failed') || msg.includes('Failed') || msg.includes('Select')
+              msg.includes('failed') || msg.includes('Failed') || msg.includes('Select') || msg.includes('اختر')
                 ? 'bg-danger-bg text-danger-fg'
                 : 'bg-success-bg text-success-fg'
             }`}>{msg}</span>
@@ -136,24 +137,30 @@ export default function ReconciliationPage() {
             disabled={completing || !balanced}
             className="btn btn-primary btn-sm"
           >
-            {completing ? 'Completing…' : 'Confirm All Matches'}
+            {completing ? (isAr ? 'جاري الإكمال…' : 'Completing…') : (isAr ? 'تأكيد المطابقة' : 'Confirm All Matches')}
           </button>
         </div>
       </div>
+
+      {accError && (
+        <div className="px-6">
+          <ErrorBanner error={accError} retry={() => window.location.reload()} />
+        </div>
+      )}
 
       {/* Controls */}
       <div className="px-6">
         <div className="card p-4 flex flex-wrap gap-4 items-end">
           {/* Bank account searchable combobox */}
           <div className="w-64 relative">
-            <label className="input-label">Bank Account</label>
+            <label className="input-label">{isAr ? 'الحساب البنكي' : 'Bank Account'}</label>
             <button
               type="button"
               onClick={() => { setAccOpen((v) => !v); setAccSearch(''); }}
               className="input flex items-center justify-between gap-2 cursor-pointer"
             >
               <span className={selectedAcc ? 'text-[--text-1]' : 'text-[--text-3]'}>
-                {selectedAcc?.name ?? (accLoading ? 'Loading…' : 'All Bank Account')}
+                {selectedAcc?.name ?? (accLoading ? 'Loading…' : (isAr ? 'كل الحسابات' : 'All Bank Account'))}
               </span>
               <svg className={`w-4 h-4 text-[--text-3] shrink-0 transition-transform ${accOpen ? 'rotate-180' : ''}`}
                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -167,7 +174,7 @@ export default function ReconciliationPage() {
                     type="text"
                     value={accSearch}
                     onChange={(e) => setAccSearch(e.target.value)}
-                    placeholder="Search accounts…"
+                    placeholder={isAr ? 'بحث في الحسابات…' : 'Search accounts…'}
                     autoFocus
                     className="w-full px-3 py-1.5 text-xs rounded-lg border border-[--border] bg-[--surface-2] text-[--text-1] outline-none focus:border-[--primary]"
                   />
@@ -178,7 +185,7 @@ export default function ReconciliationPage() {
                     onClick={() => { setAccountId(''); setAccOpen(false); }}
                     className={`w-full text-left px-3 py-2 text-xs transition hover:bg-[--surface-2] ${!accountId ? 'text-[--primary] font-medium' : 'text-[--text-2]'}`}
                   >
-                    — All Accounts —
+                    {isAr ? '— كل الحسابات —' : '— All Accounts —'}
                   </button>
                   {filteredAccs.map((a) => (
                     <button
@@ -192,7 +199,7 @@ export default function ReconciliationPage() {
                     </button>
                   ))}
                   {filteredAccs.length === 0 && (
-                    <p className="px-3 py-3 text-xs text-[--text-3] text-center">No results</p>
+                    <p className="px-3 py-3 text-xs text-[--text-3] text-center">{isAr ? 'لا نتائج' : 'No results'}</p>
                   )}
                 </div>
               </div>
@@ -201,7 +208,7 @@ export default function ReconciliationPage() {
 
           {/* Month picker */}
           <div>
-            <label className="input-label">Statement Period</label>
+            <label className="input-label">{isAr ? 'فترة الكشف' : 'Statement Period'}</label>
             <input
               type="month"
               value={month}
@@ -212,7 +219,7 @@ export default function ReconciliationPage() {
 
           {/* Ending balance */}
           <div>
-            <label className="input-label">Statement Ending Balance</label>
+            <label className="input-label">{isAr ? 'الرصيد الختامي للكشف' : 'Statement Ending Balance'}</label>
             <input
               type="text"
               value={endingBalance}
@@ -230,8 +237,8 @@ export default function ReconciliationPage() {
           <svg className="w-10 h-10 mx-auto mb-3 text-[--text-3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
           </svg>
-          <p className="text-sm font-medium text-[--text-2]">Select a bank account to begin</p>
-          <p className="text-xs text-[--text-3] mt-1">Choose an account and statement period above to start reconciling.</p>
+          <p className="text-sm font-medium text-[--text-2]">{isAr ? 'اختر حسابًا بنكيًا للبدء' : 'Select a bank account to begin'}</p>
+          <p className="text-xs text-[--text-3] mt-1">{isAr ? 'اختر حسابًا وفترة كشف من الأعلى لبدء التسوية.' : 'Choose an account and statement period above to start reconciling.'}</p>
         </div>
       )}
 
@@ -244,7 +251,7 @@ export default function ReconciliationPage() {
           {/* LEFT: Bank Statement Items */}
           <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-[--border] bg-[--surface-2]">
-              <p className="section-label mb-0">Bank Statement Lines</p>
+              <p className="section-label mb-0">{isAr ? 'حركات الكشف البنكي' : 'Bank Statement Lines'}</p>
             </div>
             {(stmtLoading && accountId) ? (
               <p className="p-6 text-xs text-[--text-3]">Loading…</p>
@@ -269,23 +276,23 @@ export default function ReconciliationPage() {
                         <p className={`text-xs font-medium truncate ${isMatched ? 'text-success-fg' : 'text-[--text-1]'}`}>
                           {line.description}
                         </p>
-                        <p className="text-[11px] text-[--text-3] mt-0.5">{fmtDate(line.date)}</p>
+                        <p className="text-[11px] text-[--text-3] mt-0.5">{fmtDate(line.date, isAr, { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className={`text-xs font-semibold tabular-nums ${line.amount >= 0 ? 'text-success-fg' : 'text-danger-fg'}`}>
                           {line.amount >= 0 ? '+' : '−'} {egp(line.amount)}
                         </span>
                         {isMatched ? (
-                          <span className="badge badge-success">Matched</span>
+                          <span className="badge badge-success">{isAr ? 'مطابق' : 'Matched'}</span>
                         ) : (
-                          <span className="badge badge-warning">Unmatched</span>
+                          <span className="badge badge-warning">{isAr ? 'غير مطابق' : 'Unmatched'}</span>
                         )}
                       </div>
                     </div>
                   );
                 })}
                 {stmtLines.length === 0 && (
-                  <p className="p-6 text-xs text-[--text-3] text-center">No statement lines found.</p>
+                  <p className="p-6 text-xs text-[--text-3] text-center">{isAr ? 'لا توجد حركات في الكشف.' : 'No statement lines found.'}</p>
                 )}
               </div>
             )}
@@ -302,20 +309,20 @@ export default function ReconciliationPage() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
               </svg>
-              <span className="text-[10px] font-medium leading-tight">Match</span>
+              <span className="text-[10px] font-medium leading-tight">{isAr ? 'طابق' : 'Match'}</span>
             </button>
             {selectedStmt && !selectedBook && (
-              <p className="text-[10px] text-[--text-3] text-center w-16">Select a book entry →</p>
+              <p className="text-[10px] text-[--text-3] text-center w-16">{isAr ? 'اختر قيدًا ←' : 'Select a book entry →'}</p>
             )}
             {!selectedStmt && selectedBook && (
-              <p className="text-[10px] text-[--text-3] text-center w-16">← Select a statement line</p>
+              <p className="text-[10px] text-[--text-3] text-center w-16">{isAr ? '← اختر حركة' : '← Select a statement line'}</p>
             )}
           </div>
 
           {/* RIGHT: Book Transactions */}
           <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-[--border] bg-[--surface-2]">
-              <p className="section-label mb-0">Matched Journal Entries</p>
+              <p className="section-label mb-0">{isAr ? 'قيود دفتر الأستاذ' : 'Matched Journal Entries'}</p>
             </div>
             {(bookLoading && accountId) ? (
               <p className="p-6 text-xs text-[--text-3]">Loading…</p>
@@ -341,7 +348,7 @@ export default function ReconciliationPage() {
                           {entry.description}
                         </p>
                         <p className="text-[11px] text-[--text-3] mt-0.5">
-                          {fmtDate(entry.date)}
+                          {fmtDate(entry.date, isAr, { day: '2-digit', month: 'short', year: 'numeric' })}
                           {entry.reference && <span className="ml-2 font-mono">{entry.reference}</span>}
                         </p>
                       </div>
@@ -350,9 +357,9 @@ export default function ReconciliationPage() {
                           {entry.amount >= 0 ? '+' : '−'} {egp(entry.amount)}
                         </span>
                         {isMatched ? (
-                          <span className="badge badge-success">Confirmed</span>
+                          <span className="badge badge-success">{isAr ? 'مؤكد' : 'Confirmed'}</span>
                         ) : (
-                          <span className="badge badge-warning">Unmatched</span>
+                          <span className="badge badge-warning">{isAr ? 'غير مطابق' : 'Unmatched'}</span>
                         )}
                       </div>
                     </div>
@@ -362,11 +369,11 @@ export default function ReconciliationPage() {
                 {/* Unmatched placeholder block */}
                 {bookEntries.filter((e) => !e.matched).length === 0 && accountId && (
                   <div className="px-4 py-4 border-2 border-dashed border-[--border-strong] m-3 rounded-lg">
-                    <p className="text-xs text-warning-fg font-medium mb-1">Unmatched Statement Line</p>
-                    <p className="text-[11px] text-[--text-3]">No matching entry found in GL</p>
+                    <p className="text-xs text-warning-fg font-medium mb-1">{isAr ? 'حركة كشف غير مطابقة' : 'Unmatched Statement Line'}</p>
+                    <p className="text-[11px] text-[--text-3]">{isAr ? 'لا يوجد قيد مطابق في دفتر الأستاذ' : 'No matching entry found in GL'}</p>
                     <div className="flex gap-2 mt-3">
-                      <button className="btn btn-sm btn-ghost text-[11px]">Find Entry</button>
-                      <button className="btn btn-sm btn-primary text-[11px]">+ Create Entry</button>
+                      <button className="btn btn-sm btn-ghost text-[11px]">{isAr ? 'بحث عن قيد' : 'Find Entry'}</button>
+                      <button className="btn btn-sm btn-primary text-[11px]">{isAr ? '+ إنشاء قيد' : '+ Create Entry'}</button>
                     </div>
                   </div>
                 )}
@@ -382,29 +389,29 @@ export default function ReconciliationPage() {
         <div className="card p-4">
           <div className="grid grid-cols-5 gap-4 items-center">
             <div>
-              <p className="text-[11px] text-[--text-3] font-medium uppercase tracking-wider mb-1">Statement Balance</p>
+              <p className="text-[11px] text-[--text-3] font-medium uppercase tracking-wider mb-1">{isAr ? 'الرصيد البنكي' : 'Statement Balance'}</p>
               <p className="text-sm font-semibold text-[--text-1] tabular-nums">{egp(stmtBalance)}</p>
             </div>
             <div>
-              <p className="text-[11px] text-[--text-3] font-medium uppercase tracking-wider mb-1">Outstanding Deposits</p>
+              <p className="text-[11px] text-[--text-3] font-medium uppercase tracking-wider mb-1">{isAr ? 'الإيداعات المعلقة' : 'Outstanding Deposits'}</p>
               <p className="text-sm font-semibold text-success tabular-nums">+ {egp(outstandingDeposits)}</p>
             </div>
             <div>
-              <p className="text-[11px] text-[--text-3] font-medium uppercase tracking-wider mb-1">Outstanding Withdrawals</p>
+              <p className="text-[11px] text-[--text-3] font-medium uppercase tracking-wider mb-1">{isAr ? 'السحوبات المعلقة' : 'Outstanding Withdrawals'}</p>
               <p className="text-sm font-semibold text-danger tabular-nums">− {egp(outstandingWithdrawals)}</p>
             </div>
             <div>
-              <p className="text-[11px] text-[--text-3] font-medium uppercase tracking-wider mb-1">Book Balance</p>
+              <p className="text-[11px] text-[--text-3] font-medium uppercase tracking-wider mb-1">{isAr ? 'رصيد دفتر الأستاذ' : 'Book Balance'}</p>
               <p className="text-sm font-semibold text-[--text-1] tabular-nums">{egp(bookBalance)}</p>
             </div>
             <div className={`rounded-lg px-4 py-3 ${balanced ? 'bg-success-bg' : 'bg-danger-bg'}`}>
               <p className={`text-[11px] font-medium uppercase tracking-wider mb-1 ${balanced ? 'text-success-fg' : 'text-danger-fg'}`}>
-                Difference
+                {isAr ? 'الفرق' : 'Difference'}
               </p>
               <p className={`text-lg font-bold tabular-nums ${balanced ? 'text-success-fg' : 'text-danger-fg'}`}>
                 {balanced ? 'EGP 0' : egp(diff)}
               </p>
-              {balanced && <p className="text-[10px] text-success-fg mt-0.5">Ready to complete</p>}
+              {balanced && <p className="text-[10px] text-success-fg mt-0.5">{isAr ? 'جاهز للإكمال' : 'Ready to complete'}</p>}
             </div>
           </div>
         </div>

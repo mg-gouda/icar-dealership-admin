@@ -16,7 +16,6 @@ interface Props {
   label?: string;
   disabled?: boolean;
   className?: string;
-  /** Allow clearing the selection (shows "— All —" or placeholder as first option) */
   clearable?: boolean;
   clearLabel?: string;
 }
@@ -32,21 +31,20 @@ export default function SearchableCombobox({
   clearable = false,
   clearLabel = 'All',
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen]     = useState(false);
   const [search, setSearch] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const id = useId();
+  const containerRef        = useRef<HTMLDivElement>(null);
+  const inputRef            = useRef<HTMLInputElement>(null);
+  const id                  = useId();
 
   const selected = options.find((o) => o.value === value);
-  const display = selected?.label ?? '';
+  const display  = selected?.label ?? '';
 
   const filtered = options.filter((o) =>
     o.label.toLowerCase().includes(search.toLowerCase()) ||
     (o.description?.toLowerCase().includes(search.toLowerCase()) ?? false),
   );
 
-  // Close on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (!containerRef.current?.contains(e.target as Node)) {
@@ -79,7 +77,7 @@ export default function SearchableCombobox({
   return (
     <div ref={containerRef} className={`relative ${className}`}>
       {label && (
-        <label htmlFor={id} className="block text-xs text-gray-500 mb-1">{label}</label>
+        <label htmlFor={id} className="input-label">{label}</label>
       )}
 
       {/* Trigger */}
@@ -88,31 +86,67 @@ export default function SearchableCombobox({
         type="button"
         onClick={openDropdown}
         disabled={disabled}
-        className={`
-          w-full flex items-center justify-between gap-2
-          bg-gray-800 border text-white text-xs rounded-lg px-3 py-1.5
-          focus:outline-none focus:ring-1 focus:ring-blue-500 transition
-          ${disabled ? 'opacity-50 cursor-not-allowed border-white/5' : 'border-white/10 hover:border-white/20 cursor-pointer'}
-          ${open ? 'border-blue-500/50 ring-1 ring-blue-500/40' : ''}
-        `}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.5rem',
+          background: 'var(--surface)',
+          border: `1px solid ${open ? 'var(--primary)' : 'var(--border)'}`,
+          borderRadius: '0.4rem',
+          padding: '0.5rem 0.75rem',
+          fontSize: '0.8125rem',
+          color: display ? 'var(--text-1)' : 'var(--text-3)',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.5 : 1,
+          outline: 'none',
+          boxShadow: open ? '0 0 0 3px oklch(from var(--primary) l c h / 0.12)' : 'none',
+          transition: 'border-color 150ms, box-shadow 150ms',
+        }}
       >
-        <span className={display ? 'text-white' : 'text-gray-500'}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {display || placeholder}
         </span>
-        <svg className={`w-3.5 h-3.5 text-gray-500 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
-          fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          style={{
+            width: '0.875rem', height: '0.875rem',
+            color: 'var(--text-3)', flexShrink: 0,
+            transform: open ? 'rotate(180deg)' : 'none',
+            transition: 'transform 150ms',
+          }}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute z-50 mt-1 w-full min-w-[180px] rounded-xl border border-white/10 bg-gray-850 bg-gray-900 shadow-xl shadow-black/40 overflow-hidden">
-          {/* Search input */}
-          <div className="p-2 border-b border-white/5">
-            <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-2.5 py-1.5">
-              <svg className="w-3.5 h-3.5 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        <div style={{
+          position: 'absolute',
+          zIndex: 50,
+          marginTop: '0.25rem',
+          width: '100%',
+          minWidth: '11rem',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: '0.625rem',
+          boxShadow: '0 8px 24px oklch(0 0 0 / 0.12)',
+          overflow: 'hidden',
+        }}>
+          {/* Search */}
+          <div style={{ padding: '0.5rem', borderBottom: '1px solid var(--border)' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '0.5rem',
+              background: 'var(--surface-2)',
+              borderRadius: '0.4rem',
+              padding: '0.35rem 0.625rem',
+            }}>
+              <svg style={{ width: '0.875rem', height: '0.875rem', color: 'var(--text-3)', flexShrink: 0 }}
+                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input
                 ref={inputRef}
@@ -121,43 +155,71 @@ export default function SearchableCombobox({
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Search…"
-                className="bg-transparent text-white text-xs placeholder-gray-600 focus:outline-none w-full"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  fontSize: '0.8125rem',
+                  color: 'var(--text-1)',
+                  width: '100%',
+                }}
               />
             </div>
           </div>
 
           {/* Options */}
-          <div className="max-h-52 overflow-y-auto py-1">
+          <div style={{ maxHeight: '13rem', overflowY: 'auto', padding: '0.25rem 0' }}>
             {clearable && (
               <button
                 type="button"
                 onClick={() => select('')}
-                className={`w-full text-left px-3 py-2 text-xs transition ${
-                  value === '' ? 'bg-blue-600/20 text-blue-300' : 'text-gray-400 hover:bg-white/5 hover:text-white'
-                }`}
+                style={{
+                  width: '100%', textAlign: 'start',
+                  padding: '0.5rem 0.75rem',
+                  fontSize: '0.8125rem',
+                  background: value === '' ? 'var(--info-bg)' : 'transparent',
+                  color: value === '' ? 'var(--primary)' : 'var(--text-2)',
+                  border: 'none', cursor: 'pointer',
+                  transition: 'background 100ms',
+                }}
+                onMouseEnter={(e) => { if (value !== '') (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-2)'; }}
+                onMouseLeave={(e) => { if (value !== '') (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
               >
                 — {clearLabel} —
               </button>
             )}
-            {filtered.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => select(o.value)}
-                className={`w-full text-left px-3 py-2 text-xs transition ${
-                  o.value === value
-                    ? 'bg-blue-600/20 text-blue-300'
-                    : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                <span className="block">{o.label}</span>
-                {o.description && (
-                  <span className="block text-gray-500 mt-0.5">{o.description}</span>
-                )}
-              </button>
-            ))}
+            {filtered.map((o) => {
+              const active = o.value === value;
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => select(o.value)}
+                  style={{
+                    width: '100%', textAlign: 'start',
+                    padding: '0.5rem 0.75rem',
+                    fontSize: '0.8125rem',
+                    background: active ? 'var(--info-bg)' : 'transparent',
+                    color: active ? 'var(--primary)' : 'var(--text-1)',
+                    border: 'none', cursor: 'pointer',
+                    transition: 'background 100ms',
+                  }}
+                  onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-2)'; }}
+                  onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                >
+                  <span style={{ display: 'block' }}>{o.label}</span>
+                  {o.description && (
+                    <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-3)', marginTop: '0.125rem' }}>
+                      {o.description}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
             {filtered.length === 0 && (
-              <p className="px-3 py-3 text-xs text-gray-600 text-center">No results for "{search}"</p>
+              <p style={{ padding: '0.75rem', fontSize: '0.8125rem', color: 'var(--text-3)', textAlign: 'center' }}>
+                No results for &ldquo;{search}&rdquo;
+              </p>
             )}
           </div>
         </div>

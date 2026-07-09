@@ -6,6 +6,8 @@ import { useRouter, useParams } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
 import ScannerModal, { PART_FORMATS } from '../../../../components/ScannerModal';
+import { useLang } from '@/lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
 
 const fmt = (n: number) => 'EGP ' + n.toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -37,12 +39,6 @@ interface ServiceOrder {
   total: number;
 }
 
-const LINE_TYPE_OPTS = [
-  { value: 'LABOR', label: 'Labor' },
-  { value: 'PART', label: 'Part' },
-  { value: 'OTHER', label: 'Other' },
-];
-
 function lineTypeBadge(t: string): string {
   if (t === 'LABOR') return 'badge-info';
   if (t === 'PART') return 'badge-success';
@@ -69,6 +65,13 @@ export default function ServiceOrderDetailPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
+  const { isAr } = useLang();
+
+  const LINE_TYPE_OPTS = [
+    { value: 'LABOR', label: isAr ? 'عمالة' : 'Labor' },
+    { value: 'PART', label: isAr ? 'قطعة' : 'Part' },
+    { value: 'OTHER', label: isAr ? 'أخرى' : 'Other' },
+  ];
 
   const { data: order, loading, error, reload } = useQuery<ServiceOrder>(`/service-orders/${id}`, [id]);
 
@@ -84,7 +87,10 @@ export default function ServiceOrderDetailPage() {
 
   const submitLine = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!lineForm.description || !lineForm.unitPrice) { setLineErr('Description and unit price required.'); return; }
+    if (!lineForm.description || !lineForm.unitPrice) {
+      setLineErr(isAr ? 'الوصف وسعر الوحدة مطلوبان.' : 'Description and unit price required.');
+      return;
+    }
     setLineSaving(true); setLineErr('');
     try {
       await apiFetch(`/service-orders/${id}/lines`, {
@@ -100,12 +106,12 @@ export default function ServiceOrderDetailPage() {
       setShowAddLine(false);
       reload();
     } catch (err: unknown) {
-      setLineErr(err instanceof Error ? err.message : 'Error adding line');
+      setLineErr(err instanceof Error ? err.message : (isAr ? 'خطأ في إضافة البند' : 'Error adding line'));
     } finally {
       setLineSaving(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, lineForm, reload]);
+  }, [id, lineForm, reload, isAr]);
 
   const doAction = useCallback(async (endpoint: string, label: string) => {
     if (!window.confirm(`${label}?`)) return;
@@ -114,17 +120,17 @@ export default function ServiceOrderDetailPage() {
       await apiFetch(`/service-orders/${id}/${endpoint}`, { method: 'POST' });
       reload();
     } catch (err: unknown) {
-      setActionErr(err instanceof Error ? err.message : 'Action failed');
+      setActionErr(err instanceof Error ? err.message : (isAr ? 'فشل الإجراء' : 'Action failed'));
     } finally {
       setActionLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, reload]);
+  }, [id, reload, isAr]);
 
   if (loading) {
     return (
       <div className="page-body">
-        <p style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>Loading…</p>
+        <p style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>{isAr ? 'جاري التحميل…' : 'Loading…'}</p>
       </div>
     );
   }
@@ -132,7 +138,7 @@ export default function ServiceOrderDetailPage() {
   if (error || !order) {
     return (
       <div className="page-body">
-        <p style={{ color: 'var(--danger)', fontSize: '0.875rem' }}>{error ?? 'Order not found'}</p>
+        <p style={{ color: 'var(--danger)', fontSize: '0.875rem' }}>{error ?? (isAr ? 'الأمر غير موجود' : 'Order not found')}</p>
       </div>
     );
   }
@@ -149,12 +155,12 @@ export default function ServiceOrderDetailPage() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
             <Link href="/service" style={{ color: 'var(--text-3)', textDecoration: 'none', fontSize: '0.875rem' }}>
-              ← Service Center
+              ← {isAr ? 'مركز الصيانة' : 'Service Center'}
             </Link>
             <span style={{ color: 'var(--border)' }}>/</span>
             <span style={{ color: 'var(--text-1)', fontSize: '0.875rem', fontWeight: 500 }}>{orderNum}</span>
           </div>
-          <h1 className="page-title">Service Order {orderNum}</h1>
+          <h1 className="page-title">{isAr ? `أمر الصيانة ${orderNum}` : `Service Order ${orderNum}`}</h1>
         </div>
         <span
           className={`badge ${statusBadgeClass(order.status)}`}
@@ -172,10 +178,12 @@ export default function ServiceOrderDetailPage() {
 
             {/* Order info */}
             <div className="card" style={{ padding: '1.25rem' }}>
-              <p className="section-label" style={{ marginBottom: '1rem' }}>Order Information</p>
+              <p className="section-label" style={{ marginBottom: '1rem' }}>
+                {isAr ? 'معلومات الأمر' : 'Order Information'}
+              </p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem 2rem' }}>
                 <div>
-                  <p style={FIELD_LABEL}>Vehicle</p>
+                  <p style={FIELD_LABEL}>{isAr ? 'السيارة' : 'Vehicle'}</p>
                   <p style={{ fontWeight: 500 }}>
                     {order.vehicle ? `${order.vehicle.year} ${order.vehicle.make} ${order.vehicle.model}` : '—'}
                   </p>
@@ -183,11 +191,11 @@ export default function ServiceOrderDetailPage() {
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{order.vehicle.licensePlate}</p>
                   )}
                   {order.vehicle?.vin && (
-                    <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', fontFamily: 'monospace' }}>VIN: {order.vehicle.vin}</p>
+                    <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', fontFamily: 'monospace' }}>{isAr ? 'الشاسيه' : 'VIN'}: {order.vehicle.vin}</p>
                   )}
                 </div>
                 <div>
-                  <p style={FIELD_LABEL}>Customer</p>
+                  <p style={FIELD_LABEL}>{isAr ? 'العميل' : 'Customer'}</p>
                   <p style={{ fontWeight: 500 }}>{order.customer?.name ?? '—'}</p>
                   {order.customer?.phone && (
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{order.customer.phone}</p>
@@ -197,41 +205,41 @@ export default function ServiceOrderDetailPage() {
                   )}
                 </div>
                 <div>
-                  <p style={FIELD_LABEL}>Service Type</p>
+                  <p style={FIELD_LABEL}>{isAr ? 'نوع الخدمة' : 'Service Type'}</p>
                   <p style={{ color: 'var(--text-2)' }}>{order.serviceType.replace(/_/g, ' ')}</p>
                 </div>
                 <div>
-                  <p style={FIELD_LABEL}>Technician</p>
+                  <p style={FIELD_LABEL}>{isAr ? 'الميكانيكي' : 'Technician'}</p>
                   <p style={{ color: 'var(--text-2)' }}>{order.technician?.name ?? '—'}</p>
                 </div>
                 <div>
-                  <p style={FIELD_LABEL}>Location</p>
+                  <p style={FIELD_LABEL}>{isAr ? 'الموقع' : 'Location'}</p>
                   <p style={{ color: 'var(--text-2)' }}>{order.location?.name ?? '—'}</p>
                 </div>
                 <div>
-                  <p style={FIELD_LABEL}>Date Created</p>
+                  <p style={FIELD_LABEL}>{isAr ? 'تاريخ الإنشاء' : 'Date Created'}</p>
                   <p style={{ color: 'var(--text-2)' }}>
-                    {new Date(order.createdAt).toLocaleDateString('en-EG', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {fmtDate(order.createdAt, isAr, { day: 'numeric', month: 'short', year: 'numeric' })}
                   </p>
                 </div>
                 {order.completedAt && (
                   <div>
-                    <p style={FIELD_LABEL}>Completed</p>
+                    <p style={FIELD_LABEL}>{isAr ? 'تاريخ الإكمال' : 'Completed'}</p>
                     <p style={{ color: 'var(--text-2)' }}>
-                      {new Date(order.completedAt).toLocaleDateString('en-EG', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {fmtDate(order.completedAt, isAr, { day: 'numeric', month: 'short', year: 'numeric' })}
                     </p>
                   </div>
                 )}
               </div>
               {order.description && (
                 <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
-                  <p style={FIELD_LABEL}>Description</p>
+                  <p style={FIELD_LABEL}>{isAr ? 'الوصف' : 'Description'}</p>
                   <p style={{ color: 'var(--text-2)', fontSize: '0.875rem' }}>{order.description}</p>
                 </div>
               )}
               {order.internalNotes && (
                 <div style={{ marginTop: '0.75rem' }}>
-                  <p style={FIELD_LABEL}>Internal Notes</p>
+                  <p style={FIELD_LABEL}>{isAr ? 'ملاحظات داخلية' : 'Internal Notes'}</p>
                   <p style={{ color: 'var(--text-2)', fontSize: '0.875rem' }}>{order.internalNotes}</p>
                 </div>
               )}
@@ -240,28 +248,28 @@ export default function ServiceOrderDetailPage() {
             {/* Service lines */}
             <div className="card" style={{ overflow: 'hidden' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)' }}>
-                <p className="section-label" style={{ margin: 0 }}>Service Lines</p>
+                <p className="section-label" style={{ margin: 0 }}>{isAr ? 'بنود الخدمة' : 'Service Lines'}</p>
                 {order.status !== 'INVOICED' && order.status !== 'CANCELLED' && (
                   <button className="btn btn-ghost btn-sm" onClick={() => setShowAddLine((v) => !v)}>
-                    {showAddLine ? 'Cancel' : '+ Add Line'}
+                    {showAddLine ? (isAr ? 'إلغاء' : 'Cancel') : (isAr ? '+ إضافة بند' : '+ Add Line')}
                   </button>
                 )}
               </div>
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Type</th>
-                    <th>Description</th>
-                    <th style={{ textAlign: 'right' }}>Qty</th>
-                    <th style={{ textAlign: 'right' }}>Unit Price</th>
-                    <th style={{ textAlign: 'right' }}>Total</th>
+                    <th>{isAr ? 'النوع' : 'Type'}</th>
+                    <th>{isAr ? 'الوصف' : 'Description'}</th>
+                    <th style={{ textAlign: 'right' }}>{isAr ? 'الكمية' : 'Qty'}</th>
+                    <th style={{ textAlign: 'right' }}>{isAr ? 'سعر الوحدة' : 'Unit Price'}</th>
+                    <th style={{ textAlign: 'right' }}>{isAr ? 'الإجمالي' : 'Total'}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(order.lines ?? []).map((l) => (
                     <tr key={l.id}>
                       <td>
-                        <span className={`badge ${lineTypeBadge(l.lineType)}`}>{l.lineType}</span>
+                        <span className={`badge ${lineTypeBadge(l.lineType)}`}>{isAr ? ({ LABOR: 'عمالة', PART: 'قطعة', OTHER: 'أخرى' }[l.lineType] ?? l.lineType) : l.lineType}</span>
                       </td>
                       <td style={{ color: 'var(--text-1)' }}>{l.description}</td>
                       <td style={{ textAlign: 'right', color: 'var(--text-2)' }}>{l.qty}</td>
@@ -272,7 +280,7 @@ export default function ServiceOrderDetailPage() {
                   {(order.lines ?? []).length === 0 && !showAddLine && (
                     <tr>
                       <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)' }}>
-                        No lines yet. Add labor or parts above.
+                        {isAr ? 'لا توجد بنود. أضف عمالة أو قطع أعلاه.' : 'No lines yet. Add labor or parts above.'}
                       </td>
                     </tr>
                   )}
@@ -294,7 +302,7 @@ export default function ServiceOrderDetailPage() {
                   }}
                 >
                   <div style={{ width: 130 }}>
-                    <label className="input-label">Type</label>
+                    <label className="input-label">{isAr ? 'النوع' : 'Type'}</label>
                     <SearchableCombobox
                       options={LINE_TYPE_OPTS}
                       value={lineForm.lineType}
@@ -302,11 +310,11 @@ export default function ServiceOrderDetailPage() {
                     />
                   </div>
                   <div style={{ flex: '1 1 200px' }}>
-                    <label className="input-label">Description *</label>
+                    <label className="input-label">{isAr ? 'الوصف *' : 'Description *'}</label>
                     <div style={{ display: 'flex', gap: '0.375rem' }}>
                       <input
                         className="input"
-                        placeholder="Description…"
+                        placeholder={isAr ? 'الوصف…' : 'Description…'}
                         value={lineForm.description}
                         onChange={(e) => setLineForm({ ...lineForm, description: e.target.value })}
                         required
@@ -315,7 +323,7 @@ export default function ServiceOrderDetailPage() {
                       {lineForm.lineType === 'PART' && (
                         <button
                           type="button"
-                          title="Scan part barcode"
+                          title={isAr ? 'مسح الباركود' : 'Scan part barcode'}
                           disabled={scanningPart}
                           onClick={() => setShowPartScanner(true)}
                           style={{
@@ -336,7 +344,7 @@ export default function ServiceOrderDetailPage() {
                     </div>
                   </div>
                   <div style={{ width: 80 }}>
-                    <label className="input-label">Qty</label>
+                    <label className="input-label">{isAr ? 'الكمية' : 'Qty'}</label>
                     <input
                       type="number"
                       min="0.01"
@@ -347,7 +355,7 @@ export default function ServiceOrderDetailPage() {
                     />
                   </div>
                   <div style={{ width: 130 }}>
-                    <label className="input-label">Unit Price *</label>
+                    <label className="input-label">{isAr ? 'سعر الوحدة *' : 'Unit Price *'}</label>
                     <input
                       type="number"
                       min="0"
@@ -368,7 +376,7 @@ export default function ServiceOrderDetailPage() {
                     disabled={lineSaving}
                     style={{ alignSelf: 'flex-end' }}
                   >
-                    {lineSaving ? 'Adding…' : 'Add'}
+                    {lineSaving ? (isAr ? 'جاري الإضافة…' : 'Adding…') : (isAr ? 'إضافة' : 'Add')}
                   </button>
                 </form>
               )}
@@ -380,14 +388,14 @@ export default function ServiceOrderDetailPage() {
 
             {/* Summary */}
             <div className="card" style={{ padding: '1.25rem' }}>
-              <p className="section-label" style={{ marginBottom: '1rem' }}>Summary</p>
+              <p className="section-label" style={{ marginBottom: '1rem' }}>{isAr ? 'الملخص' : 'Summary'}</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
-                  <span style={{ color: 'var(--text-2)' }}>Labor</span>
+                  <span style={{ color: 'var(--text-2)' }}>{isAr ? 'العمالة' : 'Labor'}</span>
                   <span className="tabular-nums">{fmt(Number(order.laborTotal ?? 0))}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
-                  <span style={{ color: 'var(--text-2)' }}>Parts</span>
+                  <span style={{ color: 'var(--text-2)' }}>{isAr ? 'القطع' : 'Parts'}</span>
                   <span className="tabular-nums">{fmt(Number(order.partsTotal ?? 0))}</span>
                 </div>
                 <div
@@ -400,7 +408,7 @@ export default function ServiceOrderDetailPage() {
                     fontWeight: 700,
                   }}
                 >
-                  <span>Grand Total</span>
+                  <span>{isAr ? 'الإجمالي الكلي' : 'Grand Total'}</span>
                   <span className="tabular-nums" style={{ color: 'var(--primary)' }}>
                     {fmt(Number(order.total ?? 0))}
                   </span>
@@ -410,15 +418,15 @@ export default function ServiceOrderDetailPage() {
 
             {/* Actions */}
             <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
-              <p className="section-label" style={{ marginBottom: '0.25rem' }}>Actions</p>
+              <p className="section-label" style={{ marginBottom: '0.25rem' }}>{isAr ? 'الإجراءات' : 'Actions'}</p>
               {canComplete && (
                 <button
                   className="btn btn-primary"
                   style={{ width: '100%' }}
                   disabled={actionLoading}
-                  onClick={() => doAction('complete', 'Mark this order as complete')}
+                  onClick={() => doAction('complete', isAr ? 'تعليم هذا الأمر كمكتمل' : 'Mark this order as complete')}
                 >
-                  Mark Complete
+                  {isAr ? 'تعليم كمكتمل' : 'Mark Complete'}
                 </button>
               )}
               {canInvoice && (
@@ -426,14 +434,14 @@ export default function ServiceOrderDetailPage() {
                   className="btn btn-primary"
                   style={{ width: '100%' }}
                   disabled={actionLoading}
-                  onClick={() => doAction('invoice', 'Create invoice for this order')}
+                  onClick={() => doAction('invoice', isAr ? 'إنشاء فاتورة لهذا الأمر' : 'Create invoice for this order')}
                 >
-                  Create Invoice
+                  {isAr ? 'إنشاء فاتورة' : 'Create Invoice'}
                 </button>
               )}
               {!canComplete && !canInvoice && (
                 <p style={{ color: 'var(--text-3)', fontSize: '0.8rem' }}>
-                  No actions available for current status.
+                  {isAr ? 'لا توجد إجراءات متاحة للحالة الحالية.' : 'No actions available for current status.'}
                 </p>
               )}
               {actionErr && (
@@ -449,8 +457,8 @@ export default function ServiceOrderDetailPage() {
     {showPartScanner && (
       <ScannerModal
         formats={PART_FORMATS}
-        title="Scan Part"
-        hint="Scan the barcode or QR on the spare part or its packaging"
+        title={isAr ? 'مسح القطعة' : 'Scan Part'}
+        hint={isAr ? 'امسح الباركود أو QR على قطعة الغيار أو عبوتها' : 'Scan the barcode or QR on the spare part or its packaging'}
         onScan={async (code) => {
           setShowPartScanner(false);
           setScanningPart(true);
@@ -465,11 +473,11 @@ export default function ServiceOrderDetailPage() {
               }));
             } else {
               setLineForm(f => ({ ...f, lineType: 'PART', description: code }));
-              setLineErr(`Part "${code}" not in inventory — enter details manually.`);
+              setLineErr(isAr ? `القطعة "${code}" غير موجودة في المخزن — أدخل التفاصيل يدوياً.` : `Part "${code}" not in inventory — enter details manually.`);
             }
           } catch {
             setLineForm(f => ({ ...f, lineType: 'PART', description: code }));
-            setLineErr('Lookup failed — filled code, verify manually.');
+            setLineErr(isAr ? 'فشل البحث — تم ملء الكود، تحقق يدوياً.' : 'Lookup failed — filled code, verify manually.');
           } finally {
             setScanningPart(false);
           }

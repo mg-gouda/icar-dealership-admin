@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import { useLang } from '@/lib/lang-context';
+import { ErrorBanner } from '@/components/ui/error-banner';
 
 interface Vendor {
   id: string;
@@ -42,6 +44,7 @@ const EMPTY_FORM = {
 
 export default function VendorsPage() {
   const router = useRouter();
+  const { isAr } = useLang();
 
   const [search, setSearch] = useState('');
   const [currencyFilter, setCurrencyFilter] = useState('');
@@ -57,7 +60,7 @@ export default function VendorsPage() {
   }).toString();
 
   const { data, loading, error, reload } = useQuery<{ data: Vendor[]; total: number }>(
-    `/finance/vendors?${qs}`,
+    `/partners?type=VENDOR&${qs}`,
     [qs],
   );
 
@@ -70,14 +73,15 @@ export default function VendorsPage() {
   }
 
   async function saveVendor() {
-    if (!form.name.trim()) { setSaveErr('Name is required.'); return; }
+    if (!form.name.trim()) { setSaveErr(isAr ? 'الاسم مطلوب.' : 'Name is required.'); return; }
     setSaving(true);
     setSaveErr('');
     try {
-      await apiFetch('/finance/vendors', {
+      await apiFetch('/partners', {
         method: 'POST',
         body: JSON.stringify({
           name: form.name,
+          partnerType: 'VENDOR',
           taxId: form.taxId || undefined,
           phone: form.phone || undefined,
           email: form.email || undefined,
@@ -88,7 +92,7 @@ export default function VendorsPage() {
       setShowModal(false);
       reload();
     } catch (e: unknown) {
-      setSaveErr(e instanceof Error ? e.message : 'Error saving vendor');
+      setSaveErr(e instanceof Error ? e.message : (isAr ? 'خطأ في حفظ المورد' : 'Error saving vendor'));
     } finally {
       setSaving(false);
     }
@@ -99,11 +103,13 @@ export default function VendorsPage() {
       {/* Page header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Vendors</h1>
-          <p className="page-subtitle">Accounts Payable — Supplier Directory</p>
+          <h1 className="page-title">{isAr ? 'الموردون' : 'Vendors'}</h1>
+          <p className="page-subtitle">
+            {isAr ? 'الذمم الدائنة — دليل الموردين' : 'Accounts Payable — Supplier Directory'}
+          </p>
         </div>
         <button onClick={openModal} className="btn btn-primary">
-          + New Vendor
+          {isAr ? '+ مورد جديد' : '+ New Vendor'}
         </button>
       </div>
 
@@ -120,12 +126,12 @@ export default function VendorsPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name or tax ID…"
+              placeholder={isAr ? 'بحث بالاسم أو الرقم الضريبي…' : 'Search by name or tax ID…'}
               className="input pl-9"
             />
           </div>
           <div className="w-40">
-            <label className="input-label">Currency</label>
+            <label className="input-label">{isAr ? 'العملة' : 'Currency'}</label>
             <SearchableCombobox
               options={CURRENCY_FILTER_OPTS}
               value={currencyFilter}
@@ -144,20 +150,20 @@ export default function VendorsPage() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
-              Loading vendors…
+              {isAr ? 'جاري تحميل الموردين…' : 'Loading vendors…'}
             </div>
           )}
-          {error && <p className="p-6 text-danger-fg text-sm">{error}</p>}
+          {error && <div className="p-4"><ErrorBanner error={error} retry={reload} /></div>}
           {!loading && (
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Tax ID</th>
-                  <th>Phone</th>
-                  <th>Email</th>
-                  <th>Currency</th>
-                  <th className="text-right">Balance (AP)</th>
+                  <th>{isAr ? 'الاسم' : 'Name'}</th>
+                  <th>{isAr ? 'الرقم الضريبي' : 'Tax ID'}</th>
+                  <th>{isAr ? 'الهاتف' : 'Phone'}</th>
+                  <th>{isAr ? 'البريد' : 'Email'}</th>
+                  <th>{isAr ? 'العملة' : 'Currency'}</th>
+                  <th className="text-right">{isAr ? 'الرصيد المستحق' : 'Balance (AP)'}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -189,7 +195,7 @@ export default function VendorsPage() {
                         onClick={(e) => { e.stopPropagation(); router.push(`/finance/vendors/${v.id}`); }}
                         className="btn btn-ghost btn-sm"
                       >
-                        View
+                        {isAr ? 'عرض' : 'View'}
                       </button>
                     </td>
                   </tr>
@@ -197,7 +203,7 @@ export default function VendorsPage() {
                 {vendors.length === 0 && (
                   <tr>
                     <td colSpan={7} className="py-12 text-center text-[--text-3]">
-                      No vendors found.
+                      {isAr ? 'لا يوجد موردون.' : 'No vendors found.'}
                     </td>
                   </tr>
                 )}
@@ -206,7 +212,9 @@ export default function VendorsPage() {
           )}
           {data && (
             <div className="px-4 py-2 border-t border-[--border] bg-[--surface-2] flex justify-between items-center">
-              <p className="text-xs text-[--text-3]">{data.total} total vendors</p>
+              <p className="text-xs text-[--text-3]">
+                {data.total} {isAr ? 'مورد إجمالاً' : 'total vendors'}
+              </p>
             </div>
           )}
         </div>
@@ -219,8 +227,12 @@ export default function VendorsPage() {
           <div className="card w-full max-w-lg p-6 space-y-5">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-base font-semibold text-[--text-1]">New Vendor</h2>
-                <p className="text-xs text-[--text-3] mt-0.5">Add a supplier to Accounts Payable</p>
+                <h2 className="text-base font-semibold text-[--text-1]">
+                  {isAr ? 'مورد جديد' : 'New Vendor'}
+                </h2>
+                <p className="text-xs text-[--text-3] mt-0.5">
+                  {isAr ? 'إضافة مورد إلى الذمم الدائنة' : 'Add a supplier to Accounts Payable'}
+                </p>
               </div>
               <button
                 onClick={() => setShowModal(false)}
@@ -232,17 +244,17 @@ export default function VendorsPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <label className="input-label">Name *</label>
+                <label className="input-label">{isAr ? 'الاسم *' : 'Name *'}</label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Vendor or company name"
+                  placeholder={isAr ? 'اسم المورد أو الشركة' : 'Vendor or company name'}
                   className="input"
                 />
               </div>
               <div>
-                <label className="input-label">Tax ID</label>
+                <label className="input-label">{isAr ? 'الرقم الضريبي' : 'Tax ID'}</label>
                 <input
                   type="text"
                   value={form.taxId}
@@ -252,7 +264,7 @@ export default function VendorsPage() {
                 />
               </div>
               <div>
-                <label className="input-label">Phone</label>
+                <label className="input-label">{isAr ? 'الهاتف' : 'Phone'}</label>
                 <input
                   type="text"
                   value={form.phone}
@@ -262,7 +274,7 @@ export default function VendorsPage() {
                 />
               </div>
               <div>
-                <label className="input-label">Email</label>
+                <label className="input-label">{isAr ? 'البريد الإلكتروني' : 'Email'}</label>
                 <input
                   type="email"
                   value={form.email}
@@ -272,7 +284,7 @@ export default function VendorsPage() {
                 />
               </div>
               <div>
-                <label className="input-label">Default Currency</label>
+                <label className="input-label">{isAr ? 'العملة الافتراضية' : 'Default Currency'}</label>
                 <SearchableCombobox
                   options={CURRENCY_OPTS}
                   value={form.defaultCurrency}
@@ -280,12 +292,12 @@ export default function VendorsPage() {
                 />
               </div>
               <div className="col-span-2">
-                <label className="input-label">Address</label>
+                <label className="input-label">{isAr ? 'العنوان' : 'Address'}</label>
                 <input
                   type="text"
                   value={form.address}
                   onChange={(e) => setForm({ ...form, address: e.target.value })}
-                  placeholder="Street, City, Egypt"
+                  placeholder={isAr ? 'الشارع، المدينة، مصر' : 'Street, City, Egypt'}
                   className="input"
                 />
               </div>
@@ -303,13 +315,13 @@ export default function VendorsPage() {
                 disabled={saving}
                 className="btn btn-primary flex-1"
               >
-                {saving ? 'Saving…' : 'Save Vendor'}
+                {saving ? (isAr ? 'جاري الحفظ…' : 'Saving…') : (isAr ? 'حفظ المورد' : 'Save Vendor')}
               </button>
               <button
                 onClick={() => setShowModal(false)}
                 className="btn btn-ghost"
               >
-                Cancel
+                {isAr ? 'إلغاء' : 'Cancel'}
               </button>
             </div>
           </div>

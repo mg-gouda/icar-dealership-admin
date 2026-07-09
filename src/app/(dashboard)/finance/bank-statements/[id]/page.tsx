@@ -5,6 +5,8 @@ import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../../lib/useApi';
 import StatusBadge from '../../../../../components/StatusBadge';
 import SearchableCombobox from '../../../../../components/ui/SearchableCombobox';
+import { useLang } from '@/lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
 
 interface StatementLine {
   id: string;
@@ -39,10 +41,6 @@ interface GlLine {
 const fmt = (n: number) =>
   Number(n).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const TYPE_OPTS = [
-  { value: 'DEBIT', label: 'Debit' },
-  { value: 'CREDIT', label: 'Credit' },
-];
 
 const blank = () => ({
   date: new Date().toISOString().slice(0, 10),
@@ -62,6 +60,7 @@ function MatchModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const { isAr } = useLang();
   const { data: glRaw, loading: glLoading } = useQuery<{ items?: GlLine[] } | GlLine[]>(
     '/finance/reconciliation/unreconciled-lines',
   );
@@ -87,7 +86,7 @@ function MatchModal({
       });
       onSuccess();
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : 'Match failed');
+      setErr(e instanceof Error ? e.message : isAr ? 'فشل التطابق' : 'Match failed');
     } finally {
       setMatching(false);
     }
@@ -99,9 +98,9 @@ function MatchModal({
       <div className="relative w-full max-w-2xl rounded-2xl bg-gray-900 border border-white/10 shadow-2xl flex flex-col max-h-[80vh]">
         <div className="flex items-center justify-between p-5 border-b border-white/5 flex-shrink-0">
           <div>
-            <h2 className="text-sm font-semibold text-white">Match GL Line</h2>
+            <h2 className="text-sm font-semibold text-white">{isAr ? 'مطابقة قيد دفتر الأستاذ' : 'Match GL Line'}</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              Statement line: {line.description ?? '—'} &nbsp;|&nbsp;
+              {isAr ? 'حركة الكشف' : 'Statement line'}: {line.description ?? '—'} &nbsp;|&nbsp;
               <span className={line.type === 'CREDIT' ? 'text-green-400' : 'text-red-400'}>
                 {line.type === 'CREDIT' ? '+' : '-'}{fmt(Math.abs(Number(line.amount)))} EGP
               </span>
@@ -111,9 +110,9 @@ function MatchModal({
         </div>
 
         <div className="overflow-y-auto flex-1 p-2">
-          {glLoading && <p className="p-4 text-gray-500 text-sm text-center">Loading GL lines…</p>}
+          {glLoading && <p className="p-4 text-gray-500 text-sm text-center">{isAr ? 'جارٍ تحميل قيود الأستاذ…' : 'Loading GL lines…'}</p>}
           {!glLoading && glLines.length === 0 && (
-            <p className="p-4 text-gray-600 text-sm text-center">No unreconciled GL lines found.</p>
+            <p className="p-4 text-gray-600 text-sm text-center">{isAr ? 'لا توجد قيود غير مسواة.' : 'No unreconciled GL lines found.'}</p>
           )}
           {glLines.map((gl) => (
             <div
@@ -129,7 +128,7 @@ function MatchModal({
                   {gl.account ? `${gl.account.code} — ${gl.account.name}` : gl.id.slice(-8)}
                 </p>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  {gl.journalEntry?.date ? new Date(gl.journalEntry.date).toLocaleDateString('en-EG') : '—'}
+                  {gl.journalEntry?.date ? fmtDate(gl.journalEntry.date, isAr) : '—'}
                   {gl.journalEntry?.ref ? ` · ${gl.journalEntry.ref}` : ''}
                   {gl.label ? ` · ${gl.label}` : ''}
                 </p>
@@ -147,11 +146,11 @@ function MatchModal({
         <div className="flex gap-3 p-5 border-t border-white/5 flex-shrink-0">
           <button onClick={onClose}
             className="flex-1 py-2 text-sm text-gray-400 border border-white/10 rounded-lg hover:text-white transition">
-            Cancel
+            {isAr ? 'إلغاء' : 'Cancel'}
           </button>
           <button onClick={confirm} disabled={!selected || matching}
             className="flex-1 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition">
-            {matching ? 'Matching…' : 'Match'}
+            {matching ? '…' : (isAr ? 'مطابقة' : 'Match')}
           </button>
         </div>
       </div>
@@ -163,6 +162,7 @@ function MatchModal({
 export default function BankStatementDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { isAr } = useLang();
 
   const { data: statement, loading, error, reload } = useQuery<Statement>(
     `/finance/bank-statements/${id}`,
@@ -199,7 +199,7 @@ export default function BankStatementDetailPage() {
       setSuggestLineId(null);
       reload();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Reconciliation failed');
+      alert(err instanceof Error ? err.message : isAr ? 'فشل التسوية' : 'Reconciliation failed');
     }
   }
 
@@ -251,7 +251,7 @@ export default function BankStatementDetailPage() {
 
   async function addLine(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.date || !form.amount) { setFormErr('Date and amount required.'); return; }
+    if (!form.date || !form.amount) { setFormErr(isAr ? 'التاريخ والمبلغ مطلوبان.' : 'Date and amount required.'); return; }
     setSaving(true); setFormErr('');
     try {
       await apiFetch(`/finance/bank-statements/${id}/lines`, {
@@ -267,17 +267,19 @@ export default function BankStatementDetailPage() {
       setForm(blank());
       reload();
     } catch (e: unknown) {
-      setFormErr(e instanceof Error ? e.message : 'Failed to add line');
+      setFormErr(e instanceof Error ? e.message : isAr ? 'فشل إضافة السطر' : 'Failed to add line');
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) return <div className="p-6 text-gray-500 text-sm">Loading…</div>;
+  if (loading) return <div className="p-6 text-gray-500 text-sm">{isAr ? 'جارٍ التحميل…' : 'Loading…'}</div>;
   if (error || !statement) return (
     <div className="p-6">
-      <p className="text-red-400 text-sm mb-3">{error ?? 'Statement not found'}</p>
-      <button onClick={() => router.push('/finance/bank-statements')} className="text-blue-400 text-sm hover:text-blue-300">← Bank Statements</button>
+      <p className="text-red-400 text-sm mb-3">{error ?? (isAr ? 'الكشف غير موجود' : 'Statement not found')}</p>
+      <button onClick={() => router.push('/finance/bank-statements')} className="text-blue-400 text-sm hover:text-blue-300">
+        {isAr ? '← كشوف البنك' : '← Bank Statements'}
+      </button>
     </div>
   );
 
@@ -286,6 +288,13 @@ export default function BankStatementDetailPage() {
   const totalCredits = lines.filter((l) => l.type === 'CREDIT').reduce((s, l) => s + Math.abs(Number(l.amount)), 0);
   const net = totalCredits - totalDebits;
 
+  const summaryCards = [
+    { label: isAr ? 'الحساب البنكي' : 'Bank Account', value: statement.bankAccount?.name ?? '—' },
+    { label: isAr ? 'التاريخ' : 'Date', value: fmtDate(statement.date, isAr) },
+    { label: isAr ? 'الرصيد الافتتاحي' : 'Opening Balance', value: `EGP ${fmt(statement.startingBalance)}` },
+    { label: isAr ? 'الرصيد الختامي' : 'Closing Balance', value: `EGP ${fmt(statement.endingBalance)}` },
+  ];
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
@@ -293,7 +302,7 @@ export default function BankStatementDetailPage() {
         <div>
           <button onClick={() => router.push('/finance/bank-statements')}
             className="text-xs text-gray-500 hover:text-white transition mb-2 inline-block">
-            ← Bank Statements
+            {isAr ? '← العودة لكشوف البنك' : '← Bank Statements'}
           </button>
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-semibold text-white font-mono">{statement.reference}</h1>
@@ -305,11 +314,11 @@ export default function BankStatementDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <label className="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded-lg cursor-pointer transition">
-            Import CSV
+            {isAr ? 'استيراد CSV' : 'Import CSV'}
             <input type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
           </label>
           <label className="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded-lg cursor-pointer transition">
-            Import OFX
+            {isAr ? 'استيراد OFX' : 'Import OFX'}
             <input type="file" accept=".ofx,.qfx" className="hidden" onChange={handleOfxFile} />
           </label>
         </div>
@@ -318,25 +327,20 @@ export default function BankStatementDetailPage() {
       {csvBanner && (
         <div className={`mb-4 p-3 rounded-lg text-xs ${csvBanner.type === 'ok' ? 'bg-green-900/20 border border-green-500/20 text-green-300' : 'bg-red-900/20 border border-red-500/20 text-red-300'}`}>
           {csvBanner.msg}
-          <button onClick={() => setCsvBanner(null)} className="ml-3 underline">dismiss</button>
+          <button onClick={() => setCsvBanner(null)} className="ml-3 underline">{isAr ? 'تجاهل' : 'dismiss'}</button>
         </div>
       )}
 
       {ofxBanner && (
         <div className={`mb-4 p-3 rounded-lg text-xs ${ofxBanner.type === 'ok' ? 'bg-green-900/20 border border-green-500/20 text-green-300' : 'bg-red-900/20 border border-red-500/20 text-red-300'}`}>
           {ofxBanner.msg}
-          <button onClick={() => setOfxBanner(null)} className="ml-3 underline">dismiss</button>
+          <button onClick={() => setOfxBanner(null)} className="ml-3 underline">{isAr ? 'تجاهل' : 'dismiss'}</button>
         </div>
       )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        {[
-          { label: 'Bank Account', value: statement.bankAccount?.name ?? '—' },
-          { label: 'Date', value: new Date(statement.date).toLocaleDateString('en-EG') },
-          { label: 'Opening Balance', value: `EGP ${fmt(statement.startingBalance)}` },
-          { label: 'Closing Balance', value: `EGP ${fmt(statement.endingBalance)}` },
-        ].map((c) => (
+        {summaryCards.map((c) => (
           <div key={c.label} className="rounded-xl border border-white/5 bg-gray-900 p-4">
             <p className="text-xs text-gray-500 mb-1">{c.label}</p>
             <p className="text-sm text-white font-medium">{c.value}</p>
@@ -347,44 +351,47 @@ export default function BankStatementDetailPage() {
       {/* Lines section */}
       <div className="rounded-xl border border-white/5 bg-gray-900 overflow-hidden">
         <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Statement Lines</p>
-          <span className="text-xs text-gray-600">{lines.length} lines</span>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{isAr ? 'حركات الكشف' : 'Statement Lines'}</p>
+          <span className="text-xs text-gray-600">{lines.length} {isAr ? 'حركة' : 'lines'}</span>
         </div>
 
         {/* Add line form */}
         <form onSubmit={addLine} className="px-5 py-4 border-b border-white/5 bg-white/[0.02]">
-          <p className="text-xs text-gray-500 mb-3 font-medium">+ Add Line</p>
+          <p className="text-xs text-gray-500 mb-3 font-medium">+ {isAr ? 'إضافة حركة' : 'Add Line'}</p>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 items-end">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Date *</label>
+              <label className="block text-xs text-gray-500 mb-1">{isAr ? 'التاريخ *' : 'Date *'}</label>
               <input type="date" required value={form.date} onChange={(e) => set('date', e.target.value)}
                 className="w-full px-3 py-1.5 bg-gray-800 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Description</label>
+              <label className="block text-xs text-gray-500 mb-1">{isAr ? 'الوصف' : 'Description'}</label>
               <input value={form.description} onChange={(e) => set('description', e.target.value)}
-                placeholder="e.g. Wire transfer"
+                placeholder={isAr ? 'مثال: تحويل بنكي' : 'e.g. Wire transfer'}
                 className="w-full px-3 py-1.5 bg-gray-800 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Reference</label>
+              <label className="block text-xs text-gray-500 mb-1">{isAr ? 'المرجع' : 'Reference'}</label>
               <input value={form.reference} onChange={(e) => set('reference', e.target.value)}
-                placeholder="e.g. TXN-001"
+                placeholder={isAr ? 'مثال: TXN-001' : 'e.g. TXN-001'}
                 className="w-full px-3 py-1.5 bg-gray-800 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Amount *</label>
+              <label className="block text-xs text-gray-500 mb-1">{isAr ? 'المبلغ *' : 'Amount *'}</label>
               <input type="number" step="0.01" required value={form.amount} onChange={(e) => set('amount', e.target.value)}
                 placeholder="0.00"
                 className="w-full px-3 py-1.5 bg-gray-800 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500" />
             </div>
             <div>
               <SearchableCombobox
-                label="Type *"
-                options={TYPE_OPTS}
+                label={isAr ? 'النوع *' : 'Type *'}
+                options={[
+                  { value: 'DEBIT', label: isAr ? 'مدين' : 'Debit' },
+                  { value: 'CREDIT', label: isAr ? 'دائن' : 'Credit' },
+                ]}
                 value={form.type}
                 onChange={(v) => set('type', v)}
-                placeholder="Select type…"
+                placeholder={isAr ? 'اختر النوع…' : 'Select type…'}
               />
             </div>
           </div>
@@ -392,7 +399,7 @@ export default function BankStatementDetailPage() {
           <div className="mt-3 flex justify-end">
             <button type="submit" disabled={saving}
               className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition">
-              {saving ? 'Adding…' : 'Add Line'}
+              {saving ? '…' : (isAr ? 'إضافة حركة' : 'Add Line')}
             </button>
           </div>
         </form>
@@ -401,19 +408,19 @@ export default function BankStatementDetailPage() {
         <table className="w-full text-sm">
           <thead className="border-b border-white/5 text-xs text-gray-500">
             <tr>
-              <th className="px-5 py-3 text-left font-medium">Date</th>
-              <th className="px-5 py-3 text-left font-medium">Description</th>
-              <th className="px-5 py-3 text-left font-medium">Reference</th>
-              <th className="px-5 py-3 text-right font-medium">Amount</th>
-              <th className="px-5 py-3 text-center font-medium">Reconciled</th>
-              <th className="px-5 py-3 text-center font-medium">Match</th>
+              <th className="px-5 py-3 text-left font-medium">{isAr ? 'التاريخ' : 'Date'}</th>
+              <th className="px-5 py-3 text-left font-medium">{isAr ? 'الوصف' : 'Description'}</th>
+              <th className="px-5 py-3 text-left font-medium">{isAr ? 'المرجع' : 'Reference'}</th>
+              <th className="px-5 py-3 text-right font-medium">{isAr ? 'المبلغ' : 'Amount'}</th>
+              <th className="px-5 py-3 text-center font-medium">{isAr ? 'مطابق' : 'Reconciled'}</th>
+              <th className="px-5 py-3 text-center font-medium">{isAr ? 'مطابقة' : 'Match'}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
             {lines.map((l) => (
               <tr key={l.id} className="hover:bg-white/[0.03] transition">
                 <td className="px-5 py-2.5 text-gray-400 text-xs">
-                  {new Date(l.date).toLocaleDateString('en-EG')}
+                  {fmtDate(l.date, isAr)}
                 </td>
                 <td className="px-5 py-2.5 text-gray-300 text-xs">{l.description ?? '—'}</td>
                 <td className="px-5 py-2.5 text-gray-500 font-mono text-xs">{l.reference ?? '—'}</td>
@@ -433,18 +440,18 @@ export default function BankStatementDetailPage() {
                       <button
                         onClick={() => setMatchingLine(l)}
                         className="text-xs px-2 py-0.5 rounded border border-blue-500/30 text-blue-400 hover:text-blue-300 hover:border-blue-400 transition">
-                        Match
+                        {isAr ? 'مطابقة' : 'Match'}
                       </button>
                       <button
                         onClick={() => fetchSuggestions(l.id)}
                         className="text-xs px-2 py-0.5 rounded border border-amber-500/30 text-amber-400 hover:text-amber-300 hover:border-amber-400 transition">
-                        Suggest
+                        {isAr ? 'اقتراح' : 'Suggest'}
                       </button>
                       {suggestLineId === l.id && (
                         <div className="absolute right-0 top-7 z-30 w-72 bg-gray-800 border border-white/10 rounded-lg shadow-xl overflow-hidden">
-                          {suggestLoading && <p className="p-3 text-gray-500 text-xs">Loading...</p>}
+                          {suggestLoading && <p className="p-3 text-gray-500 text-xs">{isAr ? 'جارٍ التحميل...' : 'Loading...'}</p>}
                           {!suggestLoading && suggestions.length === 0 && (
-                            <p className="p-3 text-gray-600 text-xs">No matches found.</p>
+                            <p className="p-3 text-gray-600 text-xs">{isAr ? 'لا توجد تطابقات.' : 'No matches found.'}</p>
                           )}
                           {!suggestLoading && suggestions.map((s: any) => (
                             <button
@@ -453,7 +460,7 @@ export default function BankStatementDetailPage() {
                               className="w-full text-left px-3 py-2 hover:bg-white/5 border-b border-white/5 last:border-0 transition">
                               <p className="text-xs text-white">{s.account?.code} - {s.account?.name}</p>
                               <p className="text-[10px] text-gray-500">
-                                {s.journalEntry?.date ? new Date(s.journalEntry.date).toLocaleDateString('en-EG') : ''}
+                                {s.journalEntry?.date ? fmtDate(s.journalEntry.date, isAr) : ''}
                                 {s.journalEntry?.ref ? ` | ${s.journalEntry.ref}` : ''}
                                 {' | '}
                                 {Number(s.debit) > 0 ? `DR ${fmt(s.debit)}` : `CR ${fmt(s.credit)}`}
@@ -468,7 +475,7 @@ export default function BankStatementDetailPage() {
               </tr>
             ))}
             {lines.length === 0 && (
-              <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-600 text-sm">No lines yet.</td></tr>
+              <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-600 text-sm">{isAr ? 'لا توجد حركات بعد.' : 'No lines yet.'}</td></tr>
             )}
           </tbody>
 
@@ -476,14 +483,14 @@ export default function BankStatementDetailPage() {
           {lines.length > 0 && (
             <tfoot className="border-t border-white/10 bg-white/[0.02]">
               <tr>
-                <td colSpan={3} className="px-5 py-3 text-xs text-gray-500 font-medium">Totals</td>
+                <td colSpan={3} className="px-5 py-3 text-xs text-gray-500 font-medium">{isAr ? 'الإجماليات' : 'Totals'}</td>
                 <td className="px-5 py-3 text-right text-xs tabular-nums">
                   <span className="text-red-400 mr-3">-{fmt(totalDebits)}</span>
                   <span className="text-green-400">+{fmt(totalCredits)}</span>
                 </td>
                 <td className="px-5 py-3 text-center text-xs font-semibold">
                   <span className={net >= 0 ? 'text-green-400' : 'text-red-400'}>
-                    Net {net >= 0 ? '+' : ''}{fmt(net)}
+                    {isAr ? 'الصافي' : 'Net'} {net >= 0 ? '+' : ''}{fmt(net)}
                   </span>
                 </td>
                 <td />

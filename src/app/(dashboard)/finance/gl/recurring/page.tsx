@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../../lib/useApi';
 import SearchableCombobox from '../../../../../components/ui/SearchableCombobox';
+import { useLang } from '@/lib/lang-context';
 
 interface TemplateLine {
   id: string;
@@ -33,13 +34,16 @@ interface FormLine {
 
 const EMPTY_LINE = (): FormLine => ({ accountId: '', debit: '', credit: '', label: '' });
 
-const RECURRENCE_OPTS = [
-  { value: 'MONTHLY', label: 'Monthly' },
-  { value: 'QUARTERLY', label: 'Quarterly' },
-  { value: 'YEARLY', label: 'Yearly' },
-];
 
 export default function RecurringTemplatePage() {
+  const { isAr } = useLang();
+
+  const RECURRENCE_OPTS = [
+    { value: 'MONTHLY', label: isAr ? 'شهري' : 'Monthly' },
+    { value: 'QUARTERLY', label: isAr ? 'ربع سنوي' : 'Quarterly' },
+    { value: 'YEARLY', label: isAr ? 'سنوي' : 'Yearly' },
+  ];
+
   const { data: templates, loading, error, reload } = useQuery<Template[]>('/finance/gl/recurring');
   const { data: journalsRaw } = useQuery<any[]>('/finance/gl/journals');
   const { data: accountsRaw } = useQuery<any>('/finance/gl/accounts?limit=200');
@@ -84,11 +88,11 @@ export default function RecurringTemplatePage() {
 
   async function submitCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim()) { setSaveErr('Name required.'); return; }
-    if (!form.journalId) { setSaveErr('Select a journal.'); return; }
-    if (!balanced) { setSaveErr('Lines must balance (debits = credits, both > 0).'); return; }
+    if (!form.name.trim()) { setSaveErr(isAr ? 'الاسم مطلوب.' : 'Name required.'); return; }
+    if (!form.journalId) { setSaveErr(isAr ? 'اختر دفتراً.' : 'Select a journal.'); return; }
+    if (!balanced) { setSaveErr(isAr ? 'البنود يجب أن تكون متوازنة (المدين = الدائن، كلاهما > 0).' : 'Lines must balance (debits = credits, both > 0).'); return; }
     const validLines = lines.filter((l) => l.accountId && (Number(l.debit) > 0 || Number(l.credit) > 0));
-    if (validLines.length < 2) { setSaveErr('At least 2 lines required.'); return; }
+    if (validLines.length < 2) { setSaveErr(isAr ? 'مطلوب بندان على الأقل.' : 'At least 2 lines required.'); return; }
 
     setSaving(true); setSaveErr('');
     try {
@@ -111,7 +115,7 @@ export default function RecurringTemplatePage() {
       resetForm();
       reload();
     } catch (err: unknown) {
-      setSaveErr(err instanceof Error ? err.message : 'Error creating template');
+      setSaveErr(err instanceof Error ? err.message : (isAr ? 'خطأ في إنشاء القالب' : 'Error creating template'));
     } finally {
       setSaving(false);
     }
@@ -125,7 +129,7 @@ export default function RecurringTemplatePage() {
       setConfirmDeleteId(null);
       reload();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Delete failed');
+      alert(err instanceof Error ? err.message : (isAr ? 'فشل الحذف' : 'Delete failed'));
     } finally {
       setDeleting(false);
     }
@@ -135,33 +139,35 @@ export default function RecurringTemplatePage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-white">Recurring Journal Templates</h1>
-          <p className="text-xs text-gray-500 mt-0.5">{rows.length} template{rows.length !== 1 ? 's' : ''}</p>
+          <h1 className="text-xl font-semibold text-white">{isAr ? 'القوالب المتكررة' : 'Recurring Journal Templates'}</h1>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {rows.length} {isAr ? (rows.length !== 1 ? 'قوالب' : 'قالب') : `template${rows.length !== 1 ? 's' : ''}`}
+          </p>
         </div>
         <div className="flex gap-2">
           <Link href="/finance/gl"
             className="px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg border border-white/10 hover:border-white/20 transition">
-            &larr; GL
+            {isAr ? '← دفتر الأستاذ' : '← GL'}
           </Link>
           <button onClick={() => { resetForm(); setShowNew(true); }}
             className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition font-medium">
-            + New Template
+            {isAr ? '+ قالب جديد' : '+ New Template'}
           </button>
         </div>
       </div>
 
       <div className="rounded-xl border border-white/5 bg-gray-900 overflow-hidden">
-        {loading && <p className="p-6 text-gray-500 text-sm">Loading...</p>}
+        {loading && <p className="p-6 text-gray-500 text-sm">{isAr ? 'تحميل…' : 'Loading...'}</p>}
         {error && <p className="p-6 text-red-400 text-sm">{error}</p>}
         {!loading && (
           <table className="w-full text-sm">
             <thead className="border-b border-white/5 text-gray-400 text-xs">
               <tr>
-                <th className="px-4 py-3 text-left font-medium">Name</th>
-                <th className="px-4 py-3 text-left font-medium">Journal</th>
-                <th className="px-4 py-3 text-left font-medium">Recurrence</th>
-                <th className="px-4 py-3 text-left font-medium">Next Run</th>
-                <th className="px-4 py-3 text-right font-medium">Lines</th>
+                <th className="px-4 py-3 text-left font-medium">{isAr ? 'الاسم' : 'Name'}</th>
+                <th className="px-4 py-3 text-left font-medium">{isAr ? 'الدفتر' : 'Journal'}</th>
+                <th className="px-4 py-3 text-left font-medium">{isAr ? 'التكرار' : 'Recurrence'}</th>
+                <th className="px-4 py-3 text-left font-medium">{isAr ? 'التشغيل التالي' : 'Next Run'}</th>
+                <th className="px-4 py-3 text-right font-medium">{isAr ? 'البنود' : 'Lines'}</th>
                 <th className="px-4 py-3 text-right font-medium"></th>
               </tr>
             </thead>
@@ -174,7 +180,7 @@ export default function RecurringTemplatePage() {
                   </td>
                   <td className="px-4 py-2.5">
                     <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300">
-                      {t.recurrence}
+                      {isAr ? ({ MONTHLY: 'شهري', QUARTERLY: 'ربع سنوي', YEARLY: 'سنوي' } as Record<string, string>)[t.recurrence] ?? t.recurrence : t.recurrence}
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-gray-400 text-xs">
@@ -187,7 +193,7 @@ export default function RecurringTemplatePage() {
                     <button
                       onClick={() => setConfirmDeleteId(t.id)}
                       className="text-xs text-gray-600 hover:text-red-400 transition px-2 py-0.5 rounded">
-                      Delete
+                      {isAr ? 'حذف' : 'Delete'}
                     </button>
                   </td>
                 </tr>
@@ -195,7 +201,9 @@ export default function RecurringTemplatePage() {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-gray-600 text-sm">
-                    No recurring templates yet. Create one to automate journal generation.
+                    {isAr
+                      ? 'لا توجد قوالب متكررة. أنشئ قالباً لأتمتة إنشاء القيود.'
+                      : 'No recurring templates yet. Create one to automate journal generation.'}
                   </td>
                 </tr>
               )}
@@ -210,38 +218,37 @@ export default function RecurringTemplatePage() {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowNew(false)} />
           <div className="relative w-full max-w-2xl rounded-2xl bg-gray-900 border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-white/5 sticky top-0 bg-gray-900 z-10">
-              <h2 className="text-sm font-semibold text-white">New Recurring Template</h2>
+              <h2 className="text-sm font-semibold text-white">{isAr ? 'قالب متكرر جديد' : 'New Recurring Template'}</h2>
               <button onClick={() => setShowNew(false)} className="text-gray-500 hover:text-white text-lg leading-none">x</button>
             </div>
 
             <form onSubmit={submitCreate} className="p-5 space-y-4">
-              {/* Header fields */}
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Name *</label>
+                <label className="block text-xs text-gray-500 mb-1">{isAr ? 'الاسم *' : 'Name *'}</label>
                 <input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="e.g. Monthly Depreciation"
+                  placeholder={isAr ? 'مثال: استهلاك شهري' : 'e.g. Monthly Depreciation'}
                   className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
                 />
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <SearchableCombobox
-                  label="Journal *"
+                  label={isAr ? 'الدفتر *' : 'Journal *'}
                   options={journalOpts}
                   value={form.journalId}
                   onChange={(v) => setForm({ ...form, journalId: v })}
-                  placeholder="Select journal"
+                  placeholder={isAr ? 'اختر دفتراً' : 'Select journal'}
                 />
                 <SearchableCombobox
-                  label="Recurrence *"
+                  label={isAr ? 'التكرار *' : 'Recurrence *'}
                   options={RECURRENCE_OPTS}
                   value={form.recurrence}
                   onChange={(v) => setForm({ ...form, recurrence: v })}
                 />
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Next Run Date *</label>
+                  <label className="block text-xs text-gray-500 mb-1">{isAr ? 'تاريخ التشغيل التالي *' : 'Next Run Date *'}</label>
                   <input
                     type="date"
                     value={form.nextRunDate}
@@ -255,10 +262,10 @@ export default function RecurringTemplatePage() {
               {/* Lines */}
               <div>
                 <div className="grid grid-cols-[1fr_1fr_100px_100px_24px] gap-1.5 text-xs text-gray-500 mb-1.5 px-1">
-                  <span>Account</span>
-                  <span>Label</span>
-                  <span className="text-right">Debit</span>
-                  <span className="text-right">Credit</span>
+                  <span>{isAr ? 'الحساب' : 'Account'}</span>
+                  <span>{isAr ? 'البيان' : 'Label'}</span>
+                  <span className="text-right">{isAr ? 'مدين' : 'Debit'}</span>
+                  <span className="text-right">{isAr ? 'دائن' : 'Credit'}</span>
                   <span />
                 </div>
                 <div className="space-y-1.5">
@@ -268,12 +275,12 @@ export default function RecurringTemplatePage() {
                         options={accountOpts}
                         value={line.accountId}
                         onChange={(v) => setLine(i, 'accountId', v)}
-                        placeholder="Account..."
+                        placeholder={isAr ? 'الحساب...' : 'Account...'}
                       />
                       <input
                         value={line.label}
                         onChange={(e) => setLine(i, 'label', e.target.value)}
-                        placeholder="Description"
+                        placeholder={isAr ? 'وصف' : 'Description'}
                         className="px-2.5 py-2 bg-gray-800 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500"
                       />
                       <input
@@ -298,13 +305,17 @@ export default function RecurringTemplatePage() {
                 </div>
                 <button type="button" onClick={addLine}
                   className="mt-2 text-xs text-blue-400 hover:text-blue-300 transition">
-                  + Add line
+                  {isAr ? '+ إضافة بند' : '+ Add line'}
                 </button>
 
                 {/* Balance indicator */}
                 <div className={`mt-3 flex items-center justify-between text-xs p-2 rounded-lg ${balanced ? 'bg-green-900/20 border border-green-500/20' : 'bg-amber-900/20 border border-amber-500/20'}`}>
                   <span className={balanced ? 'text-green-400' : 'text-amber-400'}>
-                    {balanced ? 'Balanced' : totalDr === 0 && totalCr === 0 ? 'Enter amounts' : 'Not balanced'}
+                    {balanced
+                      ? (isAr ? 'متوازن' : 'Balanced')
+                      : totalDr === 0 && totalCr === 0
+                        ? (isAr ? 'أدخل المبالغ' : 'Enter amounts')
+                        : (isAr ? 'غير متوازن' : 'Not balanced')}
                   </span>
                   <span className="tabular-nums text-gray-400">
                     DR {totalDr.toLocaleString('en-EG', { maximumFractionDigits: 2 })} / CR {totalCr.toLocaleString('en-EG', { maximumFractionDigits: 2 })}
@@ -317,11 +328,11 @@ export default function RecurringTemplatePage() {
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => setShowNew(false)}
                   className="flex-1 py-2 text-sm text-gray-400 border border-white/10 rounded-lg hover:text-white transition">
-                  Cancel
+                  {isAr ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button type="submit" disabled={saving || !balanced}
                   className="flex-1 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition">
-                  {saving ? 'Creating...' : 'Create Template'}
+                  {saving ? (isAr ? 'جارٍ الإنشاء...' : 'Creating...') : (isAr ? 'إنشاء القالب' : 'Create Template')}
                 </button>
               </div>
             </form>
@@ -334,18 +345,20 @@ export default function RecurringTemplatePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setConfirmDeleteId(null)} />
           <div className="relative w-full max-w-sm rounded-2xl bg-gray-900 border border-white/10 shadow-2xl p-6">
-            <h2 className="text-sm font-semibold text-white mb-2">Delete Template?</h2>
+            <h2 className="text-sm font-semibold text-white mb-2">{isAr ? 'حذف القالب؟' : 'Delete Template?'}</h2>
             <p className="text-xs text-gray-400 mb-5">
-              This will permanently delete the template and all its lines. Previously generated journal entries are unaffected.
+              {isAr
+                ? 'سيؤدي هذا إلى حذف القالب وجميع بنوده نهائياً. لن تتأثر القيود المحاسبية السابقة.'
+                : 'This will permanently delete the template and all its lines. Previously generated journal entries are unaffected.'}
             </p>
             <div className="flex gap-3">
               <button onClick={() => setConfirmDeleteId(null)}
                 className="flex-1 py-2 text-sm text-gray-400 border border-white/10 rounded-lg hover:text-white transition">
-                Cancel
+                {isAr ? 'إلغاء' : 'Cancel'}
               </button>
               <button onClick={confirmDelete} disabled={deleting}
                 className="flex-1 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-500 disabled:opacity-50 rounded-lg transition">
-                {deleting ? 'Deleting...' : 'Delete'}
+                {deleting ? (isAr ? 'جارٍ الحذف...' : 'Deleting...') : (isAr ? 'حذف' : 'Delete')}
               </button>
             </div>
           </div>

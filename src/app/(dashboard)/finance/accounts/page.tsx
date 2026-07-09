@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import { useLang } from '@/lib/lang-context';
+import { ErrorBanner } from '@/components/ui/error-banner';
 
 interface Account {
   id: string; code: string; name: string; type: string;
@@ -12,15 +14,6 @@ interface Account {
   subGroup?: string;
 }
 
-const ACCOUNT_TYPES = [
-  'Asset','Liability','Equity','Revenue','Expense',
-  'ContraAsset','ContraLiability','ContraEquity','ContraRevenue','ContraExpense',
-].map(t => ({ value: t, label: t }));
-
-const NORMAL_BALANCE_OPTS = [
-  { value: 'DEBIT', label: 'Debit' },
-  { value: 'CREDIT', label: 'Credit' },
-];
 
 const TYPE_ORDER = ['Asset','ContraAsset','Liability','ContraLiability','Equity','Revenue','ContraRevenue','Expense','ContraExpense'];
 
@@ -50,6 +43,12 @@ const TYPE_LABEL: Record<string, string> = {
   ContraRevenue: 'Cost', Expense: 'Expense', ContraExpense: 'Contra',
 };
 
+const TYPE_LABEL_AR: Record<string, string> = {
+  Asset: 'أصول', ContraAsset: 'مقابل', Liability: 'خصوم',
+  ContraLiability: 'مقابل', Equity: 'حقوق الملكية', Revenue: 'إيرادات',
+  ContraRevenue: 'تكلفة', Expense: 'مصروفات', ContraExpense: 'مقابل',
+};
+
 const egp = (n: number) => 'EGP ' + n.toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function AccountsPage() {
@@ -60,8 +59,26 @@ export default function AccountsPage() {
   const [saving, setSaving]         = useState(false);
   const [toggling, setToggling]     = useState<string | null>(null);
   const [err, setErr]               = useState('');
+  const { isAr } = useLang();
 
-  const { data: res, loading, reload } = useQuery<{ items: Account[]; total: number }>('/finance/accounts?limit=500');
+  const ACCOUNT_TYPES = [
+    { value: 'Asset', label: isAr ? 'أصول' : 'Asset' },
+    { value: 'Liability', label: isAr ? 'التزامات' : 'Liability' },
+    { value: 'Equity', label: isAr ? 'حقوق ملكية' : 'Equity' },
+    { value: 'Revenue', label: isAr ? 'إيرادات' : 'Revenue' },
+    { value: 'Expense', label: isAr ? 'مصروفات' : 'Expense' },
+    { value: 'ContraAsset', label: isAr ? 'أصول مقابلة' : 'ContraAsset' },
+    { value: 'ContraLiability', label: 'ContraLiability' },
+    { value: 'ContraEquity', label: 'ContraEquity' },
+    { value: 'ContraRevenue', label: 'ContraRevenue' },
+    { value: 'ContraExpense', label: 'ContraExpense' },
+  ];
+  const NORMAL_BALANCE_OPTS = [
+    { value: 'DEBIT', label: isAr ? 'مدين' : 'Debit' },
+    { value: 'CREDIT', label: isAr ? 'دائن' : 'Credit' },
+  ];
+
+  const { data: res, loading, error, reload } = useQuery<{ items: Account[]; total: number }>('/finance/accounts?limit=500');
   const accounts = res?.items ?? [];
 
   const filtered = accounts.filter(a => {
@@ -82,7 +99,7 @@ export default function AccountsPage() {
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.code || !form.name) { setErr('Code and name required.'); return; }
+    if (!form.code || !form.name) { setErr(isAr ? 'الكود والاسم مطلوبان.' : 'Code and name required.'); return; }
     setSaving(true); setErr('');
     try {
       await apiFetch('/finance/accounts', {
@@ -111,10 +128,12 @@ export default function AccountsPage() {
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Chart of Accounts</h1>
-          <p className="page-subtitle">DealerMS COA — Full Hierarchy</p>
+          <h1 className="page-title">{isAr ? 'دليل الحسابات' : 'Chart of Accounts'}</h1>
+          <p className="page-subtitle">{isAr ? 'دليل الحسابات — التسلسل الهرمي الكامل' : 'DealerMS COA — Full Hierarchy'}</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="btn btn-primary btn-sm">+ New Account</button>
+        <button onClick={() => setShowCreate(true)} className="btn btn-primary btn-sm">
+          {isAr ? '+ حساب جديد' : '+ New Account'}
+        </button>
       </div>
 
       <div className="page-body">
@@ -126,23 +145,24 @@ export default function AccountsPage() {
               <path d="M10 10l2.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
             </svg>
             <input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search accounts..."
+              placeholder={isAr ? 'بحث…' : 'Search accounts...'}
               className="input pl-8" style={{ fontSize: '0.8125rem' }} />
           </div>
           <SearchableCombobox
-            label="" placeholder="All Types"
-            options={[{ value: '', label: 'All Types' }, ...ACCOUNT_TYPES]}
+            label="" placeholder={isAr ? 'كل الأنواع' : 'All Types'}
+            options={[{ value: '', label: isAr ? 'كل الأنواع' : 'All Types' }, ...ACCOUNT_TYPES]}
             value={typeFilter} onChange={v => setTypeFilter(v)}
           />
           {['Asset','Liability'].map(t => (
             <button key={t} onClick={() => setTypeFilter(typeFilter === t ? '' : t)}
               className="btn btn-secondary btn-sm"
               style={typeFilter === t ? { background: 'var(--primary)', color: '#fff', borderColor: 'var(--primary)' } : {}}>
-              {t === 'Asset' ? 'Assets' : 'Liabilities'} ›
+              {t === 'Asset' ? (isAr ? 'الأصول' : 'Assets') : (isAr ? 'الالتزامات' : 'Liabilities')} ›
             </button>
           ))}
         </div>
 
+        {error && <div className="mb-4"><ErrorBanner error={error} retry={reload} /></div>}
         {loading && (
           <div className="card">
             {[...Array(8)].map((_, i) => (
@@ -159,12 +179,12 @@ export default function AccountsPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th style={{ width: '7rem' }}>Code</th>
-                  <th>Account Name</th>
-                  <th style={{ width: '8rem' }}>Type</th>
-                  <th style={{ width: '5rem' }}>D/C</th>
-                  <th style={{ width: '8rem', textAlign: 'right' }}>Balance</th>
-                  <th style={{ width: '5rem', textAlign: 'center' }}>Status</th>
+                  <th style={{ width: '7rem' }}>{isAr ? 'الكود' : 'Code'}</th>
+                  <th>{isAr ? 'الاسم' : 'Account Name'}</th>
+                  <th style={{ width: '8rem' }}>{isAr ? 'النوع' : 'Type'}</th>
+                  <th style={{ width: '5rem' }}>{isAr ? 'م/د' : 'D/C'}</th>
+                  <th style={{ width: '8rem', textAlign: 'right' }}>{isAr ? 'الرصيد' : 'Balance'}</th>
+                  <th style={{ width: '5rem', textAlign: 'center' }}>{isAr ? 'الحالة' : 'Status'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -184,7 +204,7 @@ export default function AccountsPage() {
                         </td>
                         <td>
                           <span className={`badge ${TYPE_BADGE[a.type] ?? 'badge-neutral'}`}>
-                            {TYPE_LABEL[a.type] ?? a.type}
+                            {isAr ? (TYPE_LABEL_AR[a.type] ?? TYPE_LABEL[a.type] ?? a.type) : (TYPE_LABEL[a.type] ?? a.type)}
                           </span>
                         </td>
                         <td style={{ color: 'var(--text-3)', fontSize: '0.75rem' }}>{a.normalBalance}</td>
@@ -195,7 +215,7 @@ export default function AccountsPage() {
                           <button onClick={() => toggleActive(a)} disabled={toggling === a.id}
                             className={`badge ${a.isActive ? 'badge-success' : 'badge-neutral'}`}
                             style={{ cursor: 'pointer', border: 'none' }}>
-                            {toggling === a.id ? '…' : a.isActive ? 'Active' : 'Inactive'}
+                            {toggling === a.id ? '…' : a.isActive ? (isAr ? 'نشط' : 'Active') : (isAr ? 'غير نشط' : 'Inactive')}
                           </button>
                         </td>
                       </tr>
@@ -205,7 +225,7 @@ export default function AccountsPage() {
                 {filtered.length === 0 && !loading && (
                   <tr>
                     <td colSpan={6} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)' }}>
-                      No accounts found.
+                      {isAr ? 'لا توجد حسابات' : 'No accounts found.'}
                     </td>
                   </tr>
                 )}
@@ -221,29 +241,31 @@ export default function AccountsPage() {
           <div className="absolute inset-0" style={{ background: 'oklch(0 0 0 / 0.4)' }} onClick={() => setShowCreate(false)} />
           <div className="relative card shadow-2xl w-full max-w-md" style={{ zIndex: 1 }}>
             <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
-              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>New Account</h2>
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{isAr ? 'حساب جديد' : 'New Account'}</h2>
               <button onClick={() => setShowCreate(false)} style={{ color: 'var(--text-3)', fontSize: '1.25rem', lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
             </div>
             <form onSubmit={create} className="p-5 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="input-label">Code *</label>
+                  <label className="input-label">{isAr ? 'الكود *' : 'Code *'}</label>
                   <input required value={form.code} onChange={e => set('code', e.target.value)}
                     className="input" style={{ fontFamily: 'monospace' }} placeholder="e.g. 100010" />
                 </div>
-                <SearchableCombobox label="Type" options={ACCOUNT_TYPES} value={form.type} onChange={v => set('type', v)} />
+                <SearchableCombobox label={isAr ? 'النوع' : 'Type'} options={ACCOUNT_TYPES} value={form.type} onChange={v => set('type', v)} />
               </div>
               <div>
-                <label className="input-label">Account Name *</label>
+                <label className="input-label">{isAr ? 'اسم الحساب *' : 'Account Name *'}</label>
                 <input required value={form.name} onChange={e => set('name', e.target.value)} className="input" />
               </div>
-              <SearchableCombobox label="Normal Balance" options={NORMAL_BALANCE_OPTS} value={form.normalBalance} onChange={v => set('normalBalance', v)} />
-              <SearchableCombobox label="Parent Account (optional)" options={parentOpts} value={form.parentId}
-                onChange={v => set('parentId', v)} placeholder="None (top level)" clearable />
+              <SearchableCombobox label={isAr ? 'الرصيد الطبيعي' : 'Normal Balance'} options={NORMAL_BALANCE_OPTS} value={form.normalBalance} onChange={v => set('normalBalance', v)} />
+              <SearchableCombobox label={isAr ? 'الحساب الأب (اختياري)' : 'Parent Account (optional)'} options={parentOpts} value={form.parentId}
+                onChange={v => set('parentId', v)} placeholder={isAr ? 'بدون (مستوى أول)' : 'None (top level)'} clearable />
               {err && <p className="text-xs" style={{ color: 'var(--danger)' }}>{err}</p>}
               <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => setShowCreate(false)} className="btn btn-secondary flex-1">Cancel</button>
-                <button type="submit" disabled={saving} className="btn btn-primary flex-1">{saving ? 'Saving…' : 'Create Account'}</button>
+                <button type="button" onClick={() => setShowCreate(false)} className="btn btn-secondary flex-1">{isAr ? 'إلغاء' : 'Cancel'}</button>
+                <button type="submit" disabled={saving} className="btn btn-primary flex-1">
+                  {saving ? (isAr ? 'جاري الحفظ…' : 'Saving…') : (isAr ? 'إنشاء الحساب' : 'Create Account')}
+                </button>
               </div>
             </form>
           </div>

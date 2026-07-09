@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../lib/useApi';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
+import { useLang } from '../../../lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,21 +35,6 @@ interface VendorBill {
   receiptLines?: POLine[];
 }
 
-const STATUS_OPTS = [
-  { value: '', label: 'All statuses' },
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'POSTED', label: 'Posted' },
-  { value: 'PAID', label: 'Paid' },
-  { value: 'CANCELLED', label: 'Cancelled' },
-];
-
-const MATCH_OPTS = [
-  { value: '', label: 'All match status' },
-  { value: 'MATCHED', label: 'Matched' },
-  { value: 'PARTIAL', label: 'Partial' },
-  { value: 'UNMATCHED', label: 'Unmatched' },
-];
-
 const BLANK_LINE = { description: '', quantity: '1', unitCost: '' };
 
 function statusBadge(status: string) {
@@ -75,6 +62,7 @@ const egp = (n: number) =>
 
 // ── 3-Way Match Panel ─────────────────────────────────────────────────────────
 function ThreeWayMatchPanel({ bill, onClose }: { bill: VendorBill; onClose: () => void }) {
+  const { isAr } = useLang();
   // Merge all line items: PO lines are the source of truth
   const poLines = bill.poLines ?? bill.lines ?? [];
   const receiptLines = bill.receiptLines ?? [];
@@ -125,27 +113,31 @@ function ThreeWayMatchPanel({ bill, onClose }: { bill: VendorBill; onClose: () =
           <div className="flex items-center justify-between">
             <div>
               <h2 style={{ fontWeight: 700, fontSize: '1.0625rem', color: 'var(--text-1)' }}>
-                Vendor Bill — {bill.partner?.name ?? ''}
+                {isAr ? `فاتورة مورد — ${bill.partner?.name ?? ''}` : `Vendor Bill — ${bill.partner?.name ?? ''}`}
               </h2>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginTop: '0.15rem' }}>
                 {bill.number ?? bill.id.slice(0, 8)}
                 {bill.poRef && ` · PO #${bill.poRef}`}
-                {' · 3-Way Match'}
+                {isAr ? ' · مطابقة ثلاثية' : ' · 3-Way Match'}
               </p>
             </div>
             <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ fontSize: '1.2rem' }}>×</button>
           </div>
           {/* Status pipeline */}
           <div className="flex items-center gap-2 mt-3">
-            {['Draft', 'Posted', 'Paid'].map((s, i) => (
-              <div key={s} className="flex items-center gap-2">
+            {([
+              { key: 'DRAFT', en: 'Draft', ar: 'مسودة' },
+              { key: 'POSTED', en: 'Posted', ar: 'مرحّل' },
+              { key: 'PAID', en: 'Paid', ar: 'مدفوع' },
+            ] as { key: string; en: string; ar: string }[]).map(({ key, en, ar }, i) => (
+              <div key={key} className="flex items-center gap-2">
                 {i > 0 && <div style={{ width: 24, height: 2, background: 'var(--border)' }} />}
                 <span
-                  className={bill.status === s.toUpperCase()
-                    ? (s === 'Paid' ? 'badge badge-success' : 'badge badge-info')
+                  className={bill.status === key
+                    ? (key === 'PAID' ? 'badge badge-success' : 'badge badge-info')
                     : 'badge badge-neutral'}
                 >
-                  {s}
+                  {isAr ? ar : en}
                 </span>
               </div>
             ))}
@@ -161,8 +153,8 @@ function ThreeWayMatchPanel({ bill, onClose }: { bill: VendorBill; onClose: () =
             <span style={{ fontSize: '1.1rem' }}>{hasVariances ? 'Warning' : 'OK'}</span>
             <span style={{ fontWeight: 700, color: hasVariances ? 'var(--warning-fg)' : 'var(--success-fg)' }}>
               {hasVariances
-                ? `3-WAY MATCH — VARIANCE DETECTED`
-                : '3-WAY MATCH — ALL LINES MATCHED'}
+                ? (isAr ? 'مطابقة ثلاثية — تم اكتشاف فرق' : '3-WAY MATCH — VARIANCE DETECTED')
+                : (isAr ? 'مطابقة ثلاثية — جميع البنود متطابقة' : '3-WAY MATCH — ALL LINES MATCHED')}
             </span>
           </div>
 
@@ -171,13 +163,13 @@ function ThreeWayMatchPanel({ bill, onClose }: { bill: VendorBill; onClose: () =
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Item</th>
-                  <th className="text-right">PO Qty</th>
-                  <th className="text-right">PO Price</th>
-                  <th className="text-right">Received Qty</th>
-                  <th className="text-right">Bill Qty</th>
-                  <th className="text-right">Bill Price</th>
-                  <th className="text-right">Variance</th>
+                  <th>{isAr ? 'الصنف' : 'Item'}</th>
+                  <th className="text-right">{isAr ? 'كمية أمر الشراء' : 'PO Qty'}</th>
+                  <th className="text-right">{isAr ? 'سعر أمر الشراء' : 'PO Price'}</th>
+                  <th className="text-right">{isAr ? 'الكمية المستلمة' : 'Received Qty'}</th>
+                  <th className="text-right">{isAr ? 'كمية الفاتورة' : 'Bill Qty'}</th>
+                  <th className="text-right">{isAr ? 'سعر الفاتورة' : 'Bill Price'}</th>
+                  <th className="text-right">{isAr ? 'الفرق' : 'Variance'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -217,14 +209,16 @@ function ThreeWayMatchPanel({ bill, onClose }: { bill: VendorBill; onClose: () =
               className="px-4 py-3 rounded-lg mb-4"
               style={{ background: 'var(--warning-bg)', border: '1px solid var(--warning)', color: 'var(--warning-fg)', fontSize: '0.85rem' }}
             >
-              {varianceCount} variance{varianceCount !== 1 ? 's' : ''} found. Finance must approve these discrepancies before this bill can be posted.
+              {isAr
+                ? `تم العثور على ${varianceCount} فرق. يجب على المحاسبة الموافقة على هذه الفروقات قبل ترحيل الفاتورة.`
+                : `${varianceCount} variance${varianceCount !== 1 ? 's' : ''} found. Finance must approve these discrepancies before this bill can be posted.`}
             </div>
           )}
 
           {/* Actions */}
           <div className="flex gap-3">
             <button className="btn btn-secondary" onClick={onClose}>
-              Return to Supplier
+              {isAr ? 'إرجاع إلى المورد' : 'Return to Supplier'}
             </button>
             {hasVariances && (
               <button
@@ -237,7 +231,7 @@ function ThreeWayMatchPanel({ bill, onClose }: { bill: VendorBill; onClose: () =
                   } catch { /* non-blocking */ }
                 }}
               >
-                Override &amp; Approve Variances
+                {isAr ? 'تجاوز والموافقة على الفروقات' : 'Override & Approve Variances'}
               </button>
             )}
             {!hasVariances && bill.status === 'DRAFT' && (
@@ -250,7 +244,7 @@ function ThreeWayMatchPanel({ bill, onClose }: { bill: VendorBill; onClose: () =
                   } catch { /* non-blocking */ }
                 }}
               >
-                Validate &amp; Post
+                {isAr ? 'التحقق والترحيل' : 'Validate & Post'}
               </button>
             )}
           </div>
@@ -262,6 +256,7 @@ function ThreeWayMatchPanel({ bill, onClose }: { bill: VendorBill; onClose: () =
 
 // ── New Bill Form ─────────────────────────────────────────────────────────────
 function NewBillForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const { isAr } = useLang();
   const { data: partnersRaw } = useQuery<any[]>('/partners?limit=200&type=VENDOR');
   const { data: journalsRaw } = useQuery<any[]>('/finance/journals?type=PURCHASE&limit=50');
 
@@ -290,7 +285,7 @@ function NewBillForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.partnerId || !form.journalId) { setErr('Vendor and journal required.'); return; }
+    if (!form.partnerId || !form.journalId) { setErr(isAr ? 'المورد والدفتر إلزاميان.' : 'Vendor and journal required.'); return; }
     setSaving(true); setErr('');
     try {
       await apiFetch('/finance/invoices', {
@@ -324,39 +319,39 @@ function NewBillForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
       />
       <div className="relative w-full card shadow-2xl p-6" style={{ maxWidth: 760, background: 'var(--surface)', zIndex: 10 }}>
         <div className="flex items-center justify-between mb-5">
-          <h2 style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-1)' }}>New Vendor Bill</h2>
+          <h2 style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-1)' }}>{isAr ? 'فاتورة مورد جديدة' : 'New Vendor Bill'}</h2>
           <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ fontSize: '1.2rem' }}>×</button>
         </div>
 
         <form onSubmit={submit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="input-label">Vendor *</label>
+              <label className="input-label">{isAr ? 'المورد *' : 'Vendor *'}</label>
               <SearchableCombobox options={vendorOpts} value={form.partnerId}
-                onChange={(v) => setForm((p) => ({ ...p, partnerId: v }))} placeholder="Search vendors…" />
+                onChange={(v) => setForm((p) => ({ ...p, partnerId: v }))} placeholder={isAr ? 'ابحث عن موردين…' : 'Search vendors…'} />
             </div>
             <div>
-              <label className="input-label">Purchase Journal *</label>
+              <label className="input-label">{isAr ? 'دفتر المشتريات *' : 'Purchase Journal *'}</label>
               <SearchableCombobox options={journalOpts} value={form.journalId}
-                onChange={(v) => setForm((p) => ({ ...p, journalId: v }))} placeholder="Select journal…" />
+                onChange={(v) => setForm((p) => ({ ...p, journalId: v }))} placeholder={isAr ? 'اختر الدفتر…' : 'Select journal…'} />
             </div>
             <div>
-              <label className="input-label">PO Reference</label>
+              <label className="input-label">{isAr ? 'مرجع أمر الشراء' : 'PO Reference'}</label>
               <input className="input" placeholder="PO-2026-####" value={form.poRef}
                 onChange={(e) => setForm((p) => ({ ...p, poRef: e.target.value }))} />
             </div>
             <div>
-              <label className="input-label">Receipt Reference</label>
+              <label className="input-label">{isAr ? 'مرجع الاستلام' : 'Receipt Reference'}</label>
               <input className="input" placeholder="REC-2026-####" value={form.receiptRef}
                 onChange={(e) => setForm((p) => ({ ...p, receiptRef: e.target.value }))} />
             </div>
             <div>
-              <label className="input-label">Bill Date *</label>
+              <label className="input-label">{isAr ? 'تاريخ الفاتورة *' : 'Bill Date *'}</label>
               <input type="date" required className="input" value={form.date}
                 onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))} />
             </div>
             <div>
-              <label className="input-label">Due Date</label>
+              <label className="input-label">{isAr ? 'تاريخ الاستحقاق' : 'Due Date'}</label>
               <input type="date" className="input" value={form.dueDate}
                 onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value }))} />
             </div>
@@ -365,17 +360,17 @@ function NewBillForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
           {/* Lines */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="section-label" style={{ margin: 0 }}>Bill Lines</p>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={addLine}>+ Add Line</button>
+              <p className="section-label" style={{ margin: 0 }}>{isAr ? 'بنود الفاتورة' : 'Bill Lines'}</p>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={addLine}>{isAr ? '+ إضافة بند' : '+ Add Line'}</button>
             </div>
             <div className="card" style={{ overflow: 'hidden' }}>
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Description</th>
-                    <th className="text-right" style={{ width: 80 }}>Qty</th>
-                    <th className="text-right" style={{ width: 130 }}>Unit Cost</th>
-                    <th className="text-right" style={{ width: 130 }}>Subtotal</th>
+                    <th>{isAr ? 'الوصف' : 'Description'}</th>
+                    <th className="text-right" style={{ width: 80 }}>{isAr ? 'الكمية' : 'Qty'}</th>
+                    <th className="text-right" style={{ width: 130 }}>{isAr ? 'تكلفة الوحدة' : 'Unit Cost'}</th>
+                    <th className="text-right" style={{ width: 130 }}>{isAr ? 'الإجمالي الفرعي' : 'Subtotal'}</th>
                     <th style={{ width: 36 }} />
                   </tr>
                 </thead>
@@ -384,7 +379,7 @@ function NewBillForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                     <tr key={i}>
                       <td>
                         <input required className="input" style={{ fontSize: '0.8rem', padding: '0.3rem 0.5rem' }}
-                          placeholder="Item description…" value={l.description}
+                          placeholder={isAr ? 'وصف الصنف…' : 'Item description…'} value={l.description}
                           onChange={(e) => updateLine(i, 'description', e.target.value)} />
                       </td>
                       <td>
@@ -415,7 +410,7 @@ function NewBillForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
               </table>
               <div className="flex justify-end px-4 py-3" style={{ borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}>
                 <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>
-                  Total: <span className="tabular-nums" style={{ color: 'var(--primary)' }}>{egp(lineTotal)}</span>
+                  {isAr ? 'الإجمالي:' : 'Total:'} <span className="tabular-nums" style={{ color: 'var(--primary)' }}>{egp(lineTotal)}</span>
                 </span>
               </div>
             </div>
@@ -424,9 +419,9 @@ function NewBillForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
           {err && <p style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>{err}</p>}
 
           <div className="flex gap-3 pt-2" style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-            <button type="button" className="btn btn-secondary flex-1" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn btn-secondary flex-1" onClick={onClose}>{isAr ? 'إلغاء' : 'Cancel'}</button>
             <button type="submit" disabled={saving} className="btn btn-primary flex-1">
-              {saving ? 'Creating…' : 'Create Bill'}
+              {saving ? (isAr ? 'جارٍ الإنشاء…' : 'Creating…') : (isAr ? 'إنشاء الفاتورة' : 'Create Bill')}
             </button>
           </div>
         </form>
@@ -437,6 +432,20 @@ function NewBillForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function VendorBillsPage() {
+  const { isAr } = useLang();
+  const STATUS_OPTS = [
+    { value: '',          label: isAr ? 'جميع الحالات' : 'All statuses' },
+    { value: 'DRAFT',     label: isAr ? 'مسودة'        : 'Draft'        },
+    { value: 'POSTED',    label: isAr ? 'مرحّل'        : 'Posted'       },
+    { value: 'PAID',      label: isAr ? 'مدفوع'        : 'Paid'         },
+    { value: 'CANCELLED', label: isAr ? 'ملغي'         : 'Cancelled'    },
+  ];
+  const MATCH_OPTS = [
+    { value: '',          label: isAr ? 'جميع حالات التطابق' : 'All match status' },
+    { value: 'MATCHED',   label: isAr ? 'متطابق'             : 'Matched'          },
+    { value: 'PARTIAL',   label: isAr ? 'جزئي'               : 'Partial'          },
+    { value: 'UNMATCHED', label: isAr ? 'غير متطابق'         : 'Unmatched'        },
+  ];
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState('');
   const [matchFilter, setMatchFilter] = useState('');
@@ -445,14 +454,13 @@ export default function VendorBillsPage() {
   const [selectedBill, setSelectedBill] = useState<VendorBill | null>(null);
 
   const qs = new URLSearchParams({
-    type: 'VENDOR_BILL',
     limit: '30',
     ...(statusFilter && { status: statusFilter }),
     ...(matchFilter && { matchStatus: matchFilter }),
     ...(search && { q: search }),
   });
   const { data, loading, error, reload } = useQuery<{ items: VendorBill[]; total: number }>(
-    `/finance/invoices?${qs}`,
+    `/purchase-orders?${qs}`,
     [statusFilter, matchFilter, search],
   );
 
@@ -463,13 +471,15 @@ export default function VendorBillsPage() {
       {/* Header */}
       <div className="page-header" style={{ padding: '1.25rem 0 1rem' }}>
         <div>
-          <h1 className="page-title">Vendor Bills</h1>
+          <h1 className="page-title">{isAr ? 'فواتير الموردين' : 'Vendor Bills'}</h1>
           <p className="page-subtitle">
-            {data?.total ?? 0} bills · 3-Way Match: PO → Receipt → Bill
+            {isAr
+              ? `${data?.total ?? 0} فاتورة · مطابقة ثلاثية: أمر شراء ← استلام ← فاتورة`
+              : `${data?.total ?? 0} bills · 3-Way Match: PO → Receipt → Bill`}
           </p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowNew(true)}>
-          + New Bill
+          {isAr ? '+ فاتورة جديدة' : '+ New Bill'}
         </button>
       </div>
 
@@ -478,7 +488,7 @@ export default function VendorBillsPage() {
         <input
           className="input"
           style={{ maxWidth: 240 }}
-          placeholder="Search bills…"
+          placeholder={isAr ? 'ابحث عن فواتير…' : 'Search bills…'}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -487,9 +497,9 @@ export default function VendorBillsPage() {
             options={STATUS_OPTS}
             value={statusFilter}
             onChange={setStatusFilter}
-            placeholder="All statuses"
+            placeholder={isAr ? 'جميع الحالات' : 'All statuses'}
             clearable
-            clearLabel="All statuses"
+            clearLabel={isAr ? 'جميع الحالات' : 'All statuses'}
           />
         </div>
         <div style={{ width: 200 }}>
@@ -497,9 +507,9 @@ export default function VendorBillsPage() {
             options={MATCH_OPTS}
             value={matchFilter}
             onChange={setMatchFilter}
-            placeholder="All match status"
+            placeholder={isAr ? 'جميع حالات التطابق' : 'All match status'}
             clearable
-            clearLabel="All match status"
+            clearLabel={isAr ? 'جميع حالات التطابق' : 'All match status'}
           />
         </div>
       </div>
@@ -507,31 +517,31 @@ export default function VendorBillsPage() {
       {/* Match legend */}
       <div className="flex items-center gap-4 mb-4" style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
         <span className="badge badge-success">MATCHED</span>
-        <span style={{ color: 'var(--text-3)' }}>PO + Receipt both confirmed</span>
+        <span style={{ color: 'var(--text-3)' }}>{isAr ? 'أمر الشراء والاستلام مؤكدان' : 'PO + Receipt both confirmed'}</span>
         <span className="badge badge-warning">PARTIAL</span>
-        <span style={{ color: 'var(--text-3)' }}>Missing one match</span>
+        <span style={{ color: 'var(--text-3)' }}>{isAr ? 'مطابقة واحدة ناقصة' : 'Missing one match'}</span>
         <span className="badge badge-danger">UNMATCHED</span>
-        <span style={{ color: 'var(--text-3)' }}>No PO or receipt</span>
+        <span style={{ color: 'var(--text-3)' }}>{isAr ? 'لا يوجد أمر شراء أو استلام' : 'No PO or receipt'}</span>
       </div>
 
       {/* Table */}
       <div className="card" style={{ overflow: 'hidden' }}>
-        {loading && <p className="p-6 text-sm" style={{ color: 'var(--text-3)' }}>Loading…</p>}
+        {loading && <p className="p-6 text-sm" style={{ color: 'var(--text-3)' }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</p>}
         {error && <p className="p-6 text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
         {!loading && (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Bill #</th>
-                <th>Vendor</th>
-                <th>PO Ref</th>
-                <th>Receipt Ref</th>
-                <th>Date</th>
-                <th>Due</th>
-                <th className="text-right">Amount</th>
-                <th>Match</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th>{isAr ? 'رقم الفاتورة' : 'Bill #'}</th>
+                <th>{isAr ? 'المورد' : 'Vendor'}</th>
+                <th>{isAr ? 'مرجع أمر الشراء' : 'PO Ref'}</th>
+                <th>{isAr ? 'مرجع الاستلام' : 'Receipt Ref'}</th>
+                <th>{isAr ? 'التاريخ' : 'Date'}</th>
+                <th>{isAr ? 'الاستحقاق' : 'Due'}</th>
+                <th className="text-right">{isAr ? 'المبلغ' : 'Amount'}</th>
+                <th>{isAr ? 'المطابقة' : 'Match'}</th>
+                <th>{isAr ? 'الحالة' : 'Status'}</th>
+                <th>{isAr ? 'الإجراءات' : 'Actions'}</th>
               </tr>
             </thead>
             <tbody>
@@ -554,10 +564,10 @@ export default function VendorBillsPage() {
                     {bill.receiptRef ?? '—'}
                   </td>
                   <td style={{ fontSize: '0.8rem', color: 'var(--text-2)' }}>
-                    {new Date(bill.date).toLocaleDateString('en-EG')}
+                    {fmtDate(bill.date, isAr)}
                   </td>
                   <td style={{ fontSize: '0.8rem', color: 'var(--text-2)' }}>
-                    {bill.dueDate ? new Date(bill.dueDate).toLocaleDateString('en-EG') : '—'}
+                    {bill.dueDate ? fmtDate(bill.dueDate, isAr) : '—'}
                   </td>
                   <td className="text-right tabular-nums" style={{ fontWeight: 600 }}>
                     {egp(Number(bill.amountTotal))}
@@ -574,7 +584,7 @@ export default function VendorBillsPage() {
                         setSelectedBill(bill);
                       }}
                     >
-                      3-Way Match
+                      {isAr ? 'مطابقة ثلاثية' : '3-Way Match'}
                     </button>
                   </td>
                 </tr>
@@ -582,7 +592,7 @@ export default function VendorBillsPage() {
               {bills.length === 0 && (
                 <tr>
                   <td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-3)', padding: '2.5rem' }}>
-                    No vendor bills found.
+                    {isAr ? 'لا توجد فواتير موردين.' : 'No vendor bills found.'}
                   </td>
                 </tr>
               )}

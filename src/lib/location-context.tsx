@@ -1,6 +1,7 @@
 'use client';
 import { createContext, useContext, useState, useEffect } from 'react';
 import { apiFetch } from './useApi';
+import { API_BASE } from './config';
 
 interface Location { id: string; name: string; }
 
@@ -44,9 +45,8 @@ export const useLocationParam = () => {
 export function useApiUrl() {
   const { locationId } = useContext(LocationCtx);
   return (path: string, extraParams = '') => {
-    const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
     const sep = path.includes('?') ? '&' : '?';
     const loc = locationId ? `${sep}locationId=${locationId}` : '';
-    return `${base}${path}${loc}${extraParams}`;
+    return `${API_BASE}${path}${loc}${extraParams}`;
   };
 }

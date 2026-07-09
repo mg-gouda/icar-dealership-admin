@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import SearchableCombobox from '@/components/ui/SearchableCombobox';
 import { apiFetch } from '@/lib/useApi';
+import { useLang } from '@/lib/lang-context';
 
 /* ── types ──────────────────────────────────────────────────────────────── */
 interface AttainmentRow {
@@ -72,9 +73,10 @@ function ProgressBar({ value }: { value: number }) {
 
 /* ── AttainBadge ────────────────────────────────────────────────────────── */
 function AttainBadge({ up, rp }: { up: number; rp: number }) {
-  if (up >= 100 && rp >= 100) return <span className="badge" style={{ background: 'var(--success-bg)', color: 'var(--success-fg)' }}>On Target</span>;
-  if (up < 50    || rp < 50 ) return <span className="badge badge-warning">At Risk</span>;
-  return <span className="badge badge-info">In Progress</span>;
+  const { isAr } = useLang();
+  if (up >= 100 && rp >= 100) return <span className="badge" style={{ background: 'var(--success-bg)', color: 'var(--success-fg)' }}>{isAr ? 'في المسار' : 'On Target'}</span>;
+  if (up < 50    || rp < 50 ) return <span className="badge badge-warning">{isAr ? 'في خطر' : 'At Risk'}</span>;
+  return <span className="badge badge-info">{isAr ? 'قيد التنفيذ' : 'In Progress'}</span>;
 }
 
 /* ── SetTargetModal ──────────────────────────────────────────────────────── */
@@ -84,6 +86,7 @@ interface ModalProps {
 }
 
 function SetTargetModal({ reps, locations, defaultPeriod, onClose, onCreated }: ModalProps) {
+  const { isAr } = useLang();
   const [form, setForm] = useState({ userId: '', locationId: '', period: defaultPeriod, targetUnits: '', targetRevenue: '' });
   const [saving, setSaving] = useState(false);
   const [err,    setErr]    = useState('');
@@ -93,7 +96,7 @@ function SetTargetModal({ reps, locations, defaultPeriod, onClose, onCreated }: 
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.userId || !form.locationId || !form.period) { setErr('All fields required'); return; }
+    if (!form.userId || !form.locationId || !form.period) { setErr(isAr ? 'جميع الحقول مطلوبة' : 'All fields required'); return; }
     setSaving(true); setErr('');
     try {
       await apiFetch('/sales-targets', {
@@ -119,7 +122,7 @@ function SetTargetModal({ reps, locations, defaultPeriod, onClose, onCreated }: 
         onClick={e => e.stopPropagation()}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-          <h2 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-1)' }}>Set Sales Target</h2>
+          <h2 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-1)' }}>{isAr ? 'تحديد هدف المبيعات' : 'Set Sales Target'}</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', display: 'flex' }}>
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -129,35 +132,35 @@ function SetTargetModal({ reps, locations, defaultPeriod, onClose, onCreated }: 
 
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
           <div>
-            <label className="input-label">Sales Rep</label>
-            <SearchableCombobox options={repOpts} value={form.userId} onChange={v => setForm(f => ({ ...f, userId: v }))} placeholder="Select rep…" />
+            <label className="input-label">{isAr ? 'مندوب المبيعات' : 'Sales Rep'}</label>
+            <SearchableCombobox options={repOpts} value={form.userId} onChange={v => setForm(f => ({ ...f, userId: v }))} placeholder={isAr ? 'اختر المندوب…' : 'Select rep…'} />
           </div>
           <div>
-            <label className="input-label">Location</label>
-            <SearchableCombobox options={locOpts} value={form.locationId} onChange={v => setForm(f => ({ ...f, locationId: v }))} placeholder="Select location…" />
+            <label className="input-label">{isAr ? 'الفرع' : 'Location'}</label>
+            <SearchableCombobox options={locOpts} value={form.locationId} onChange={v => setForm(f => ({ ...f, locationId: v }))} placeholder={isAr ? 'اختر الفرع…' : 'Select location…'} />
           </div>
           <div>
-            <label className="input-label">Period</label>
+            <label className="input-label">{isAr ? 'الفترة' : 'Period'}</label>
             <input type="month" className="input" value={form.period}
               onChange={e => setForm(f => ({ ...f, period: e.target.value }))} required />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
             <div>
-              <label className="input-label">Target Units</label>
+              <label className="input-label">{isAr ? 'هدف الوحدات' : 'Target Units'}</label>
               <input type="number" className="input" min="0" placeholder="0"
                 value={form.targetUnits} onChange={e => setForm(f => ({ ...f, targetUnits: e.target.value }))} required />
             </div>
             <div>
-              <label className="input-label">Target Revenue (EGP)</label>
+              <label className="input-label">{isAr ? 'هدف الإيرادات (ج.م)' : 'Target Revenue (EGP)'}</label>
               <input type="number" className="input" min="0" placeholder="0"
                 value={form.targetRevenue} onChange={e => setForm(f => ({ ...f, targetRevenue: e.target.value }))} required />
             </div>
           </div>
           {err && <p style={{ fontSize: '0.75rem', color: 'var(--danger-fg)' }}>{err}</p>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.25rem' }}>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>{isAr ? 'إلغاء' : 'Cancel'}</button>
             <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>
-              {saving ? 'Saving…' : 'Set Target'}
+              {saving ? (isAr ? 'جارٍ الحفظ…' : 'Saving…') : (isAr ? 'تحديد الهدف' : 'Set Target')}
             </button>
           </div>
         </form>
@@ -168,6 +171,7 @@ function SetTargetModal({ reps, locations, defaultPeriod, onClose, onCreated }: 
 
 /* ── main page ───────────────────────────────────────────────────────────── */
 export default function SalesTargetsPage() {
+  const { isAr } = useLang();
   const now = new Date();
   // ponytail: default to current YYYY-MM
   const defaultPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -229,7 +233,7 @@ export default function SalesTargetsPage() {
     finally { setSavingEdit(false); }
   }
 
-  const locOpts = [{ value: '', label: 'All Locations' }, ...locations.map(l => ({ value: l.id, label: l.name }))];
+  const locOpts = [{ value: '', label: isAr ? 'جميع الفروع' : 'All Locations' }, ...locations.map(l => ({ value: l.id, label: l.name }))];
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
@@ -237,8 +241,8 @@ export default function SalesTargetsPage() {
       {/* header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Sales Targets</h1>
-          <p className="page-subtitle">Monthly attainment by sales representative</p>
+          <h1 className="page-title">{isAr ? 'أهداف المبيعات' : 'Sales Targets'}</h1>
+          <p className="page-subtitle">{isAr ? 'الإنجاز الشهري حسب مندوب المبيعات' : 'Monthly attainment by sales representative'}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           {/* period picker */}
@@ -257,13 +261,13 @@ export default function SalesTargetsPage() {
               options={locOpts}
               value={locationId}
               onChange={setLocationId}
-              placeholder="All Locations"
+              placeholder={isAr ? 'جميع الفروع' : 'All Locations'}
               clearable
-              clearLabel="All Locations"
+              clearLabel={isAr ? 'جميع الفروع' : 'All Locations'}
             />
           </div>
           <button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}>
-            + Set Targets
+            {isAr ? '+ تحديد الأهداف' : '+ Set Targets'}
           </button>
         </div>
       </div>
@@ -273,31 +277,31 @@ export default function SalesTargetsPage() {
         {/* attainment table */}
         <div className="card" style={{ overflow: 'hidden' }}>
           <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>Attainment —{' '}
+            <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>{isAr ? 'الإنجاز —' : 'Attainment —'}{' '}
               <span style={{ color: 'var(--text-3)', fontWeight: 400 }}>{period}</span>
             </p>
             <div style={{ display: 'flex', gap: '1rem', fontSize: '0.7rem', color: 'var(--text-3)' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ width: 8, height: 8, borderRadius: 2, background: 'rgba(34,197,94,0.25)', display: 'inline-block', border: '1px solid rgba(34,197,94,0.4)' }} />
-                Both &ge;100%
+                {isAr ? 'كلاهما ≥100%' : 'Both ≥100%'}
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ width: 8, height: 8, borderRadius: 2, background: 'rgba(245,158,11,0.25)', display: 'inline-block', border: '1px solid rgba(245,158,11,0.4)' }} />
-                Either &lt;50%
+                {isAr ? 'أحدهما <50%' : 'Either <50%'}
               </span>
             </div>
           </div>
           <table className="data-table">
             <thead>
               <tr>
-                <th>Rep Name</th>
-                <th style={{ textAlign: 'right' }}>Target Units</th>
-                <th style={{ textAlign: 'right' }}>Actual Units</th>
-                <th>Units %</th>
-                <th style={{ textAlign: 'right' }}>Target Revenue</th>
-                <th style={{ textAlign: 'right' }}>Actual Revenue</th>
-                <th>Revenue %</th>
-                <th>Status</th>
+                <th>{isAr ? 'اسم المندوب' : 'Rep Name'}</th>
+                <th style={{ textAlign: 'right' }}>{isAr ? 'هدف الوحدات' : 'Target Units'}</th>
+                <th style={{ textAlign: 'right' }}>{isAr ? 'الوحدات الفعلية' : 'Actual Units'}</th>
+                <th>{isAr ? 'نسبة الوحدات' : 'Units %'}</th>
+                <th style={{ textAlign: 'right' }}>{isAr ? 'هدف الإيرادات' : 'Target Revenue'}</th>
+                <th style={{ textAlign: 'right' }}>{isAr ? 'الإيرادات الفعلية' : 'Actual Revenue'}</th>
+                <th>{isAr ? 'نسبة الإيرادات' : 'Revenue %'}</th>
+                <th>{isAr ? 'الحالة' : 'Status'}</th>
               </tr>
             </thead>
             <tbody>
@@ -330,7 +334,7 @@ export default function SalesTargetsPage() {
               {attainment.length === 0 && (
                 <tr>
                   <td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-3)', padding: '2rem' }}>
-                    No attainment data for {period}
+                    {isAr ? `لا توجد بيانات إنجاز لـ ${period}` : `No attainment data for ${period}`}
                   </td>
                 </tr>
               )}
@@ -341,18 +345,18 @@ export default function SalesTargetsPage() {
         {/* existing targets — edit in place */}
         <div className="card" style={{ overflow: 'hidden' }}>
           <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>Configured Targets</p>
-            <button className="btn btn-secondary btn-sm" onClick={() => setShowModal(true)}>+ New</button>
+            <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>{isAr ? 'الأهداف المحددة' : 'Configured Targets'}</p>
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowModal(true)}>{isAr ? '+ جديد' : '+ New'}</button>
           </div>
           <table className="data-table">
             <thead>
               <tr>
-                <th>Rep</th>
-                <th>Location</th>
-                <th>Period</th>
-                <th style={{ textAlign: 'right' }}>Target Units</th>
-                <th style={{ textAlign: 'right' }}>Target Revenue</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
+                <th>{isAr ? 'المندوب' : 'Rep'}</th>
+                <th>{isAr ? 'الفرع' : 'Location'}</th>
+                <th>{isAr ? 'الفترة' : 'Period'}</th>
+                <th style={{ textAlign: 'right' }}>{isAr ? 'هدف الوحدات' : 'Target Units'}</th>
+                <th style={{ textAlign: 'right' }}>{isAr ? 'هدف الإيرادات' : 'Target Revenue'}</th>
+                <th style={{ textAlign: 'right' }}>{isAr ? 'الإجراءات' : 'Actions'}</th>
               </tr>
             </thead>
             <tbody>
@@ -397,9 +401,9 @@ export default function SalesTargetsPage() {
                     {editingId === t.id ? (
                       <span style={{ display: 'flex', gap: '0.375rem', justifyContent: 'flex-end' }}>
                         <button className="btn btn-primary btn-sm" disabled={savingEdit} onClick={() => saveEdit(t.id)}>
-                          {savingEdit ? '…' : 'Save'}
+                          {savingEdit ? '…' : (isAr ? 'حفظ' : 'Save')}
                         </button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => setEditingId(null)}>Cancel</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setEditingId(null)}>{isAr ? 'إلغاء' : 'Cancel'}</button>
                       </span>
                     ) : (
                       <button
@@ -407,7 +411,7 @@ export default function SalesTargetsPage() {
                         onClick={() => startEdit(t)}
                         style={{ color: 'var(--primary)' }}
                       >
-                        Edit
+                        {isAr ? 'تعديل' : 'Edit'}
                       </button>
                     )}
                   </td>
@@ -416,7 +420,7 @@ export default function SalesTargetsPage() {
               {targets.length === 0 && (
                 <tr>
                   <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-3)', padding: '2rem' }}>
-                    No targets set for {period}
+                    {isAr ? `لم يتم تعيين أهداف لـ ${period}` : `No targets set for ${period}`}
                   </td>
                 </tr>
               )}

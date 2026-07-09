@@ -1,3 +1,36 @@
+'use client';
+
+import { useLang } from '@/lib/lang-context';
+
+const STATUS_AR: Record<string, string> = {
+  DRAFT: 'مسودة',
+  PENDING_FINANCE: 'في انتظار التمويل',
+  APPROVED: 'موافق عليه',
+  FINALIZED: 'مكتمل',
+  CANCELLED: 'ملغي',
+  REVERSED: 'معكوس',
+  AVAILABLE: 'متوفر',
+  RESERVED: 'محجوز',
+  SOLD: 'مباع',
+  IN_TRANSIT: 'في الطريق',
+  IN_STOCK: 'في المخزن',
+  SERVICE: 'في الصيانة',
+  PENDING_INSPECTION: 'في انتظار المعاينة',
+  NEW: 'جديد',
+  CONTACTED: 'تم التواصل',
+  QUALIFIED: 'مؤهل',
+  NEGOTIATING: 'قيد التفاوض',
+  CLOSED_WON: 'مغلق - فوز',
+  CLOSED_LOST: 'مغلق - خسارة',
+  CONVERTED: 'محول',
+  POSTED: 'مرحل',
+  PAID: 'مدفوع',
+  PARTIAL: 'جزئي',
+  OVERDUE: 'متأخر',
+  ACCRUED: 'مستحق',
+  PAYABLE: 'واجب الدفع',
+};
+
 const colors: Record<string, string> = {
   // Deal
   DRAFT: 'bg-gray-800 text-gray-300',
@@ -30,10 +63,12 @@ const colors: Record<string, string> = {
 };
 
 export default function StatusBadge({ status }: { status: string }) {
+  const { isAr } = useLang();
   const cls = colors[status] ?? 'bg-gray-800 text-gray-300';
+  const label = isAr ? (STATUS_AR[status] ?? status.replace(/_/g, ' ')) : status.replace(/_/g, ' ');
   return (
     <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${cls}`}>
-      {status.replace(/_/g, ' ')}
+      {label}
     </span>
   );
 }

@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../../lib/useApi';
 import SearchableCombobox from '../../../../../components/ui/SearchableCombobox';
+import { useLang } from '@/lib/lang-context';
+import { ErrorBanner } from '@/components/ui/error-banner';
 
 interface Vendor { id: string; name: string; }
 interface Journal { id: string; code: string; name: string; type?: string; }
@@ -39,10 +41,12 @@ function AccountSelect({
   accounts,
   value,
   onChange,
+  isAr,
 }: {
   accounts: Account[];
   value: string;
   onChange: (v: string) => void;
+  isAr: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -73,7 +77,7 @@ function AccountSelect({
         style={{ minWidth: 0 }}
       >
         <span className={`truncate text-xs ${selected ? 'text-[--text-1]' : 'text-[--text-3]'}`}>
-          {selected ? `${selected.code} — ${selected.name}` : 'Select account…'}
+          {selected ? `${selected.code} — ${selected.name}` : (isAr ? 'اختر حساباً…' : 'Select account…')}
         </span>
         <svg className={`w-3.5 h-3.5 text-[--text-3] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
           fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -88,7 +92,7 @@ function AccountSelect({
               type="text"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search accounts…"
+              placeholder={isAr ? 'بحث في الحسابات…' : 'Search accounts…'}
               className="w-full px-3 py-1.5 text-xs rounded-lg border border-[--border] bg-[--surface-2] text-[--text-1] outline-none focus:border-[--primary]"
             />
           </div>
@@ -107,7 +111,9 @@ function AccountSelect({
               </button>
             ))}
             {filtered.length === 0 && (
-              <p className="px-3 py-3 text-xs text-[--text-3] text-center">No results</p>
+              <p className="px-3 py-3 text-xs text-[--text-3] text-center">
+                {isAr ? 'لا نتائج' : 'No results'}
+              </p>
             )}
           </div>
         </div>
@@ -118,11 +124,12 @@ function AccountSelect({
 
 export default function NewVendorBillPage() {
   const router = useRouter();
+  const { isAr } = useLang();
 
-  const { data: vendorsRaw } = useQuery<{ data: Vendor[] }>('/finance/vendors?limit=200');
+  const { data: vendorsRaw, error: vendorsError } = useQuery<{ data: Vendor[] }>('/partners?type=VENDOR&limit=200');
   const { data: journalsRaw } = useQuery<{ items: Journal[] }>('/finance/journals?limit=50&type=PURCHASE');
   const { data: locationsRaw } = useQuery<{ items: Location[] }>('/locations?limit=50');
-  const { data: accountsRaw } = useQuery<{ items: Account[] }>('/finance/accounts?limit=300');
+  const { data: accountsRaw, error: accountsError } = useQuery<{ items: Account[] }>('/finance/accounts?limit=300');
   const { data: taxesRaw } = useQuery<{ items: TaxRate[] }>('/finance/taxes?limit=50');
 
   const vendors = vendorsRaw?.data ?? [];
@@ -135,7 +142,7 @@ export default function NewVendorBillPage() {
   const journalOpts = journals.map((j) => ({ value: j.id, label: j.name }));
   const locationOpts = locations.map((l) => ({ value: l.id, label: l.name }));
   const taxOpts = [
-    { value: '', label: 'No Tax' },
+    { value: '', label: isAr ? 'بدون ضريبة' : 'No Tax' },
     ...taxes.map((t) => ({ value: t.id, label: `${t.name} (${t.rate}%)` })),
   ];
 
@@ -173,10 +180,10 @@ export default function NewVendorBillPage() {
   const total = subtotal + taxTotal;
 
   function validate(): string {
-    if (!form.vendorId) return 'Select a vendor.';
-    if (!form.billDate) return 'Bill date is required.';
+    if (!form.vendorId) return isAr ? 'اختر مورداً.' : 'Select a vendor.';
+    if (!form.billDate) return isAr ? 'تاريخ الفاتورة مطلوب.' : 'Bill date is required.';
     const validLines = lines.filter((l) => l.accountId && Number(l.unitPrice) > 0);
-    if (validLines.length === 0) return 'At least one line item is required.';
+    if (validLines.length === 0) return isAr ? 'مطلوب سطر واحد على الأقل.' : 'At least one line item is required.';
     return '';
   }
 
@@ -209,17 +216,18 @@ export default function NewVendorBillPage() {
     };
 
     try {
-      // ponytail: mock — log + toast until real endpoint available
-      console.log('[vendor-bills/new] POST payload:', payload);
+      // ponytail: mock — toast until real endpoint available
       await new Promise((r) => setTimeout(r, 400)); // ponytail: simulated latency
 
       if (typeof window !== 'undefined') {
         // ponytail: inline toast via alert until toast component wired
-        alert(andPost ? 'Bill posted successfully.' : 'Bill saved as draft.');
+        alert(andPost
+          ? (isAr ? 'تم ترحيل الفاتورة.' : 'Bill posted successfully.')
+          : (isAr ? 'تم حفظ الفاتورة كمسودة.' : 'Bill saved as draft.'));
       }
       router.push('/finance/vendor-bills');
     } catch (e: unknown) {
-      setSaveErr(e instanceof Error ? e.message : 'Error saving bill');
+      setSaveErr(e instanceof Error ? e.message : (isAr ? 'خطأ في حفظ الفاتورة' : 'Error saving bill'));
     } finally {
       setSaving(false);
       setPosting(false);
@@ -239,28 +247,35 @@ export default function NewVendorBillPage() {
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            Vendor Bills
+            {isAr ? 'فواتير الموردين' : 'Vendor Bills'}
           </button>
-          <h1 className="page-title">New Vendor Bill</h1>
-          <p className="page-subtitle">Accounts Payable — Create Supplier Invoice</p>
+          <h1 className="page-title">{isAr ? 'فاتورة مورد جديدة' : 'New Vendor Bill'}</h1>
+          <p className="page-subtitle">
+            {isAr ? 'الذمم الدائنة — إنشاء فاتورة مورد' : 'Accounts Payable — Create Supplier Invoice'}
+          </p>
+          {(vendorsError || accountsError) && (
+            <div className="mt-3">
+              <ErrorBanner error={vendorsError ?? accountsError} retry={() => window.location.reload()} />
+            </div>
+          )}
         </div>
 
         {/* Header fields */}
         <div className="card p-5 space-y-4">
-          <p className="section-label">Bill Details</p>
+          <p className="section-label">{isAr ? 'تفاصيل الفاتورة' : 'Bill Details'}</p>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label className="input-label">Vendor *</label>
+              <label className="input-label">{isAr ? 'المورد *' : 'Vendor *'}</label>
               <SearchableCombobox
                 options={vendorOpts}
                 value={form.vendorId}
                 onChange={(v) => setForm({ ...form, vendorId: v })}
-                placeholder="Select vendor…"
+                placeholder={isAr ? 'اختر مورداً…' : 'Select vendor…'}
               />
             </div>
             <div>
-              <label className="input-label">Bill Date *</label>
+              <label className="input-label">{isAr ? 'تاريخ الفاتورة *' : 'Bill Date *'}</label>
               <input
                 type="date"
                 value={form.billDate}
@@ -269,7 +284,7 @@ export default function NewVendorBillPage() {
               />
             </div>
             <div>
-              <label className="input-label">Due Date</label>
+              <label className="input-label">{isAr ? 'تاريخ الاستحقاق' : 'Due Date'}</label>
               <input
                 type="date"
                 value={form.dueDate}
@@ -278,17 +293,17 @@ export default function NewVendorBillPage() {
               />
             </div>
             <div>
-              <label className="input-label">Reference / Vendor Invoice #</label>
+              <label className="input-label">{isAr ? 'المرجع / رقم فاتورة المورد' : 'Reference / Vendor Invoice #'}</label>
               <input
                 type="text"
                 value={form.reference}
                 onChange={(e) => setForm({ ...form, reference: e.target.value })}
-                placeholder="Vendor's invoice number"
+                placeholder={isAr ? 'رقم فاتورة المورد' : "Vendor's invoice number"}
                 className="input"
               />
             </div>
             <div>
-              <label className="input-label">Currency</label>
+              <label className="input-label">{isAr ? 'العملة' : 'Currency'}</label>
               <SearchableCombobox
                 options={CURRENCY_OPTS}
                 value={form.currency}
@@ -296,29 +311,29 @@ export default function NewVendorBillPage() {
               />
             </div>
             <div>
-              <label className="input-label">Journal</label>
+              <label className="input-label">{isAr ? 'الدفتر المحاسبي' : 'Journal'}</label>
               <SearchableCombobox
                 options={journalOpts}
                 value={form.journalId}
                 onChange={(v) => setForm({ ...form, journalId: v })}
-                placeholder="Purchase journal…"
+                placeholder={isAr ? 'دفتر المشتريات…' : 'Purchase journal…'}
               />
             </div>
             <div>
-              <label className="input-label">Location</label>
+              <label className="input-label">{isAr ? 'الفرع' : 'Location'}</label>
               <SearchableCombobox
                 options={locationOpts}
                 value={form.locationId}
                 onChange={(v) => setForm({ ...form, locationId: v })}
-                placeholder="Select location…"
+                placeholder={isAr ? 'اختر الفرع…' : 'Select location…'}
               />
             </div>
             <div className="col-span-2">
-              <label className="input-label">Notes</label>
+              <label className="input-label">{isAr ? 'ملاحظات' : 'Notes'}</label>
               <textarea
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="Internal notes or payment instructions…"
+                placeholder={isAr ? 'ملاحظات داخلية أو تعليمات الدفع…' : 'Internal notes or payment instructions…'}
                 rows={2}
                 className="input resize-none"
               />
@@ -329,19 +344,19 @@ export default function NewVendorBillPage() {
         {/* Line items */}
         <div className="card overflow-hidden">
           <div className="px-5 py-3 border-b border-[--border] bg-[--surface-2]">
-            <p className="section-label mb-0">Line Items</p>
+            <p className="section-label mb-0">{isAr ? 'بنود الفاتورة' : 'Line Items'}</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[--border] bg-[--surface-2] text-[11px] font-semibold uppercase tracking-wider text-[--text-3]">
                   <td className="px-4 py-2.5 w-8 text-center">#</td>
-                  <td className="px-3 py-2.5">Account</td>
-                  <td className="px-3 py-2.5">Description</td>
-                  <td className="px-3 py-2.5 w-20 text-right">Qty</td>
-                  <td className="px-3 py-2.5 w-28 text-right">Unit Price</td>
-                  <td className="px-3 py-2.5 w-36">Tax</td>
-                  <td className="px-3 py-2.5 w-28 text-right">Subtotal</td>
+                  <td className="px-3 py-2.5">{isAr ? 'الحساب' : 'Account'}</td>
+                  <td className="px-3 py-2.5">{isAr ? 'البيان' : 'Description'}</td>
+                  <td className="px-3 py-2.5 w-20 text-right">{isAr ? 'الكمية' : 'Qty'}</td>
+                  <td className="px-3 py-2.5 w-28 text-right">{isAr ? 'سعر الوحدة' : 'Unit Price'}</td>
+                  <td className="px-3 py-2.5 w-36">{isAr ? 'الضريبة' : 'Tax'}</td>
+                  <td className="px-3 py-2.5 w-28 text-right">{isAr ? 'الإجمالي' : 'Subtotal'}</td>
                   <td className="px-3 py-2.5 w-8"></td>
                 </tr>
               </thead>
@@ -356,6 +371,7 @@ export default function NewVendorBillPage() {
                           accounts={accounts}
                           value={line.accountId}
                           onChange={(v) => setLine(i, 'accountId', v)}
+                          isAr={isAr}
                         />
                       </td>
                       <td className="px-3 py-2">
@@ -363,7 +379,7 @@ export default function NewVendorBillPage() {
                           type="text"
                           value={line.description}
                           onChange={(e) => setLine(i, 'description', e.target.value)}
-                          placeholder="Description…"
+                          placeholder={isAr ? 'البيان…' : 'Description…'}
                           className="input text-xs py-1.5"
                         />
                       </td>
@@ -393,7 +409,7 @@ export default function NewVendorBillPage() {
                           options={taxOpts}
                           value={line.taxRateId}
                           onChange={(v) => setLine(i, 'taxRateId', v)}
-                          placeholder="No tax"
+                          placeholder={isAr ? 'بدون ضريبة' : 'No tax'}
                         />
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-xs text-[--text-1]">
@@ -421,28 +437,34 @@ export default function NewVendorBillPage() {
                       onClick={() => setLines((prev) => [...prev, EMPTY_LINE()])}
                       className="text-xs text-[--primary] hover:underline font-medium"
                     >
-                      + Add Line
+                      {isAr ? '+ إضافة بند' : '+ Add Line'}
                     </button>
                   </td>
                   <td className="px-3 py-2.5 text-right" colSpan={2}></td>
                 </tr>
                 {/* Totals */}
                 <tr className="border-t border-[--border]">
-                  <td colSpan={6} className="px-4 py-2 text-right text-xs text-[--text-3]">Subtotal</td>
+                  <td colSpan={6} className="px-4 py-2 text-right text-xs text-[--text-3]">
+                    {isAr ? 'الإجمالي قبل الضريبة' : 'Subtotal'}
+                  </td>
                   <td className="px-3 py-2 text-right text-xs tabular-nums text-[--text-1]">
                     {fmtMoney(subtotal, form.currency)}
                   </td>
                   <td></td>
                 </tr>
                 <tr>
-                  <td colSpan={6} className="px-4 py-2 text-right text-xs text-[--text-3]">Tax</td>
+                  <td colSpan={6} className="px-4 py-2 text-right text-xs text-[--text-3]">
+                    {isAr ? 'الضريبة' : 'Tax'}
+                  </td>
                   <td className="px-3 py-2 text-right text-xs tabular-nums text-[--text-1]">
                     {fmtMoney(taxTotal, form.currency)}
                   </td>
                   <td></td>
                 </tr>
                 <tr className="border-t border-[--border-strong]">
-                  <td colSpan={6} className="px-4 py-3 text-right text-sm font-semibold text-[--text-1]">Total</td>
+                  <td colSpan={6} className="px-4 py-3 text-right text-sm font-semibold text-[--text-1]">
+                    {isAr ? 'الإجمالي' : 'Total'}
+                  </td>
                   <td className="px-3 py-3 text-right text-sm font-bold tabular-nums text-[--primary]">
                     {fmtMoney(total, form.currency)}
                   </td>
@@ -464,18 +486,18 @@ export default function NewVendorBillPage() {
       <div className="w-64 shrink-0 space-y-4 pt-14">
         {/* Totals summary */}
         <div className="card p-5 space-y-3">
-          <p className="section-label">Summary</p>
+          <p className="section-label">{isAr ? 'الملخص' : 'Summary'}</p>
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs text-[--text-2]">
-              <span>Subtotal</span>
+              <span>{isAr ? 'الإجمالي قبل الضريبة' : 'Subtotal'}</span>
               <span className="tabular-nums">{fmtMoney(subtotal, form.currency)}</span>
             </div>
             <div className="flex justify-between text-xs text-[--text-2]">
-              <span>Tax</span>
+              <span>{isAr ? 'الضريبة' : 'Tax'}</span>
               <span className="tabular-nums">{fmtMoney(taxTotal, form.currency)}</span>
             </div>
             <div className="flex justify-between text-sm font-semibold text-[--text-1] pt-1.5 border-t border-[--border]">
-              <span>Total</span>
+              <span>{isAr ? 'الإجمالي' : 'Total'}</span>
               <span className="tabular-nums text-[--primary]">{fmtMoney(total, form.currency)}</span>
             </div>
           </div>
@@ -483,26 +505,26 @@ export default function NewVendorBillPage() {
 
         {/* Actions */}
         <div className="card p-4 space-y-2">
-          <p className="section-label">Actions</p>
+          <p className="section-label">{isAr ? 'الإجراءات' : 'Actions'}</p>
           <button
             onClick={() => submit(true)}
             disabled={posting || saving}
             className="btn btn-primary w-full"
           >
-            {posting ? 'Posting…' : 'Post Bill'}
+            {posting ? (isAr ? 'جاري الترحيل…' : 'Posting…') : (isAr ? 'ترحيل الفاتورة' : 'Post Bill')}
           </button>
           <button
             onClick={() => submit(false)}
             disabled={saving || posting}
             className="btn btn-secondary w-full"
           >
-            {saving ? 'Saving…' : 'Save as Draft'}
+            {saving ? (isAr ? 'جاري الحفظ…' : 'Saving…') : (isAr ? 'حفظ كمسودة' : 'Save as Draft')}
           </button>
           <button
             onClick={() => router.back()}
             className="btn btn-ghost w-full"
           >
-            Cancel
+            {isAr ? 'إلغاء' : 'Cancel'}
           </button>
         </div>
 
@@ -512,12 +534,14 @@ export default function NewVendorBillPage() {
             <div className="flex items-start gap-2">
               <span className="text-sm">i</span>
               <div>
-                <p className="text-xs font-semibold text-[--text-1] mb-1">Vendor Selected</p>
+                <p className="text-xs font-semibold text-[--text-1] mb-1">
+                  {isAr ? 'المورد المحدد' : 'Vendor Selected'}
+                </p>
                 <p className="text-xs text-[--text-2]">
                   {vendors.find((v) => v.id === form.vendorId)?.name}
                 </p>
                 <p className="text-xs text-[--text-3] mt-0.5">
-                  AP entry will be created on post.
+                  {isAr ? 'سيتم إنشاء قيد الذمم الدائنة عند الترحيل.' : 'AP entry will be created on post.'}
                 </p>
               </div>
             </div>

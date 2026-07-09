@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 import { useQuery, apiFetch } from '../../../lib/useApi';
+import { useLang } from '../../../lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Fund {
@@ -30,11 +32,6 @@ interface Location {
   name: string;
 }
 
-const VOUCHER_TABS = [
-  { key: 'PENDING', label: 'Pending' },
-  { key: '',        label: 'All' },
-];
-
 const fmt = (n: number | undefined | null) =>
   'EGP ' + Number(n ?? 0).toLocaleString('en-EG', { maximumFractionDigits: 0 });
 
@@ -54,6 +51,7 @@ function FundModal({ locations, onClose, onSuccess }: {
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const { isAr } = useLang();
   const [form, setForm] = useState({ name: '', locationId: '', initialBalance: '' });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
@@ -61,7 +59,7 @@ function FundModal({ locations, onClose, onSuccess }: {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name) { setErr('Name required.'); return; }
+    if (!form.name) { setErr(isAr ? 'الاسم مطلوب.' : 'Name required.'); return; }
     setSaving(true); setErr('');
     try {
       await apiFetch('/petty-cash/funds', {
@@ -82,34 +80,34 @@ function FundModal({ locations, onClose, onSuccess }: {
       <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose} />
       <div className="relative w-full max-w-md card shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
-          <h3 style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-1)' }}>New Fund</h3>
+          <h3 style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-1)' }}>{isAr ? 'صندوق جديد' : 'New Fund'}</h3>
           <button onClick={onClose} className="btn btn-ghost btn-sm" style={{ padding: '0.2rem 0.5rem', fontSize: '1.1rem', lineHeight: 1 }}>✕</button>
         </div>
         <form onSubmit={submit} style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
-            <label className="input-label">Fund Name *</label>
+            <label className="input-label">{isAr ? 'اسم الصندوق *' : 'Fund Name *'}</label>
             <input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} autoFocus />
           </div>
           <div>
-            <label className="input-label">Location</label>
+            <label className="input-label">{isAr ? 'الفرع' : 'Location'}</label>
             <SearchableCombobox
               options={locations.map((l) => ({ value: l.id, label: l.name }))}
               value={form.locationId}
               onChange={(v) => set('locationId', v)}
-              placeholder="Select location…"
+              placeholder={isAr ? 'اختر الفرع…' : 'Select location…'}
               clearable
             />
           </div>
           <div>
-            <label className="input-label">Initial Balance (EGP)</label>
+            <label className="input-label">{isAr ? 'الرصيد الأولي (ج.م)' : 'Initial Balance (EGP)'}</label>
             <input className="input" type="number" min="0" value={form.initialBalance}
               onChange={(e) => set('initialBalance', e.target.value)} />
           </div>
           {err && <p style={{ color: 'var(--danger)', fontSize: '0.75rem' }}>{err}</p>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', paddingTop: '0.5rem' }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>{isAr ? 'إلغاء' : 'Cancel'}</button>
             <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? 'Saving…' : 'Create Fund'}
+              {saving ? (isAr ? 'جارٍ الحفظ…' : 'Saving…') : (isAr ? 'إنشاء الصندوق' : 'Create Fund')}
             </button>
           </div>
         </form>
@@ -124,13 +122,14 @@ function ReplenishModal({ fund, onClose, onSuccess }: {
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const { isAr } = useLang();
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!amount || Number(amount) <= 0) { setErr('Enter a positive amount.'); return; }
+    if (!amount || Number(amount) <= 0) { setErr(isAr ? 'أدخل مبلغاً موجباً.' : 'Enter a positive amount.'); return; }
     setSaving(true); setErr('');
     try {
       await apiFetch(`/petty-cash/funds/${fund.id}`, {
@@ -148,27 +147,27 @@ function ReplenishModal({ fund, onClose, onSuccess }: {
       <div className="relative w-full max-w-sm card shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
           <h3 style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-1)' }}>
-            Replenish — {fund.name}
+            {isAr ? 'تعبئة الصندوق —' : 'Replenish —'} {fund.name}
           </h3>
           <button onClick={onClose} className="btn btn-ghost btn-sm" style={{ padding: '0.2rem 0.5rem', fontSize: '1.1rem', lineHeight: 1 }}>✕</button>
         </div>
         <form onSubmit={submit} style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
-            <label className="input-label">Current Balance</label>
+            <label className="input-label">{isAr ? 'الرصيد الحالي' : 'Current Balance'}</label>
             <p style={{ fontSize: '1rem', fontWeight: 700, color: Number(fund.balance) < 500 ? 'var(--warning)' : 'var(--primary)', marginTop: '0.25rem' }}>
               {fmt(fund.balance)}
             </p>
           </div>
           <div>
-            <label className="input-label">Replenish Amount (EGP) *</label>
+            <label className="input-label">{isAr ? 'مبلغ التعبئة (ج.م) *' : 'Replenish Amount (EGP) *'}</label>
             <input className="input" type="number" min="1" value={amount}
               onChange={(e) => setAmount(e.target.value)} autoFocus />
           </div>
           {err && <p style={{ color: 'var(--danger)', fontSize: '0.75rem' }}>{err}</p>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', paddingTop: '0.5rem' }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>{isAr ? 'إلغاء' : 'Cancel'}</button>
             <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? 'Saving…' : 'Replenish'}
+              {saving ? (isAr ? 'جارٍ الحفظ…' : 'Saving…') : (isAr ? 'تعبئة' : 'Replenish')}
             </button>
           </div>
         </form>
@@ -183,6 +182,7 @@ function VoucherModal({ funds, onClose, onSuccess }: {
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const { isAr } = useLang();
   const [form, setForm] = useState({ fundId: '', amount: '', description: '', category: '', receiptUrl: '' });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
@@ -191,7 +191,7 @@ function VoucherModal({ funds, onClose, onSuccess }: {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.fundId || !form.amount || !form.description) {
-      setErr('Fund, amount, and description are required.'); return;
+      setErr(isAr ? 'الصندوق والمبلغ والوصف مطلوبة.' : 'Fund, amount, and description are required.'); return;
     }
     setSaving(true); setErr('');
     try {
@@ -215,46 +215,46 @@ function VoucherModal({ funds, onClose, onSuccess }: {
       <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose} />
       <div className="relative w-full max-w-lg card shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
-          <h3 style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-1)' }}>Submit Voucher</h3>
+          <h3 style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-1)' }}>{isAr ? 'تقديم قسيمة' : 'Submit Voucher'}</h3>
           <button onClick={onClose} className="btn btn-ghost btn-sm" style={{ padding: '0.2rem 0.5rem', fontSize: '1.1rem', lineHeight: 1 }}>✕</button>
         </div>
         <form onSubmit={submit} style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
-            <label className="input-label">Fund *</label>
+            <label className="input-label">{isAr ? 'الصندوق *' : 'Fund *'}</label>
             <SearchableCombobox
               options={funds.map((f) => ({ value: f.id, label: f.name }))}
               value={form.fundId}
               onChange={(v) => set('fundId', v)}
-              placeholder="Select fund…"
+              placeholder={isAr ? 'اختر الصندوق…' : 'Select fund…'}
             />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
             <div>
-              <label className="input-label">Amount (EGP) *</label>
+              <label className="input-label">{isAr ? 'المبلغ (ج.م) *' : 'Amount (EGP) *'}</label>
               <input className="input" type="number" min="1" value={form.amount}
                 onChange={(e) => set('amount', e.target.value)} />
             </div>
             <div>
-              <label className="input-label">Category</label>
-              <input className="input" value={form.category} placeholder="e.g. Office Supplies"
+              <label className="input-label">{isAr ? 'الفئة' : 'Category'}</label>
+              <input className="input" value={form.category} placeholder={isAr ? 'مثال: مستلزمات مكتبية' : 'e.g. Office Supplies'}
                 onChange={(e) => set('category', e.target.value)} />
             </div>
           </div>
           <div>
-            <label className="input-label">Description *</label>
+            <label className="input-label">{isAr ? 'الوصف *' : 'Description *'}</label>
             <textarea className="textarea" rows={2} value={form.description}
               onChange={(e) => set('description', e.target.value)} />
           </div>
           <div>
-            <label className="input-label">Receipt URL</label>
+            <label className="input-label">{isAr ? 'رابط الإيصال' : 'Receipt URL'}</label>
             <input className="input" value={form.receiptUrl} placeholder="https://…"
               onChange={(e) => set('receiptUrl', e.target.value)} />
           </div>
           {err && <p style={{ color: 'var(--danger)', fontSize: '0.75rem' }}>{err}</p>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', paddingTop: '0.5rem' }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>{isAr ? 'إلغاء' : 'Cancel'}</button>
             <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? 'Saving…' : 'Submit Voucher'}
+              {saving ? (isAr ? 'جارٍ الإرسال…' : 'Saving…') : (isAr ? 'تقديم القسيمة' : 'Submit Voucher')}
             </button>
           </div>
         </form>
@@ -265,6 +265,11 @@ function VoucherModal({ funds, onClose, onSuccess }: {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function PettyCashPage() {
+  const { isAr } = useLang();
+  const VOUCHER_TABS = [
+    { key: 'PENDING', label: isAr ? 'قيد الانتظار' : 'Pending' },
+    { key: '',        label: isAr ? 'الكل' : 'All' },
+  ];
   const [voucherTab, setVoucherTab] = useState('PENDING');
   const [showFundModal, setShowFundModal] = useState(false);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
@@ -297,7 +302,7 @@ export default function PettyCashPage() {
   }
 
   async function rejectVoucher(id: string) {
-    if (!window.confirm('Reject this voucher?')) return;
+    if (!window.confirm(isAr ? 'رفض هذا السند؟' : 'Reject this voucher?')) return;
     setActionLoading(`${id}_reject`);
     try {
       await apiFetch(`/petty-cash/vouchers/${id}/reject`, { method: 'POST' });
@@ -312,10 +317,10 @@ export default function PettyCashPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Petty Cash</h1>
+          <h1 className="page-title">{isAr ? 'المصروفات النثرية' : 'Petty Cash'}</h1>
           <p className="page-subtitle">
-            {funds.length} fund{funds.length !== 1 ? 's' : ''}
-            {pendingCount > 0 ? ` · ${pendingCount} low balance` : ''}
+            {funds.length} {isAr ? (funds.length !== 1 ? 'صناديق' : 'صندوق') : (funds.length !== 1 ? 'funds' : 'fund')}
+            {pendingCount > 0 ? ` · ${pendingCount} ${isAr ? 'رصيد منخفض' : 'low balance'}` : ''}
           </p>
         </div>
       </div>
@@ -328,33 +333,33 @@ export default function PettyCashPage() {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)',
           }}>
-            <span className="section-label" style={{ margin: 0 }}>Funds</span>
+            <span className="section-label" style={{ margin: 0 }}>{isAr ? 'الصناديق' : 'Funds'}</span>
             <button className="btn btn-primary btn-sm" onClick={() => setShowFundModal(true)}>
-              + New Fund
+              {isAr ? '+ صندوق جديد' : '+ New Fund'}
             </button>
           </div>
           <table className="data-table">
             <thead>
               <tr>
-                <th>Fund Name</th>
-                <th>Location</th>
-                <th>Custodian</th>
-                <th style={{ textAlign: 'right' }}>Balance</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th>{isAr ? 'اسم الصندوق' : 'Fund Name'}</th>
+                <th>{isAr ? 'الفرع' : 'Location'}</th>
+                <th>{isAr ? 'المسؤول' : 'Custodian'}</th>
+                <th style={{ textAlign: 'right' }}>{isAr ? 'الرصيد' : 'Balance'}</th>
+                <th>{isAr ? 'الحالة' : 'Status'}</th>
+                <th>{isAr ? 'الإجراءات' : 'Actions'}</th>
               </tr>
             </thead>
             <tbody>
               {fundsLoading ? (
                 <tr>
                   <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)' }}>
-                    Loading…
+                    {isAr ? 'جارٍ التحميل…' : 'Loading…'}
                   </td>
                 </tr>
               ) : funds.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)' }}>
-                    No funds found.
+                    {isAr ? 'لا توجد صناديق.' : 'No funds found.'}
                   </td>
                 </tr>
               ) : (
@@ -379,7 +384,7 @@ export default function PettyCashPage() {
                     </td>
                     <td>
                       <button className="btn btn-secondary btn-sm" onClick={() => setReplenishFund(f)}>
-                        Replenish
+                        {isAr ? 'تعبئة' : 'Replenish'}
                       </button>
                     </td>
                   </tr>
@@ -395,9 +400,9 @@ export default function PettyCashPage() {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)',
           }}>
-            <span className="section-label" style={{ margin: 0 }}>Vouchers</span>
+            <span className="section-label" style={{ margin: 0 }}>{isAr ? 'القسائم' : 'Vouchers'}</span>
             <button className="btn btn-primary btn-sm" onClick={() => setShowVoucherModal(true)}>
-              + Submit Voucher
+              {isAr ? '+ تقديم قسيمة' : '+ Submit Voucher'}
             </button>
           </div>
 
@@ -417,34 +422,34 @@ export default function PettyCashPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Fund</th>
-                <th>Submitted By</th>
-                <th>Category</th>
-                <th>Description</th>
-                <th style={{ textAlign: 'right' }}>Amount</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th>{isAr ? 'التاريخ' : 'Date'}</th>
+                <th>{isAr ? 'الصندوق' : 'Fund'}</th>
+                <th>{isAr ? 'مقدم من' : 'Submitted By'}</th>
+                <th>{isAr ? 'الفئة' : 'Category'}</th>
+                <th>{isAr ? 'الوصف' : 'Description'}</th>
+                <th style={{ textAlign: 'right' }}>{isAr ? 'المبلغ' : 'Amount'}</th>
+                <th>{isAr ? 'الحالة' : 'Status'}</th>
+                <th>{isAr ? 'الإجراءات' : 'Actions'}</th>
               </tr>
             </thead>
             <tbody>
               {vouchersLoading ? (
                 <tr>
                   <td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)' }}>
-                    Loading…
+                    {isAr ? 'جارٍ التحميل…' : 'Loading…'}
                   </td>
                 </tr>
               ) : vouchers.length === 0 ? (
                 <tr>
                   <td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)' }}>
-                    No vouchers found.
+                    {isAr ? 'لا توجد قسائم.' : 'No vouchers found.'}
                   </td>
                 </tr>
               ) : (
                 vouchers.map((v) => (
                   <tr key={v.id}>
                     <td style={{ color: 'var(--text-2)', whiteSpace: 'nowrap' }}>
-                      {new Date(v.date).toLocaleDateString('en-EG', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {fmtDate(v.date, isAr, { day: 'numeric', month: 'short', year: 'numeric' })}
                     </td>
                     <td style={{ fontWeight: 500 }}>{v.fund?.name ?? '—'}</td>
                     <td style={{ color: 'var(--text-2)' }}>{v.submittedBy?.name ?? '—'}</td>
@@ -470,7 +475,7 @@ export default function PettyCashPage() {
                             disabled={actionLoading === `${v.id}_approve`}
                             onClick={() => approveVoucher(v.id)}
                           >
-                            {actionLoading === `${v.id}_approve` ? '…' : 'Approve'}
+                            {actionLoading === `${v.id}_approve` ? '…' : (isAr ? 'اعتماد' : 'Approve')}
                           </button>
                           <button
                             className="btn btn-sm"
@@ -478,7 +483,7 @@ export default function PettyCashPage() {
                             disabled={actionLoading === `${v.id}_reject`}
                             onClick={() => rejectVoucher(v.id)}
                           >
-                            {actionLoading === `${v.id}_reject` ? '…' : 'Reject'}
+                            {actionLoading === `${v.id}_reject` ? '…' : (isAr ? 'رفض' : 'Reject')}
                           </button>
                         </div>
                       )}

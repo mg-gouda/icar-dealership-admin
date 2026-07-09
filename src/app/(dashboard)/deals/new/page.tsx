@@ -5,24 +5,26 @@ import { useState, useMemo, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import { useLang } from '@/lib/lang-context';
 
 interface User { id: string; name: string; phone?: string; role: string; }
 interface Vehicle { id: string; make: string; model: string; year: number; price: number; vin: string; }
 interface Location { id: string; name: string; city?: string; defaultAdminFee?: number; defaultInsuranceFee?: number; }
 
-const METHODS = [
-  { value: 'CASH', label: 'Cash' },
-  { value: 'DEALERSHIP_INSTALLMENT', label: 'Dealership Installment' },
-  { value: 'BANK_FINANCING', label: 'Bank Financing' },
-];
-
 const fmt = (n: number) =>
   n.toLocaleString('en-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 0 });
 
 function NewDealContent() {
+  const { isAr } = useLang();
   const router = useRouter();
   const searchParams = useSearchParams();
   const leadId = searchParams.get('leadId');
+
+  const METHODS = [
+    { value: 'CASH', label: isAr ? 'نقداً' : 'Cash' },
+    { value: 'DEALERSHIP_INSTALLMENT', label: isAr ? 'تقسيط المعرض' : 'Dealership Installment' },
+    { value: 'BANK_FINANCING', label: isAr ? 'تمويل بنكي' : 'Bank Financing' },
+  ];
 
   const { data: usersRaw } = useQuery<User[]>('/users');
   const { data: vehiclesRes } = useQuery<{ data: Vehicle[] }>('/vehicles?status=AVAILABLE&limit=200');
@@ -93,7 +95,7 @@ function NewDealContent() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.customerId || !form.vehicleId || !form.salesRepId || !form.locationId || !form.salePrice) {
-      setErr('Customer, vehicle, sales rep, location, and sale price are required.');
+      setErr(isAr ? 'العميل والسيارة والمندوب والفرع والسعر مطلوبة.' : 'Customer, vehicle, sales rep, location, and sale price are required.');
       return;
     }
     setSaving(true);
@@ -126,7 +128,7 @@ function NewDealContent() {
   const vehicleOpts = vehicles.map((v) => ({
     value: v.id,
     label: `${v.year} ${v.make} ${v.model} — ${fmt(v.price)}`,
-    description: `VIN: ${v.vin}`,
+    description: isAr ? `الشاسيه: ${v.vin}` : `VIN: ${v.vin}`,
   }));
   const locationOpts = locations.map((l) => ({
     value: l.id,
@@ -136,13 +138,15 @@ function NewDealContent() {
   return (
     <div className="p-6 max-w-2xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/deals" className="text-gray-500 hover:text-white text-xs transition">← Deals</Link>
-        <h1 className="text-xl font-semibold text-white">New Deal</h1>
+        <Link href="/deals" className="text-gray-500 hover:text-white text-xs transition">
+          {isAr ? 'العودة إلى الصفقات' : '← Deals'}
+        </Link>
+        <h1 className="text-xl font-semibold text-white">{isAr ? 'صفقة جديدة' : 'New Deal'}</h1>
       </div>
 
       {leadId && lead && (
         <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 text-sm flex items-center gap-2">
-          <span>Pre-filled from lead:</span>
+          <span>{isAr ? 'تم الملء من الاستفسار:' : 'Pre-filled from lead:'}</span>
           <span className="font-medium text-white">{lead.name}</span>
           {lead.vehicle && <span className="text-gray-400">· {lead.vehicle.year} {lead.vehicle.make} {lead.vehicle.model}</span>}
         </div>
@@ -154,70 +158,70 @@ function NewDealContent() {
       <form onSubmit={submit} className="space-y-4">
         {/* Parties */}
         <div className="rounded-xl border border-white/5 bg-gray-900 p-5 space-y-4">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Parties</p>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{isAr ? 'الأطراف' : 'Parties'}</p>
           <SearchableCombobox
-            label="Customer *"
+            label={isAr ? 'العميل *' : 'Customer *'}
             options={customerOpts}
             value={form.customerId}
             onChange={(v) => set('customerId', v)}
-            placeholder="Search customer…"
+            placeholder={isAr ? 'بحث عن عميل…' : 'Search customer…'}
           />
           <SearchableCombobox
-            label="Sales Representative *"
+            label={isAr ? 'مندوب المبيعات *' : 'Sales Representative *'}
             options={salesRepOpts}
             value={form.salesRepId}
             onChange={(v) => set('salesRepId', v)}
-            placeholder="Search sales rep…"
+            placeholder={isAr ? 'بحث عن مندوب…' : 'Search sales rep…'}
           />
           <SearchableCombobox
-            label="Location *"
+            label={isAr ? 'الفرع *' : 'Location *'}
             options={locationOpts}
             value={form.locationId}
             onChange={selectLocation}
-            placeholder="Select location…"
+            placeholder={isAr ? 'اختر فرعاً…' : 'Select location…'}
           />
         </div>
 
         {/* Vehicle */}
         <div className="rounded-xl border border-white/5 bg-gray-900 p-5 space-y-4">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Vehicle</p>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{isAr ? 'السيارة' : 'Vehicle'}</p>
           <SearchableCombobox
-            label="Available Vehicle *"
+            label={isAr ? 'السيارة المتاحة *' : 'Available Vehicle *'}
             options={vehicleOpts}
             value={form.vehicleId}
             onChange={selectVehicle}
-            placeholder="Search available vehicles…"
+            placeholder={isAr ? 'بحث عن مركبة…' : 'Search available vehicles…'}
           />
         </div>
 
         {/* Financials */}
         <div className="rounded-xl border border-white/5 bg-gray-900 p-5 space-y-4">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Financials</p>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{isAr ? 'التفاصيل المالية' : 'Financials'}</p>
           <SearchableCombobox
-            label="Purchase Method"
+            label={isAr ? 'طريقة الشراء' : 'Purchase Method'}
             options={METHODS}
             value={form.purchaseMethod}
             onChange={(v) => set('purchaseMethod', v)}
           />
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Sale Price (EGP) *</label>
+              <label className="block text-xs text-gray-500 mb-1">{isAr ? 'سعر البيع (ج.م) *' : 'Sale Price (EGP) *'}</label>
               <input type="number" required value={form.salePrice}
                 onChange={(e) => set('salePrice', e.target.value)}
                 className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Admin Fee (EGP)</label>
+              <label className="block text-xs text-gray-500 mb-1">{isAr ? 'الرسوم الإدارية (ج.م)' : 'Admin Fee (EGP)'}</label>
               <input type="number" value={form.adminFee}
                 onChange={(e) => set('adminFee', e.target.value)}
-                placeholder="From location default"
+                placeholder={isAr ? 'من إعداد الفرع' : 'From location default'}
                 className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Insurance Fee (EGP)</label>
+              <label className="block text-xs text-gray-500 mb-1">{isAr ? 'رسوم التأمين (ج.م)' : 'Insurance Fee (EGP)'}</label>
               <input type="number" value={form.insuranceFee}
                 onChange={(e) => set('insuranceFee', e.target.value)}
-                placeholder="From location default"
+                placeholder={isAr ? 'من إعداد الفرع' : 'From location default'}
                 className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500" />
             </div>
           </div>
@@ -225,7 +229,7 @@ function NewDealContent() {
           {/* Subtotal preview */}
           {subtotal > 0 && (
             <div className="flex items-center justify-between rounded-lg bg-blue-500/5 border border-blue-500/10 px-4 py-3">
-              <span className="text-xs text-gray-400">Estimated Total</span>
+              <span className="text-xs text-gray-400">{isAr ? 'الإجمالي التقديري' : 'Estimated Total'}</span>
               <span className="text-white font-bold">{fmt(subtotal)}</span>
             </div>
           )}
@@ -234,11 +238,11 @@ function NewDealContent() {
         <div className="flex justify-end gap-3">
           <Link href="/deals"
             className="px-4 py-2 text-sm text-gray-400 hover:text-white rounded-lg border border-white/10 hover:border-white/20 transition">
-            Cancel
+            {isAr ? 'إلغاء' : 'Cancel'}
           </Link>
           <button type="submit" disabled={saving}
             className="px-6 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition">
-            {saving ? 'Creating…' : 'Create Deal'}
+            {saving ? (isAr ? 'جاري الإنشاء…' : 'Creating…') : (isAr ? 'إنشاء صفقة' : 'Create Deal')}
           </button>
         </div>
       </form>
@@ -248,8 +252,9 @@ function NewDealContent() {
 
 // BUG-001: useSearchParams() requires Suspense boundary in Next.js App Router
 export default function NewDealPage() {
+  const { isAr } = useLang();
   return (
-    <Suspense fallback={<div className="p-6 text-gray-400">Loading…</div>}>
+    <Suspense fallback={<div className="p-6 text-gray-400">{isAr ? 'جاري التحميل…' : 'Loading…'}</div>}>
       <NewDealContent />
     </Suspense>
   );

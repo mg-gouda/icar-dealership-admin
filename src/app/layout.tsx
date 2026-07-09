@@ -1,21 +1,22 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Cairo } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin"],
+const cairo = Cairo({
+  subsets: ["arabic", "latin"],
+  weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "DealerMS — Staff Management Portal",
-  description: "Multi-location car dealership management platform",
+  title: "iCar Dealership",
+  description: "منصة متكاملة لإدارة معارض السيارات متعددة الفروع",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html lang="ar" dir="rtl">
+      <body className={cairo.className}>
         {children}
       </body>
     </html>

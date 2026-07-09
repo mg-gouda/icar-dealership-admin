@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { cacheFieldPermissions } from '../../lib/fieldPermissions';
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+import { useLang } from '@/lib/lang-context';
+import { API_BASE as API } from '@/lib/config';
 
 type Stage = 'credentials' | 'totp-verify' | 'totp-setup' | 'totp-confirm';
 
@@ -34,6 +34,28 @@ export default function LoginPage() {
   const [setupSecret, setSetupSecret] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [brandName, setBrandName] = useState('iCar Dealership');
+  const [brandLogo, setBrandLogo] = useState('');
+  const { isAr } = useLang();
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('dealerms_brand');
+      if (raw) {
+        const b = JSON.parse(raw);
+        const name = b.displayName || 'iCar Dealership';
+        setBrandName(name);
+        if (b.logoUrl) setBrandLogo(b.logoUrl);
+        document.title = name === 'iCar Dealership' ? name : `${name} | iCar Dealership`;
+        // apply saved favicon
+        if (b.faviconUrl) {
+          let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
+          if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+          link.href = b.faviconUrl;
+        }
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   async function post(path: string, body: object, token?: string) {
     const res = await fetch(`${API}${path}`, {
@@ -117,9 +139,14 @@ export default function LoginPage() {
       <div className="relative z-10 w-full max-w-[320px] px-4">
         {/* Brand mark above card */}
         <div className="text-center mb-5">
-          <span className="text-3xl" aria-hidden>🚗</span>
-          <p className="text-sm font-semibold text-white mt-1.5 tracking-tight">DealerMS</p>
-          <p className="text-[11px] mt-0.5" style={{ color: 'oklch(1 0 0 / 0.4)' }}>Staff Management Portal</p>
+          {brandLogo
+            ? <img src={brandLogo} alt={brandName} className="mx-auto mb-1.5" style={{ height: 44, maxWidth: 160, objectFit: 'contain', borderRadius: 6 }} />
+            : <span className="text-3xl" aria-hidden>🚗</span>
+          }
+          <p className="text-sm font-semibold text-white mt-1.5 tracking-tight">{brandName}</p>
+          <p className="text-[11px] mt-0.5" style={{ color: 'oklch(1 0 0 / 0.4)' }}>
+            {isAr ? 'بوابة الإدارة' : 'Staff Management Portal'}
+          </p>
         </div>
 
         <div className="rounded-xl shadow-2xl px-5 py-5"
@@ -129,12 +156,18 @@ export default function LoginPage() {
           {stage === 'credentials' && (
             <>
               <div className="mb-4 text-center">
-                <p className="text-[0.9375rem] font-semibold text-white">Welcome Back</p>
-                <p className="text-[11px] mt-0.5" style={{ color: 'oklch(1 0 0 / 0.45)' }}>Sign in to your account to continue</p>
+                <p className="text-[0.9375rem] font-semibold text-white">
+                  {isAr ? 'مرحباً بعودتك' : 'Welcome Back'}
+                </p>
+                <p className="text-[11px] mt-0.5" style={{ color: 'oklch(1 0 0 / 0.45)' }}>
+                  {isAr ? 'تسجيل الدخول إلى حسابك للمتابعة' : 'Sign in to your account to continue'}
+                </p>
               </div>
               <form onSubmit={handleCredentials} className="space-y-2.5">
                 <div>
-                  <label className="block text-[11px] font-medium mb-1" style={{ color: 'oklch(1 0 0 / 0.55)' }}>Email Address</label>
+                  <label className="block text-[11px] font-medium mb-1" style={{ color: 'oklch(1 0 0 / 0.55)' }}>
+                    {isAr ? 'البريد الإلكتروني' : 'Email Address'}
+                  </label>
                   <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                     required autoComplete="email" placeholder="your-name@dealership.com"
                     className="w-full rounded-lg px-3 py-2 text-xs text-white focus:outline-none transition"
@@ -144,7 +177,9 @@ export default function LoginPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-medium mb-1" style={{ color: 'oklch(1 0 0 / 0.55)' }}>Password</label>
+                  <label className="block text-[11px] font-medium mb-1" style={{ color: 'oklch(1 0 0 / 0.55)' }}>
+                    {isAr ? 'كلمة المرور' : 'Password'}
+                  </label>
                   <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                     required autoComplete="current-password" placeholder="••••••••"
                     className="w-full rounded-lg px-3 py-2 text-xs text-white focus:outline-none transition"
@@ -156,7 +191,9 @@ export default function LoginPage() {
                 <div className="flex items-center justify-between pt-0.5">
                   <label className="flex items-center gap-1.5 cursor-pointer">
                     <input type="checkbox" className="w-3 h-3 rounded" style={{ accentColor: 'oklch(0.65 0.2 265)' }} />
-                    <span className="text-[11px]" style={{ color: 'oklch(1 0 0 / 0.45)' }}>Remember me</span>
+                    <span className="text-[11px]" style={{ color: 'oklch(1 0 0 / 0.45)' }}>
+                      {isAr ? 'تذكرني' : 'Remember me'}
+                    </span>
                   </label>
                   <button type="button" className="text-[11px] transition"
                     style={{ color: 'oklch(0.72 0.18 265)' }}
@@ -169,7 +206,7 @@ export default function LoginPage() {
                       } catch { setError('Could not send reset link. Try again.'); }
                       finally { setLoading(false); }
                     }}>
-                    Forgot password?
+                    {isAr ? 'نسيت كلمة المرور؟' : 'Forgot password?'}
                   </button>
                 </div>
                 {error && <p className="text-[11px] text-red-400 text-center">{error}</p>}
@@ -178,7 +215,9 @@ export default function LoginPage() {
                   style={{ background: 'oklch(0.52 0.22 265)' }}
                   onMouseOver={e => !loading && (e.currentTarget.style.background = 'oklch(0.46 0.21 265)')}
                   onMouseOut={e => (e.currentTarget.style.background = 'oklch(0.52 0.22 265)')}>
-                  {loading ? 'Signing in…' : <>Sign In <span aria-hidden>→</span></>}
+                  {loading
+                    ? (isAr ? 'جاري تسجيل الدخول…' : 'Signing in…')
+                    : <>{isAr ? 'تسجيل الدخول' : 'Sign In'} <span aria-hidden>→</span></>}
                 </button>
               </form>
             </>
@@ -189,9 +228,13 @@ export default function LoginPage() {
             <>
               <div className="mb-4 text-center">
                 <span className="text-2xl block mb-2" aria-hidden>🔐</span>
-                <p className="text-[0.9375rem] font-semibold text-white">Two-Factor Authentication</p>
+                <p className="text-[0.9375rem] font-semibold text-white">
+                  {isAr ? 'المصادقة الثنائية' : 'Two-Factor Authentication'}
+                </p>
                 <p className="text-[11px] mt-1" style={{ color: 'oklch(1 0 0 / 0.45)' }}>
-                  Enter the 6-digit code from your authenticator app to complete login
+                  {isAr
+                    ? 'أدخل رمز التحقق المكون من 6 أرقام من تطبيق المصادقة لإتمام تسجيل الدخول'
+                    : 'Enter the 6-digit code from your authenticator app to complete login'}
                 </p>
               </div>
               <form onSubmit={handleTotpVerify} className="space-y-3">
@@ -212,19 +255,23 @@ export default function LoginPage() {
                 <button type="submit" disabled={loading || totpCode.length < 6}
                   className="w-full rounded-lg text-white text-xs font-semibold py-2.5 transition disabled:opacity-50"
                   style={{ background: 'oklch(0.52 0.22 265)' }}>
-                  {loading ? 'Verifying…' : 'Verify Code'}
+                  {loading
+                    ? (isAr ? 'جاري التحقق…' : 'Verifying…')
+                    : (isAr ? 'تحقق من الرمز' : 'Verify Code')}
                 </button>
                 <p className="text-center text-[11px]" style={{ color: 'oklch(1 0 0 / 0.35)' }}>
-                  Lost access to your authenticator?{' '}
-                  <span style={{ color: 'oklch(0.72 0.18 265)' }}>Contact your admin.</span>
+                  {isAr ? 'فقدت الوصول إلى تطبيق المصادقة؟' : 'Lost access to your authenticator?'}{' '}
+                  <span style={{ color: 'oklch(0.72 0.18 265)' }}>
+                    {isAr ? 'تواصل مع المسؤول.' : 'Contact your admin.'}
+                  </span>
                 </p>
                 <p className="text-center text-[10px] rounded-md px-2 py-1.5"
                   style={{ background: 'oklch(0.68 0.16 72 / 0.12)', color: 'oklch(0.85 0.1 72)' }}>
-                  ⚠️ Required for Finance, Admin &amp; Manager roles
+                  {isAr ? '⚠️ مطلوب لأدوار المالية والإدارة والمديرين' : '⚠️ Required for Finance, Admin & Manager roles'}
                 </p>
                 <button type="button" onClick={() => { setStage('credentials'); setError(''); setTotpCode(''); }}
                   className="w-full text-[11px] transition" style={{ color: 'oklch(1 0 0 / 0.3)' }}>
-                  ← Back to login
+                  {isAr ? '→ العودة لتسجيل الدخول' : '← Back to login'}
                 </button>
               </form>
             </>
@@ -235,31 +282,37 @@ export default function LoginPage() {
             <>
               <div className="mb-4 text-center">
                 <span className="text-2xl block mb-2" aria-hidden>🔑</span>
-                <p className="text-[0.9375rem] font-semibold text-white">Set Up Authenticator</p>
+                <p className="text-[0.9375rem] font-semibold text-white">
+                  {isAr ? 'إعداد المصادقة الثنائية' : 'Set Up Authenticator'}
+                </p>
                 <p className="text-[11px] mt-1" style={{ color: 'oklch(1 0 0 / 0.4)' }}>
-                  Your role requires 2FA. Add this key to Google Authenticator or Authy.
+                  {isAr
+                    ? 'دورك يتطلب المصادقة الثنائية. أضف هذا المفتاح إلى Google Authenticator أو Authy.'
+                    : 'Your role requires 2FA. Add this key to Google Authenticator or Authy.'}
                 </p>
               </div>
               <div className="mb-3 rounded-lg p-3 text-center"
                 style={{ background: 'oklch(1 0 0 / 0.07)', border: '1px solid oklch(1 0 0 / 0.12)' }}>
-                <p className="text-[10px] mb-1" style={{ color: 'oklch(1 0 0 / 0.4)' }}>Secret key (manual entry)</p>
+                <p className="text-[10px] mb-1" style={{ color: 'oklch(1 0 0 / 0.4)' }}>
+                  {isAr ? 'المفتاح السري (إدخال يدوي)' : 'Secret key (manual entry)'}
+                </p>
                 <p className="text-sm font-mono text-white tracking-wider break-all select-all">{setupSecret}</p>
               </div>
               {setupUri && (
                 <a href={setupUri} title={setupUri}
                   className="block text-center text-[11px] mb-3 truncate transition"
                   style={{ color: 'oklch(0.72 0.18 265)' }}>
-                  Open in authenticator app →
+                  {isAr ? '← فتح في تطبيق المصادقة' : 'Open in authenticator app →'}
                 </a>
               )}
               <button onClick={() => { setTotpCode(''); setStage('totp-confirm'); }}
                 className="w-full rounded-lg text-white text-xs font-semibold py-2.5 transition"
                 style={{ background: 'oklch(0.52 0.22 265)' }}>
-                I've added the key →
+                {isAr ? 'لقد أضفت المفتاح ←' : "I've added the key →"}
               </button>
               <button type="button" onClick={() => { setStage('credentials'); setError(''); setTotpCode(''); }}
                 className="w-full text-[11px] transition mt-2" style={{ color: 'oklch(1 0 0 / 0.3)' }}>
-                ← Cancel
+                {isAr ? '→ إلغاء' : '← Cancel'}
               </button>
             </>
           )}
@@ -268,9 +321,13 @@ export default function LoginPage() {
           {stage === 'totp-confirm' && (
             <>
               <div className="mb-4 text-center">
-                <p className="text-[0.9375rem] font-semibold text-white">Confirm Setup</p>
+                <p className="text-[0.9375rem] font-semibold text-white">
+                  {isAr ? 'تأكيد الإعداد' : 'Confirm Setup'}
+                </p>
                 <p className="text-[11px] mt-1" style={{ color: 'oklch(1 0 0 / 0.4)' }}>
-                  Enter the 6-digit code from your app to activate 2FA
+                  {isAr
+                    ? 'أدخل رمز التحقق المكون من 6 أرقام من تطبيقك لتفعيل المصادقة الثنائية'
+                    : 'Enter the 6-digit code from your app to activate 2FA'}
                 </p>
               </div>
               <form onSubmit={handleTotpConfirm} className="space-y-3">
@@ -290,11 +347,13 @@ export default function LoginPage() {
                 <button type="submit" disabled={loading || totpCode.length < 6}
                   className="w-full rounded-lg text-white text-xs font-semibold py-2.5 transition disabled:opacity-50"
                   style={{ background: 'oklch(0.52 0.22 265)' }}>
-                  {loading ? 'Activating…' : 'Activate 2FA & Sign In'}
+                  {loading
+                    ? (isAr ? 'جاري التفعيل…' : 'Activating…')
+                    : (isAr ? 'تفعيل المصادقة الثنائية وتسجيل الدخول' : 'Activate 2FA & Sign In')}
                 </button>
                 <button type="button" onClick={() => { setStage('totp-setup'); setError(''); }}
                   className="w-full text-[11px] transition" style={{ color: 'oklch(1 0 0 / 0.3)' }}>
-                  ← Back
+                  {isAr ? '→ رجوع' : '← Back'}
                 </button>
               </form>
             </>
@@ -303,8 +362,21 @@ export default function LoginPage() {
 
         {/* Security notice below card */}
         <p className="text-center text-[10px] mt-4" style={{ color: 'oklch(1 0 0 / 0.3)' }}>
-          🔒 This portal is for authorized staff only.<br />
-          Unauthorized access is strictly prohibited.
+          {isAr
+            ? <> 🔒 هذه البوابة مخصصة للموظفين المصرح لهم فقط.<br />الوصول غير المصرح به محظور تماماً.</>
+            : <>🔒 This portal is for authorized staff only.<br />Unauthorized access is strictly prohibited.</>}
+        </p>
+
+        {/* Developer credit */}
+        <p className="text-center text-[10px] mt-3" style={{ color: 'oklch(1 0 0 / 0.2)' }}>
+          {isAr ? 'تطوير ' : 'Developed by '}
+          <a href="https://wa.me/+201002805139" target="_blank" rel="noopener noreferrer"
+            style={{ color: 'oklch(1 0 0 / 0.35)', textDecoration: 'none', borderBottom: '1px solid oklch(1 0 0 / 0.2)' }}
+            onMouseOver={e => (e.currentTarget.style.color = 'oklch(1 0 0 / 0.6)')}
+            onMouseOut={e => (e.currentTarget.style.color = 'oklch(1 0 0 / 0.35)')}>
+            Mohamed Gouda
+          </a>
+          {' | v0.1.0'}
         </p>
       </div>
     </main>

@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import { useLang } from '@/lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
 
 interface DepScheduleLine {
   period: string;
@@ -31,51 +33,38 @@ interface FixedAsset {
 
 interface Account { id: string; code: string; name: string; }
 
-const METHODS = [
-  { value: 'STRAIGHT_LINE', label: 'Straight Line' },
-  { value: 'DECLINING_BALANCE', label: 'Declining Balance' },
-  { value: 'SUM_OF_YEARS_DIGITS', label: 'Sum of Years Digits' },
-];
-
-const CATEGORIES = [
-  { value: '', label: 'All Categories' },
-  { value: 'VEHICLE', label: 'Vehicle' },
-  { value: 'EQUIPMENT', label: 'Equipment' },
-  { value: 'FURNITURE', label: 'Furniture' },
-  { value: 'IT', label: 'IT & Tech' },
-  { value: 'BUILDING', label: 'Building' },
-  { value: 'OTHER', label: 'Other' },
-];
-
-const CATEGORY_OPTS = CATEGORIES.slice(1);
-
-const STATUS_OPTS = [
-  { value: '', label: 'All Statuses' },
-  { value: 'ACTIVE', label: 'Active' },
-  { value: 'DISPOSED', label: 'Disposed' },
-  { value: 'FULLY_DEPRECIATED', label: 'Fully Depreciated' },
-];
 
 const egp = (n: number) =>
   'EGP ' + n.toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function statusBadge(status: string) {
-  if (status === 'ACTIVE') return <span className="badge badge-success">Active</span>;
-  if (status === 'DISPOSED') return <span className="badge badge-neutral">Disposed</span>;
-  if (status === 'FULLY_DEPRECIATED') return <span className="badge badge-warning">Fully Depr.</span>;
-  return <span className="badge badge-neutral">{status}</span>;
-}
-
-function methodLabel(m: string) {
-  return METHODS.find((x) => x.value === m)?.label ?? m.replace(/_/g, ' ');
-}
-
-function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString('en-EG', { year: 'numeric', month: 'short', day: 'numeric' });
-}
-
 export default function AssetsPage() {
   const router = useRouter();
+  const { isAr } = useLang();
+
+  const METHODS = [
+    { value: 'STRAIGHT_LINE', label: isAr ? 'القسط الثابت' : 'Straight Line' },
+    { value: 'DECLINING_BALANCE', label: isAr ? 'الرصيد المتناقص' : 'Declining Balance' },
+    { value: 'SUM_OF_YEARS_DIGITS', label: isAr ? 'مجموع أرقام السنوات' : 'Sum of Years Digits' },
+  ];
+  const CATEGORIES = [
+    { value: '', label: isAr ? 'جميع الفئات' : 'All Categories' },
+    { value: 'VEHICLE', label: isAr ? 'مركبة' : 'Vehicle' },
+    { value: 'EQUIPMENT', label: isAr ? 'معدات' : 'Equipment' },
+    { value: 'FURNITURE', label: isAr ? 'أثاث' : 'Furniture' },
+    { value: 'IT', label: isAr ? 'تقنية المعلومات' : 'IT & Tech' },
+    { value: 'BUILDING', label: isAr ? 'مبنى' : 'Building' },
+    { value: 'OTHER', label: isAr ? 'أخرى' : 'Other' },
+  ];
+  const CATEGORY_OPTS = CATEGORIES.slice(1);
+  const STATUS_OPTS = [
+    { value: '', label: isAr ? 'جميع الحالات' : 'All Statuses' },
+    { value: 'ACTIVE', label: isAr ? 'نشط' : 'Active' },
+    { value: 'DISPOSED', label: isAr ? 'مستبعد' : 'Disposed' },
+    { value: 'FULLY_DEPRECIATED', label: isAr ? 'مستهلك بالكامل' : 'Fully Depreciated' },
+  ];
+  function methodLabel(m: string) {
+    return METHODS.find((x) => x.value === m)?.label ?? m.replace(/_/g, ' ');
+  }
 
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -126,7 +115,7 @@ export default function AssetsPage() {
 
   async function createAsset(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name || !form.cost) { setErr('Name and cost required.'); return; }
+    if (!form.name || !form.cost) { setErr(isAr ? 'الاسم والتكلفة مطلوبان.' : 'Name and cost required.'); return; }
     setSaving(true); setErr('');
     try {
       await apiFetch('/finance/assets', {
@@ -151,7 +140,7 @@ export default function AssetsPage() {
   }
 
   async function postDepreciation(assetId: string) {
-    if (!postingMonth) { alert('Select a month first.'); return; }
+    if (!postingMonth) { alert(isAr ? 'اختر شهراً أولاً.' : 'Select a month first.'); return; }
     setPosting(true);
     try {
       await apiFetch(`/finance/assets/${assetId}/depreciate`, {
@@ -168,13 +157,20 @@ export default function AssetsPage() {
   const totalMonths = expandedAsset ? expandedAsset.usefulLife * 12 : 0;
   const progressPct = totalMonths > 0 ? Math.round((postedCount / totalMonths) * 100) : 0;
 
+  function statusBadge(status: string) {
+    if (status === 'ACTIVE') return <span className="badge badge-success">{isAr ? 'نشط' : 'Active'}</span>;
+    if (status === 'DISPOSED') return <span className="badge badge-neutral">{isAr ? 'مُستبعد' : 'Disposed'}</span>;
+    if (status === 'FULLY_DEPRECIATED') return <span className="badge badge-warning">{isAr ? 'مستهلك كليًا' : 'Fully Depr.'}</span>;
+    return <span className="badge badge-neutral">{status}</span>;
+  }
+
   return (
     <>
       {/* Page header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Fixed Assets Register</h1>
-          <p className="page-subtitle">Asset Register &amp; Depreciation Schedule</p>
+          <h1 className="page-title">{isAr ? 'الأصول الثابتة' : 'Fixed Assets Register'}</h1>
+          <p className="page-subtitle">{isAr ? 'إدارة الأصول الثابتة والاستهلاك' : 'Asset Register & Depreciation Schedule'}</p>
         </div>
         <div style={{ display: 'flex', gap: '0.625rem', alignItems: 'center' }}>
           {deprMsg && <span style={{ fontSize: '0.8125rem', color: 'var(--success-fg)', fontWeight: 600 }}>{deprMsg}</span>}
@@ -185,16 +181,16 @@ export default function AssetsPage() {
               setRunningDepr(true); setDeprMsg('');
               try {
                 await apiFetch('/tasks/run-depreciation', { method: 'POST' });
-                setDeprMsg('Depreciation run complete ✓');
+                setDeprMsg(isAr ? 'اكتمل تشغيل الاستهلاك ✓' : 'Depreciation run complete ✓');
                 reload();
               } catch (e: unknown) { setDeprMsg(e instanceof Error ? e.message : 'Error'); }
               finally { setRunningDepr(false); }
             }}
           >
-            {runningDepr ? 'Running…' : '⟳ Run Depreciation'}
+            {runningDepr ? (isAr ? 'جاري التشغيل…' : 'Running…') : (isAr ? '⟳ تشغيل الاستهلاك' : '⟳ Run Depreciation')}
           </button>
           <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-            + Register New Asset
+            {isAr ? '+ أصل جديد' : '+ Register New Asset'}
           </button>
         </div>
       </div>
@@ -203,33 +199,33 @@ export default function AssetsPage() {
         {/* KPI stat cards */}
         <div className="grid grid-cols-4 gap-4">
           <div className="card p-4">
-            <p className="section-label mb-1">Total Asset Value</p>
+            <p className="section-label mb-1">{isAr ? 'إجمالي قيمة الأصول' : 'Total Asset Value'}</p>
             <p className="text-2xl font-bold" style={{ color: 'var(--text-1)' }}>
               {egp(totalValue)}
             </p>
-            <p className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>+ Original Cost</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>{isAr ? '+ التكلفة الأصلية' : '+ Original Cost'}</p>
           </div>
           <div className="card p-4">
-            <p className="section-label mb-1">Net Book Value</p>
+            <p className="section-label mb-1">{isAr ? 'القيمة الدفترية الصافية' : 'Net Book Value'}</p>
             <p className="text-2xl font-bold" style={{ color: 'var(--primary)' }}>
               {egp(totalNBV)}
             </p>
-            <p className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>After depreciation</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>{isAr ? 'بعد الاستهلاك' : 'After depreciation'}</p>
           </div>
           <div className="card p-4">
-            <p className="section-label mb-1">This Month Depreciation</p>
+            <p className="section-label mb-1">{isAr ? 'استهلاك هذا الشهر' : 'This Month Depreciation'}</p>
             <p className="text-2xl font-bold" style={{ color: 'var(--warning-fg)' }}>
               {egp(thisMonthDepr)}
             </p>
-            <p className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>Auto-posted monthly</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>{isAr ? 'يُرحَّل تلقائيًا شهريًا' : 'Auto-posted monthly'}</p>
           </div>
           <div className="card p-4">
-            <p className="section-label mb-1">Assets Running</p>
+            <p className="section-label mb-1">{isAr ? 'الأصول النشطة' : 'Assets Running'}</p>
             <p className="text-2xl font-bold" style={{ color: 'var(--success-fg)' }}>
               {activeCount}
             </p>
             <p className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>
-              {assets.filter((a) => a.status === 'FULLY_DEPRECIATED').length} fully deprecated
+              {assets.filter((a) => a.status === 'FULLY_DEPRECIATED').length} {isAr ? 'مستهلك كليًا' : 'fully deprecated'}
             </p>
           </div>
         </div>
@@ -239,7 +235,7 @@ export default function AssetsPage() {
           <input
             className="input"
             style={{ maxWidth: 260 }}
-            placeholder="Search assets…"
+            placeholder={isAr ? 'بحث…' : 'Search assets…'}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -248,7 +244,7 @@ export default function AssetsPage() {
               options={CATEGORIES}
               value={categoryFilter}
               onChange={setCategoryFilter}
-              placeholder="All Categories"
+              placeholder={isAr ? 'كل الفئات' : 'All Categories'}
             />
           </div>
           <div style={{ width: 180 }}>
@@ -256,7 +252,7 @@ export default function AssetsPage() {
               options={STATUS_OPTS}
               value={statusFilter}
               onChange={setStatusFilter}
-              placeholder="All Statuses"
+              placeholder={isAr ? 'كل الحالات' : 'All Statuses'}
             />
           </div>
         </div>
@@ -264,22 +260,22 @@ export default function AssetsPage() {
         {/* Assets table */}
         <div className="card overflow-hidden">
           {loading && (
-            <div className="p-8 text-center text-sm" style={{ color: 'var(--text-3)' }}>Loading…</div>
+            <div className="p-8 text-center text-sm" style={{ color: 'var(--text-3)' }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</div>
           )}
           <table className="data-table">
             <thead>
               <tr>
-                <th>Asset #</th>
-                <th>Asset Name</th>
-                <th>Category</th>
-                <th>Purchase Date</th>
-                <th style={{ textAlign: 'right' }}>Cost (EGP)</th>
-                <th>Useful Life</th>
-                <th>Method</th>
-                <th style={{ textAlign: 'right' }}>Accum. Depr</th>
-                <th style={{ textAlign: 'right' }}>Net Book Value</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th>{isAr ? 'رقم الأصل' : 'Asset #'}</th>
+                <th>{isAr ? 'اسم الأصل' : 'Asset Name'}</th>
+                <th>{isAr ? 'الفئة' : 'Category'}</th>
+                <th>{isAr ? 'تاريخ الشراء' : 'Purchase Date'}</th>
+                <th style={{ textAlign: 'right' }}>{isAr ? 'التكلفة (ج.م)' : 'Cost (EGP)'}</th>
+                <th>{isAr ? 'العمر الإنتاجي' : 'Useful Life'}</th>
+                <th>{isAr ? 'الطريقة' : 'Method'}</th>
+                <th style={{ textAlign: 'right' }}>{isAr ? 'الاستهلاك المتراكم' : 'Accum. Depr'}</th>
+                <th style={{ textAlign: 'right' }}>{isAr ? 'القيمة الدفترية' : 'Net Book Value'}</th>
+                <th>{isAr ? 'الحالة' : 'Status'}</th>
+                <th>{isAr ? 'الإجراءات' : 'Actions'}</th>
               </tr>
             </thead>
             <tbody>
@@ -299,12 +295,12 @@ export default function AssetsPage() {
                       <span className="font-medium" style={{ color: 'var(--text-1)' }}>{a.name}</span>
                     </td>
                     <td style={{ color: 'var(--text-2)' }}>{a.category}</td>
-                    <td style={{ color: 'var(--text-2)' }}>{fmtDate(a.purchaseDate)}</td>
+                    <td style={{ color: 'var(--text-2)' }}>{fmtDate(a.purchaseDate, isAr)}</td>
                     <td style={{ textAlign: 'right' }} className="tabular-nums font-medium">
                       {egp(Number(a.cost))}
                     </td>
                     <td style={{ color: 'var(--text-2)' }}>
-                      {a.usefulLife} yr / {a.usefulLife * 12} mo
+                      {a.usefulLife} {isAr ? 'س' : 'yr'} / {a.usefulLife * 12} {isAr ? 'ش' : 'mo'}
                     </td>
                     <td style={{ color: 'var(--text-2)' }}>{methodLabel(a.method)}</td>
                     <td
@@ -325,7 +321,7 @@ export default function AssetsPage() {
                         className="btn btn-ghost btn-sm"
                         onClick={(e) => { e.stopPropagation(); router.push(`/finance/assets/${a.id}`); }}
                       >
-                        View Schedule
+                        {isAr ? 'عرض الجدول' : 'View Schedule'}
                       </button>
                     </td>
                   </tr>
@@ -336,7 +332,7 @@ export default function AssetsPage() {
                       <td colSpan={11} style={{ padding: 0, background: 'var(--surface-2)' }}>
                         <div style={{ padding: '1rem 1.25rem', borderTop: '1px solid var(--border)' }}>
                           {loadingDetail ? (
-                            <p className="text-xs" style={{ color: 'var(--text-3)' }}>Loading schedule…</p>
+                            <p className="text-xs" style={{ color: 'var(--text-3)' }}>{isAr ? 'جاري التحميل…' : 'Loading schedule…'}</p>
                           ) : (
                             <>
                               <div className="flex items-center justify-between mb-3">
@@ -344,13 +340,13 @@ export default function AssetsPage() {
                                   className="section-label"
                                   style={{ marginBottom: 0 }}
                                 >
-                                  Depreciation Schedule — {a.name}
+                                  {isAr ? `جدول الاستهلاك — ${a.name}` : `Depreciation Schedule — ${a.name}`}
                                   {a.status === 'ACTIVE' && (
                                     <span
                                       className="badge badge-info"
                                       style={{ marginLeft: 8 }}
                                     >
-                                      Auto-posted Monthly
+                                      {isAr ? 'يُرحَّل تلقائيًا شهريًا' : 'Auto-posted Monthly'}
                                     </span>
                                   )}
                                 </p>
@@ -367,7 +363,9 @@ export default function AssetsPage() {
                                     disabled={posting || !postingMonth}
                                     onClick={() => postDepreciation(a.id)}
                                   >
-                                    {posting ? 'Posting…' : `Post Depreciation${postingMonth ? ` for ${postingMonth}` : ''}`}
+                                    {posting
+                                      ? (isAr ? 'جاري الترحيل…' : 'Posting…')
+                                      : `${isAr ? 'ترحيل الاستهلاك' : 'Post Depreciation'}${postingMonth ? ` ${isAr ? 'لـ' : 'for'} ${postingMonth}` : ''}`}
                                   </button>
                                 </div>
                               </div>
@@ -376,7 +374,7 @@ export default function AssetsPage() {
                               {totalMonths > 0 && (
                                 <div className="mb-3">
                                   <div className="flex justify-between text-xs mb-1" style={{ color: 'var(--text-3)' }}>
-                                    <span>{postedCount} months of {totalMonths} depreciated</span>
+                                    <span>{postedCount} {isAr ? 'شهر من' : 'months of'} {totalMonths} {isAr ? 'مستهلك' : 'depreciated'}</span>
                                     <span>{progressPct}%</span>
                                   </div>
                                   <div
@@ -406,12 +404,12 @@ export default function AssetsPage() {
                                 style={{ gridTemplateColumns: 'repeat(6, 1fr)', color: 'var(--text-2)' }}
                               >
                                 {[
-                                  ['Cost', egp(Number(a.cost))],
-                                  ['Salvage Value', egp(Number(a.salvageValue ?? 0))],
-                                  ['Useful Life', `${a.usefulLife} years`],
-                                  ['Method', methodLabel(a.method)],
-                                  ['Purchased', fmtDate(a.purchaseDate)],
-                                  ['Status', a.status],
+                                  [isAr ? 'التكلفة' : 'Cost', egp(Number(a.cost))],
+                                  [isAr ? 'قيمة الخردة' : 'Salvage Value', egp(Number(a.salvageValue ?? 0))],
+                                  [isAr ? 'العمر الإنتاجي' : 'Useful Life', `${a.usefulLife} ${isAr ? 'سنوات' : 'years'}`],
+                                  [isAr ? 'الطريقة' : 'Method', methodLabel(a.method)],
+                                  [isAr ? 'تاريخ الشراء' : 'Purchased', fmtDate(a.purchaseDate, isAr)],
+                                  [isAr ? 'الحالة' : 'Status', a.status],
                                 ].map(([label, val]) => (
                                   <div key={label as string}>
                                     <p style={{ color: 'var(--text-3)', marginBottom: 2 }}>{label}</p>
@@ -424,12 +422,12 @@ export default function AssetsPage() {
                                 <thead>
                                   <tr>
                                     <th>#</th>
-                                    <th>Period</th>
-                                    <th style={{ textAlign: 'right' }}>Opening NBV</th>
-                                    <th style={{ textAlign: 'right' }}>Depreciation</th>
-                                    <th style={{ textAlign: 'right' }}>Closing NBV</th>
-                                    <th>Status</th>
-                                    <th>Journal Entry</th>
+                                    <th>{isAr ? 'الفترة' : 'Period'}</th>
+                                    <th style={{ textAlign: 'right' }}>{isAr ? 'القيمة الافتتاحية' : 'Opening NBV'}</th>
+                                    <th style={{ textAlign: 'right' }}>{isAr ? 'الاستهلاك' : 'Depreciation'}</th>
+                                    <th style={{ textAlign: 'right' }}>{isAr ? 'القيمة الختامية' : 'Closing NBV'}</th>
+                                    <th>{isAr ? 'الحالة' : 'Status'}</th>
+                                    <th>{isAr ? 'قيد اليومية' : 'Journal Entry'}</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -440,7 +438,7 @@ export default function AssetsPage() {
                                         className="text-center text-xs"
                                         style={{ color: 'var(--text-3)', padding: '1rem' }}
                                       >
-                                        No schedule generated yet.
+                                        {isAr ? 'لم يُنشأ جدول بعد.' : 'No schedule generated yet.'}
                                       </td>
                                     </tr>
                                   )}
@@ -472,9 +470,9 @@ export default function AssetsPage() {
                                       </td>
                                       <td>
                                         {line.posted ? (
-                                          <span className="badge badge-success">Posted</span>
+                                          <span className="badge badge-success">{isAr ? 'مرحَّل' : 'Posted'}</span>
                                         ) : (
-                                          <span className="badge badge-neutral">Scheduled</span>
+                                          <span className="badge badge-neutral">{isAr ? 'مجدول' : 'Scheduled'}</span>
                                         )}
                                       </td>
                                       <td className="text-xs" style={{ color: 'var(--text-3)' }}>
@@ -499,7 +497,7 @@ export default function AssetsPage() {
                     className="text-center text-sm"
                     style={{ color: 'var(--text-3)', padding: '2.5rem 1rem' }}
                   >
-                    No fixed assets found.
+                    {isAr ? 'لا توجد أصول ثابتة.' : 'No fixed assets found.'}
                   </td>
                 </tr>
               )}
@@ -525,8 +523,8 @@ export default function AssetsPage() {
               style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)' }}
             >
               <div>
-                <h2 className="page-title" style={{ fontSize: '1rem' }}>Register New Asset</h2>
-                <p className="page-subtitle">Add asset to the fixed assets register</p>
+                <h2 className="page-title" style={{ fontSize: '1rem' }}>{isAr ? 'تسجيل أصل جديد' : 'Register New Asset'}</h2>
+                <p className="page-subtitle">{isAr ? 'إضافة أصل لسجل الأصول الثابتة' : 'Add asset to the fixed assets register'}</p>
               </div>
               <button
                 className="btn btn-ghost btn-sm"
@@ -543,7 +541,7 @@ export default function AssetsPage() {
             >
               <div className="space-y-3">
                 <div>
-                  <label className="input-label">Asset Name *</label>
+                  <label className="input-label">{isAr ? 'اسم الأصل *' : 'Asset Name *'}</label>
                   <input
                     required
                     className="input"
@@ -556,15 +554,15 @@ export default function AssetsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <SearchableCombobox
-                      label="Category *"
+                      label={isAr ? 'الفئة *' : 'Category *'}
                       options={CATEGORY_OPTS}
                       value={form.category}
                       onChange={(v) => setF('category', v)}
-                      placeholder="Select category"
+                      placeholder={isAr ? 'اختر الفئة' : 'Select category'}
                     />
                   </div>
                   <div>
-                    <label className="input-label">Purchase Date *</label>
+                    <label className="input-label">{isAr ? 'تاريخ الشراء *' : 'Purchase Date *'}</label>
                     <input
                       type="date"
                       required
@@ -577,7 +575,7 @@ export default function AssetsPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="input-label">Cost (EGP) *</label>
+                    <label className="input-label">{isAr ? 'التكلفة (ج.م) *' : 'Cost (EGP) *'}</label>
                     <input
                       type="number"
                       required
@@ -590,7 +588,7 @@ export default function AssetsPage() {
                     />
                   </div>
                   <div>
-                    <label className="input-label">Salvage Value (EGP)</label>
+                    <label className="input-label">{isAr ? 'قيمة الخردة (ج.م)' : 'Salvage Value (EGP)'}</label>
                     <input
                       type="number"
                       min="0"
@@ -605,7 +603,7 @@ export default function AssetsPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="input-label">Useful Life (years) *</label>
+                    <label className="input-label">{isAr ? 'العمر الإنتاجي (سنوات) *' : 'Useful Life (years) *'}</label>
                     <input
                       type="number"
                       required
@@ -619,21 +617,21 @@ export default function AssetsPage() {
                   </div>
                   <div>
                     <SearchableCombobox
-                      label="Depreciation Method"
+                      label={isAr ? 'طريقة الاستهلاك' : 'Depreciation Method'}
                       options={METHODS}
                       value={form.method}
                       onChange={(v) => setF('method', v)}
-                      placeholder="Select method"
+                      placeholder={isAr ? 'اختر الطريقة' : 'Select method'}
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="input-label">Description</label>
+                  <label className="input-label">{isAr ? 'الوصف' : 'Description'}</label>
                   <textarea
                     className="textarea"
                     rows={2}
-                    placeholder="Optional notes…"
+                    placeholder={isAr ? 'ملاحظات اختيارية…' : 'Optional notes…'}
                     value={form.description}
                     onChange={(e) => setF('description', e.target.value)}
                   />
@@ -641,11 +639,11 @@ export default function AssetsPage() {
 
                 <div>
                   <SearchableCombobox
-                    label="Fixed Asset Account"
+                    label={isAr ? 'حساب الأصل الثابت' : 'Fixed Asset Account'}
                     options={accountOpts}
                     value={form.assetAccountId}
                     onChange={(v) => setF('assetAccountId', v)}
-                    placeholder="Select GL account…"
+                    placeholder={isAr ? 'اختر حساب الأستاذ…' : 'Select GL account…'}
                     clearable
                   />
                 </div>
@@ -661,7 +659,7 @@ export default function AssetsPage() {
                     style={{ flex: 1 }}
                     onClick={() => setShowCreate(false)}
                   >
-                    Cancel
+                    {isAr ? 'إلغاء' : 'Cancel'}
                   </button>
                   <button
                     type="submit"
@@ -669,7 +667,7 @@ export default function AssetsPage() {
                     style={{ flex: 1 }}
                     disabled={saving}
                   >
-                    {saving ? 'Saving…' : 'Register Asset'}
+                    {saving ? (isAr ? 'جاري الحفظ…' : 'Saving…') : (isAr ? 'تسجيل الأصل' : 'Register Asset')}
                   </button>
                 </div>
               </div>

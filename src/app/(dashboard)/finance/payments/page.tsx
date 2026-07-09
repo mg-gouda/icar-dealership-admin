@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import { useLang } from '@/lib/lang-context';
+import { fmtDate } from '@/lib/fmt';
 
 interface Payment {
   id: string;
@@ -27,20 +29,6 @@ interface Invoice {
   partner?: { name: string };
 }
 
-const PAYMENT_METHODS = [
-  { value: 'CASH', label: 'Cash' },
-  { value: 'TRANSFER', label: 'Bank Transfer' },
-  { value: 'CHEQUE', label: 'Cheque' },
-  { value: 'CARD', label: 'Card' },
-];
-
-const STATUS_OPTS = [
-  { value: '', label: 'All statuses' },
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'POSTED', label: 'Posted' },
-  { value: 'RECONCILED', label: 'Reconciled' },
-  { value: 'CANCELLED', label: 'Cancelled' },
-];
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -59,6 +47,15 @@ const egp = (n: number) =>
 function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
   onClose: () => void; onSuccess: () => void; tab: 'customer' | 'vendor';
 }) {
+  const { isAr } = useLang();
+
+  const PAYMENT_METHODS = [
+    { value: 'CASH', label: isAr ? 'نقداً' : 'Cash' },
+    { value: 'TRANSFER', label: isAr ? 'تحويل بنكي' : 'Bank Transfer' },
+    { value: 'CHEQUE', label: isAr ? 'شيك' : 'Cheque' },
+    { value: 'CARD', label: isAr ? 'بطاقة' : 'Card' },
+  ];
+
   const [form, setForm] = useState({
     partnerId: '',
     journalId: '',
@@ -90,7 +87,7 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
   const partnerOpts = (Array.isArray(partnersRaw) ? partnersRaw : []).map((p) => ({ value: p.id, label: p.name }));
   const journalOpts = (Array.isArray(journalsRaw) ? journalsRaw : []).map((j) => ({ value: j.id, label: `${j.code} — ${j.name}` }));
   const whtOpts = [
-    { value: '', label: 'No WHT' },
+    { value: '', label: isAr ? 'بدون خصم' : 'No WHT' },
     ...((whtCatsRaw?.data ?? []).map((w) => ({ value: w.id, label: `${w.name} (${w.rate}%)` }))),
   ];
   const openInvoices = openInvoicesRaw?.items ?? [];
@@ -110,7 +107,7 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.partnerId || !form.journalId || !form.amount) {
-      setErr('Customer/vendor, journal, and amount required.');
+      setErr(isAr ? 'العميل/المورد والدفتر والمبلغ مطلوبة.' : 'Customer/vendor, journal, and amount required.');
       return;
     }
     setSaving(true); setErr('');
@@ -132,7 +129,7 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
         }),
       });
       onSuccess();
-    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Error'); }
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : isAr ? 'خطأ' : 'Error'); }
     finally { setSaving(false); }
   }
 
@@ -149,9 +146,13 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
       >
         <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
           <div>
-            <h2 style={{ fontWeight: 600, fontSize: '0.9375rem', color: 'var(--text-1)' }}>Register Payment</h2>
+            <h2 style={{ fontWeight: 600, fontSize: '0.9375rem', color: 'var(--text-1)' }}>
+              {isAr ? 'تسجيل دفعة' : 'Register Payment'}
+            </h2>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
-              {tab === 'customer' ? 'Customer receipt' : 'Vendor payment'}
+              {tab === 'customer'
+                ? (isAr ? 'استلام من عميل' : 'Customer receipt')
+                : (isAr ? 'دفع لمورد' : 'Vendor payment')}
             </p>
           </div>
           <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ fontSize: '1.2rem' }}>×</button>
@@ -159,18 +160,20 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
 
         <form onSubmit={submit} className="p-6 space-y-4 flex-1">
           <div>
-            <label className="input-label">{tab === 'customer' ? 'Customer' : 'Vendor'} *</label>
+            <label className="input-label">
+              {tab === 'customer' ? (isAr ? 'العميل' : 'Customer') : (isAr ? 'المورد' : 'Vendor')} *
+            </label>
             <SearchableCombobox
               options={partnerOpts}
               value={form.partnerId}
               onChange={(v) => { setForm((p) => ({ ...p, partnerId: v })); setAllocations([]); }}
-              placeholder={`Search ${tab === 'customer' ? 'customers' : 'vendors'}…`}
+              placeholder={tab === 'customer' ? (isAr ? 'بحث في العملاء…' : 'Search customers…') : (isAr ? 'بحث في الموردين…' : 'Search vendors…')}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="input-label">Amount (EGP) *</label>
+              <label className="input-label">{isAr ? 'المبلغ (ج.م) *' : 'Amount (EGP) *'}</label>
               <input
                 type="number" step="0.01" min="0.01" required className="input"
                 value={form.amount}
@@ -179,7 +182,7 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
               />
             </div>
             <div>
-              <label className="input-label">Date *</label>
+              <label className="input-label">{isAr ? 'التاريخ *' : 'Date *'}</label>
               <input
                 type="date" required className="input"
                 value={form.date}
@@ -189,7 +192,7 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
           </div>
 
           <div>
-            <label className="input-label">Method</label>
+            <label className="input-label">{isAr ? 'طريقة الدفع' : 'Method'}</label>
             <SearchableCombobox
               options={PAYMENT_METHODS}
               value={form.method}
@@ -198,28 +201,28 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
           </div>
 
           <div>
-            <label className="input-label">Journal *</label>
+            <label className="input-label">{isAr ? 'الدفتر *' : 'Journal *'}</label>
             <SearchableCombobox
               options={journalOpts}
               value={form.journalId}
               onChange={(v) => setForm((p) => ({ ...p, journalId: v }))}
-              placeholder="Select bank/cash journal…"
+              placeholder={isAr ? 'اختر دفتر بنك/نقدية…' : 'Select bank/cash journal…'}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="input-label">Reference #</label>
+              <label className="input-label">{isAr ? 'رقم المرجع' : 'Reference #'}</label>
               <input
-                className="input" placeholder="Cheque / transfer ref…"
+                className="input" placeholder={isAr ? 'رقم الشيك / الحوالة…' : 'Cheque / transfer ref…'}
                 value={form.reference}
                 onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))}
               />
             </div>
             <div>
-              <label className="input-label">Note</label>
+              <label className="input-label">{isAr ? 'ملاحظة' : 'Note'}</label>
               <input
-                className="input" placeholder="Optional note…"
+                className="input" placeholder={isAr ? 'ملاحظة اختيارية…' : 'Optional note…'}
                 value={form.note}
                 onChange={(e) => setForm((p) => ({ ...p, note: e.target.value }))}
               />
@@ -229,21 +232,21 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
           {/* WHT — vendor payments only */}
           {tab === 'vendor' && whtOpts.length > 1 && (
             <div>
-              <label className="input-label">Withholding Tax (WHT)</label>
+              <label className="input-label">{isAr ? 'ضريبة الاستقطاع (WHT)' : 'Withholding Tax (WHT)'}</label>
               <SearchableCombobox
                 options={whtOpts}
                 value={form.whtCategoryId}
                 onChange={(v) => setForm((p) => ({ ...p, whtCategoryId: v }))}
-                placeholder="No WHT"
+                placeholder={isAr ? 'بدون خصم' : 'No WHT'}
                 clearable
-                clearLabel="No WHT"
+                clearLabel={isAr ? 'بدون خصم' : 'No WHT'}
               />
               {form.whtCategoryId && form.amount && (() => {
                 const cat = (whtCatsRaw?.data ?? []).find(w => w.id === form.whtCategoryId);
                 const whtAmt = cat ? Number(form.amount) * cat.rate / 100 : 0;
                 return (
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-2)', marginTop: '0.375rem' }}>
-                    WHT deducted: <strong>EGP {whtAmt.toFixed(2)}</strong> · Net to bank: <strong>EGP {(Number(form.amount) - whtAmt).toFixed(2)}</strong>
+                    {isAr ? 'الخصم:' : 'WHT deducted:'} <strong>EGP {whtAmt.toFixed(2)}</strong> · {isAr ? 'صافي البنك:' : 'Net to bank:'} <strong>EGP {(Number(form.amount) - whtAmt).toFixed(2)}</strong>
                   </p>
                 );
               })()}
@@ -253,16 +256,16 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
           {/* Allocations */}
           {openInvoices.length > 0 && (
             <div>
-              <p className="section-label">Allocate to Invoices</p>
+              <p className="section-label">{isAr ? 'تخصيص للفواتير' : 'Allocate to Invoices'}</p>
               <div className="card" style={{ overflow: 'hidden' }}>
                 <table className="data-table">
                   <thead>
                     <tr>
                       <th />
-                      <th>Invoice #</th>
-                      <th className="text-right">Original</th>
-                      <th className="text-right">Applied</th>
-                      <th className="text-right">Remaining</th>
+                      <th>{isAr ? 'رقم الفاتورة' : 'Invoice #'}</th>
+                      <th className="text-right">{isAr ? 'الأصلي' : 'Original'}</th>
+                      <th className="text-right">{isAr ? 'المطبق' : 'Applied'}</th>
+                      <th className="text-right">{isAr ? 'المتبقي' : 'Remaining'}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -314,9 +317,11 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
             className="flex gap-3 pt-2"
             style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', marginTop: 'auto' }}
           >
-            <button type="button" className="btn btn-secondary flex-1" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn btn-secondary flex-1" onClick={onClose}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </button>
             <button type="submit" disabled={saving} className="btn btn-primary flex-1">
-              {saving ? 'Registering…' : 'Register Payment'}
+              {saving ? (isAr ? 'جارٍ التسجيل…' : 'Registering…') : (isAr ? 'تسجيل الدفعة' : 'Register Payment')}
             </button>
           </div>
         </form>
@@ -328,10 +333,26 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function PaymentsPage() {
   const router = useRouter();
+  const { isAr } = useLang();
   const [tab, setTab] = useState<'customer' | 'vendor'>('customer');
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
   const [showPanel, setShowPanel] = useState(false);
+
+  const STATUS_OPTS = [
+    { value: '', label: isAr ? 'كل الحالات' : 'All statuses' },
+    { value: 'DRAFT', label: isAr ? 'مسودة' : 'Draft' },
+    { value: 'POSTED', label: isAr ? 'مرحل' : 'Posted' },
+    { value: 'RECONCILED', label: isAr ? 'متسوي' : 'Reconciled' },
+    { value: 'CANCELLED', label: isAr ? 'ملغى' : 'Cancelled' },
+  ];
+
+  const statusLabel: Record<string, string> = {
+    DRAFT: isAr ? 'مسودة' : 'DRAFT',
+    POSTED: isAr ? 'مرحل' : 'POSTED',
+    RECONCILED: isAr ? 'متسوي' : 'RECONCILED',
+    CANCELLED: isAr ? 'ملغى' : 'CANCELLED',
+  };
 
   const type = tab === 'customer' ? 'INBOUND' : 'OUTBOUND';
   const qs = new URLSearchParams({
@@ -352,11 +373,11 @@ export default function PaymentsPage() {
       {/* Header */}
       <div className="page-header" style={{ padding: '1.25rem 0 1rem' }}>
         <div>
-          <h1 className="page-title">Payments</h1>
-          <p className="page-subtitle">{data?.total ?? 0} records</p>
+          <h1 className="page-title">{isAr ? 'المدفوعات' : 'Payments'}</h1>
+          <p className="page-subtitle">{data?.total ?? 0} {isAr ? 'سجل' : 'records'}</p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowPanel(true)}>
-          + Register Payment
+          {isAr ? '+ تسجيل دفعة' : '+ Register Payment'}
         </button>
       </div>
 
@@ -366,13 +387,13 @@ export default function PaymentsPage() {
           className={`tab${tab === 'customer' ? ' active' : ''}`}
           onClick={() => setTab('customer')}
         >
-          Customer Payments
+          {isAr ? 'مدفوعات العملاء' : 'Customer Payments'}
         </button>
         <button
           className={`tab${tab === 'vendor' ? ' active' : ''}`}
           onClick={() => setTab('vendor')}
         >
-          Vendor Payments
+          {isAr ? 'مدفوعات الموردين' : 'Vendor Payments'}
         </button>
       </div>
 
@@ -381,7 +402,7 @@ export default function PaymentsPage() {
         <input
           className="input"
           style={{ maxWidth: 240 }}
-          placeholder="Search payments…"
+          placeholder={isAr ? 'بحث في المدفوعات…' : 'Search payments…'}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -390,28 +411,28 @@ export default function PaymentsPage() {
             options={STATUS_OPTS}
             value={statusFilter}
             onChange={setStatusFilter}
-            placeholder="All statuses"
+            placeholder={isAr ? 'كل الحالات' : 'All statuses'}
             clearable
-            clearLabel="All statuses"
+            clearLabel={isAr ? 'كل الحالات' : 'All statuses'}
           />
         </div>
       </div>
 
       {/* Table */}
       <div className="card" style={{ overflow: 'hidden' }}>
-        {loading && <p className="p-6 text-sm" style={{ color: 'var(--text-3)' }}>Loading…</p>}
+        {loading && <p className="p-6 text-sm" style={{ color: 'var(--text-3)' }}>{isAr ? 'تحميل…' : 'Loading…'}</p>}
         {error && <p className="p-6 text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
         {!loading && (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Payment #</th>
-                <th>{tab === 'customer' ? 'Customer' : 'Vendor'}</th>
-                <th>Date</th>
-                <th>Method</th>
-                <th className="text-right">Amount</th>
-                <th>Applied To</th>
-                <th>Status</th>
+                <th>{isAr ? 'رقم الدفعة' : 'Payment #'}</th>
+                <th>{tab === 'customer' ? (isAr ? 'العميل' : 'Customer') : (isAr ? 'المورد' : 'Vendor')}</th>
+                <th>{isAr ? 'التاريخ' : 'Date'}</th>
+                <th>{isAr ? 'طريقة الدفع' : 'Method'}</th>
+                <th className="text-right">{isAr ? 'المبلغ' : 'Amount'}</th>
+                <th>{isAr ? 'مطبق على' : 'Applied To'}</th>
+                <th>{isAr ? 'الحالة' : 'Status'}</th>
               </tr>
             </thead>
             <tbody>
@@ -428,7 +449,7 @@ export default function PaymentsPage() {
                   </td>
                   <td style={{ fontWeight: 500 }}>{p.partner?.name ?? '—'}</td>
                   <td style={{ color: 'var(--text-2)', fontSize: '0.8rem' }}>
-                    {new Date(p.date).toLocaleDateString('en-EG')}
+                    {fmtDate(p.date, isAr)}
                   </td>
                   <td style={{ color: 'var(--text-2)', fontSize: '0.8rem' }}>{p.method}</td>
                   <td className="text-right tabular-nums" style={{ fontWeight: 600 }}>{egp(Number(p.amount))}</td>
@@ -438,14 +459,14 @@ export default function PaymentsPage() {
                       : '—'}
                   </td>
                   <td>
-                    <span className={statusBadge(p.status)}>{p.status}</span>
+                    <span className={statusBadge(p.status)}>{statusLabel[p.status] ?? p.status}</span>
                   </td>
                 </tr>
               ))}
               {payments.length === 0 && (
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-3)', padding: '2.5rem' }}>
-                    No payments found.
+                    {isAr ? 'لا توجد مدفوعات.' : 'No payments found.'}
                   </td>
                 </tr>
               )}
