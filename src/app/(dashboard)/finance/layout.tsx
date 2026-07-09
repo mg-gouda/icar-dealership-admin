@@ -6,6 +6,9 @@ import { useLang } from '@/lib/lang-context';
 
 const NAV_ITEMS = [
   { href: '/finance',                  en: 'Overview',         ar: 'نظرة عامة' },
+  { href: '/finance/accounts',         en: 'Chart of Accts',   ar: 'شجرة الحسابات' },
+  { href: '/finance/journals',         en: 'Journals',         ar: 'الدفاتر المحاسبية' },
+  { href: '/finance/fiscal-years',     en: 'Fiscal Years',     ar: 'السنوات المالية' },
   { href: '/finance/invoices',         en: 'Invoices',         ar: 'الفواتير' },
   { href: '/finance/vendors',          en: 'Vendors',          ar: 'الموردون' },
   { href: '/finance/vendor-bills',     en: 'Vendor Bills',     ar: 'فواتير الموردين' },
@@ -15,12 +18,9 @@ const NAV_ITEMS = [
   { href: '/finance/bank-statements',  en: 'Bank Statements',  ar: 'كشوف البنك' },
   { href: '/finance/assets',           en: 'Assets',           ar: 'الأصول' },
   { href: '/finance/reports',          en: 'Reports',          ar: 'التقارير' },
-  { href: '/finance/commissions',      en: 'Commissions',      ar: 'العمولات' },
-  { href: '/finance/accounts',         en: 'Accounts',         ar: 'الحسابات' },
-  { href: '/finance/journals',         en: 'Journals',         ar: 'الدفاتر المحاسبية' },
   { href: '/finance/taxes',            en: 'Taxes',            ar: 'الضرائب' },
   { href: '/finance/currencies',       en: 'Currencies',       ar: 'العملات' },
-  { href: '/finance/fiscal-years',     en: 'Fiscal Years',     ar: 'السنوات المالية' },
+  { href: '/finance/commissions',      en: 'Commissions',      ar: 'العمولات' },
   { href: '/finance/commission-plans', en: 'Commission Plans', ar: 'خطط العمولات' },
 ];
 

@@ -47,8 +47,23 @@ function fmtEGP(n: number): string {
   return `EGP ${n.toLocaleString()}`;
 }
 
+/* ─── Month translation ───────────────────────────────────────────────────── */
+const MONTH_AR: Record<string, string> = {
+  Jan: 'يناير', Feb: 'فبراير', Mar: 'مارس',  Apr: 'أبريل',
+  May: 'مايو',  Jun: 'يونيو',  Jul: 'يوليو', Aug: 'أغسطس',
+  Sep: 'سبتمبر', Oct: 'أكتوبر', Nov: 'نوفمبر', Dec: 'ديسمبر',
+  // full English names in case API sends those
+  January: 'يناير', February: 'فبراير', March: 'مارس', April: 'أبريل',
+  June: 'يونيو', July: 'يوليو', August: 'أغسطس', September: 'سبتمبر',
+  October: 'أكتوبر', November: 'نوفمبر', December: 'ديسمبر',
+};
+function monthLabel(m: string, isAr: boolean): string {
+  if (!isAr) return m;
+  return MONTH_AR[m] ?? MONTH_AR[m.slice(0, 3)] ?? m;
+}
+
 /* ─── SVG Line Chart ──────────────────────────────────────────────────────── */
-function LineChart({ data }: { data: MonthlyPoint[] }) {
+function LineChart({ data, isAr }: { data: MonthlyPoint[]; isAr: boolean }) {
   const W = 480, H = 180, pad = { top: 16, right: 16, bottom: 32, left: 52 };
   const innerW = W - pad.left - pad.right;
   const innerH = H - pad.top - pad.bottom;
@@ -104,7 +119,7 @@ function LineChart({ data }: { data: MonthlyPoint[] }) {
       {data.map((d, i) => (
         <text key={i} x={xScale(i)} y={H - 6} textAnchor="middle"
           style={{ fontSize: 9, fill: 'var(--text-3)' }}>
-          {d.month}
+          {monthLabel(d.month, isAr)}
         </text>
       ))}
     </svg>
@@ -419,7 +434,7 @@ export default function FinanceDashboardPage() {
                 </span>
               </div>
             </div>
-            <LineChart data={monthly} />
+            <LineChart data={monthly} isAr={isAr} />
           </div>
 
           {/* Per-Branch Gross Profit */}
@@ -471,7 +486,7 @@ export default function FinanceDashboardPage() {
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
                 {[
-                  { label: isAr ? 'دليل الحسابات' : 'Chart of Accounts', href: '/finance/accounts' },
+                  { label: isAr ? 'شجرة الحسابات' : 'Chart of Accounts', href: '/finance/accounts' },
                   { label: isAr ? 'الدفاتر'        : 'Journals',           href: '/finance/journals' },
                   { label: isAr ? 'العملات'        : 'Currencies',         href: '/finance/currencies' },
                   { label: isAr ? 'السنوات المالية': 'Fiscal Years',       href: '/finance/fiscal-years' },

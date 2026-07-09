@@ -177,7 +177,7 @@ export const ar: Record<string, string> = {
   'fin.assets': 'الأصول الثابتة',
   'fin.depreciation': 'الاستهلاك',
   'fin.gl': 'القيود المحاسبية',
-  'fin.accounts': 'دليل الحسابات',
+  'fin.accounts': 'شجرة الحسابات',
   'fin.tax': 'الضريبة',
   'fin.vendorBill': 'فاتورة مورد',
   'fin.vendors': 'الموردون',

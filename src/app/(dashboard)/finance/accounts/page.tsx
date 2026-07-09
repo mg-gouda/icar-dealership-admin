@@ -44,9 +44,9 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 const TYPE_LABEL_AR: Record<string, string> = {
-  Asset: 'أصول', ContraAsset: 'مقابل', Liability: 'خصوم',
-  ContraLiability: 'مقابل', Equity: 'حقوق الملكية', Revenue: 'إيرادات',
-  ContraRevenue: 'تكلفة', Expense: 'مصروفات', ContraExpense: 'مقابل',
+  Asset: 'أصول', ContraAsset: 'مقابل الأصول', Liability: 'التزامات',
+  ContraLiability: 'مقابل الالتزامات', Equity: 'حقوق الملكية', Revenue: 'إيرادات',
+  ContraRevenue: 'مقابل الإيرادات', Expense: 'مصروفات', ContraExpense: 'مقابل المصروفات',
 };
 
 const egp = (n: number) => 'EGP ' + n.toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -67,11 +67,11 @@ export default function AccountsPage() {
     { value: 'Equity', label: isAr ? 'حقوق ملكية' : 'Equity' },
     { value: 'Revenue', label: isAr ? 'إيرادات' : 'Revenue' },
     { value: 'Expense', label: isAr ? 'مصروفات' : 'Expense' },
-    { value: 'ContraAsset', label: isAr ? 'أصول مقابلة' : 'ContraAsset' },
-    { value: 'ContraLiability', label: 'ContraLiability' },
-    { value: 'ContraEquity', label: 'ContraEquity' },
-    { value: 'ContraRevenue', label: 'ContraRevenue' },
-    { value: 'ContraExpense', label: 'ContraExpense' },
+    { value: 'ContraAsset',     label: isAr ? 'مقابل الأصول'           : 'Contra Asset'     },
+    { value: 'ContraLiability', label: isAr ? 'مقابل الالتزامات'       : 'Contra Liability'  },
+    { value: 'ContraEquity',    label: isAr ? 'مقابل حقوق الملكية'     : 'Contra Equity'     },
+    { value: 'ContraRevenue',   label: isAr ? 'مقابل الإيرادات'        : 'Contra Revenue'    },
+    { value: 'ContraExpense',   label: isAr ? 'مقابل المصروفات'        : 'Contra Expense'    },
   ];
   const NORMAL_BALANCE_OPTS = [
     { value: 'DEBIT', label: isAr ? 'مدين' : 'Debit' },
@@ -128,8 +128,8 @@ export default function AccountsPage() {
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">{isAr ? 'دليل الحسابات' : 'Chart of Accounts'}</h1>
-          <p className="page-subtitle">{isAr ? 'دليل الحسابات — التسلسل الهرمي الكامل' : 'DealerMS COA — Full Hierarchy'}</p>
+          <h1 className="page-title">{isAr ? 'شجرة الحسابات' : 'Chart of Accounts'}</h1>
+          <p className="page-subtitle">{isAr ? 'شجرة الحسابات — التسلسل الهرمي الكامل' : 'DealerMS COA — Full Hierarchy'}</p>
         </div>
         <button onClick={() => setShowCreate(true)} className="btn btn-primary btn-sm">
           {isAr ? '+ حساب جديد' : '+ New Account'}

@@ -240,7 +240,7 @@ function fmtMonthLabel(ym: string, lang: string): string {
   const [y, m] = ym.split('-');
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString(
     lang === 'ar' ? 'ar-EG' : 'en-US',
-    { month: 'short', year: 'numeric' }
+    { month: lang === 'ar' ? 'long' : 'short', year: 'numeric' }
   );
 }
 

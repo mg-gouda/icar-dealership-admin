@@ -289,7 +289,7 @@ export default function GlDetailPage() {
                 {fmtDate(entry.date, isAr, { month: 'short', year: 'numeric' })} — {isAr ? 'مفتوحة' : 'Open'}
               </p>
               <p className="text-xs text-[--text-3] mt-0.5">
-                {isAr ? 'تاريخ القفل:' : 'Lock date:'} {entry.date ? new Date(new Date(entry.date).getFullYear(), new Date(entry.date).getMonth() + 1, 0).toLocaleDateString(isAr ? 'ar-EG' : 'en-EG', { month: 'short', day: 'numeric' }) : '—'} {isAr ? 'نهاية اليوم' : 'at EOD'}
+                {isAr ? 'تاريخ القفل:' : 'Lock date:'} {entry.date ? new Date(new Date(entry.date).getFullYear(), new Date(entry.date).getMonth() + 1, 0).toLocaleDateString(isAr ? 'ar-EG' : 'en-EG', { month: isAr ? 'long' : 'short', day: 'numeric' }) : '—'} {isAr ? 'نهاية اليوم' : 'at EOD'}
               </p>
             </div>
           </div>
