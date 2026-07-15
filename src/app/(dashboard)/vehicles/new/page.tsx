@@ -163,19 +163,31 @@ export default function NewVehiclePage() {
   const selectedLocation = locations.find((l) => l.id === form.locationId);
 
   type LI = { id: string; value: string; label: string };
-  const { data: rawMakes }         = useQuery<LI[]>('/lookup-items?category=car_make');
   const { data: rawColors }        = useQuery<LI[]>('/lookup-items?category=car_color');
   const { data: rawBodyTypes }     = useQuery<LI[]>('/lookup-items?category=body_type');
   const { data: rawFuelTypes }     = useQuery<LI[]>('/lookup-items?category=fuel_type');
   const { data: rawTransmissions } = useQuery<LI[]>('/lookup-items?category=transmission');
   const { data: rawGearTypes }     = useQuery<LI[]>('/lookup-items?category=gear_type');
   const toOpts = (r: LI[] | null | undefined) => (Array.isArray(r) ? r : []).map((i) => ({ value: i.value, label: i.label }));
-  const MAKES         = toOpts(rawMakes);
   const COLORS        = toOpts(rawColors);
   const BODY_TYPES    = toOpts(rawBodyTypes);
   const FUEL_TYPES    = toOpts(rawFuelTypes);
   const TRANSMISSIONS = toOpts(rawTransmissions);
   const GEAR_TYPES    = toOpts(rawGearTypes);
+
+  // Cascaded Make → Model
+  interface CMake { id: string; name: string; slug: string; logoUrl?: string; }
+  interface CModel { id: string; name: string; }
+  const { data: rawCarMakes } = useQuery<CMake[]>('/settings/car-makes');
+  const carMakes = Array.isArray(rawCarMakes) ? rawCarMakes : [];
+  const selectedCarMake = carMakes.find((m) => m.name === form.make) ?? null;
+  const { data: rawCarModels } = useQuery<CModel[]>(
+    selectedCarMake ? `/settings/car-makes/${selectedCarMake.id}/models` : null,
+    [selectedCarMake?.id],
+  );
+  const carModels = Array.isArray(rawCarModels) ? rawCarModels : [];
+  const MAKE_OPTS  = carMakes.map((m) => ({ value: m.name, label: m.name }));
+  const MODEL_OPTS = carModels.map((m) => ({ value: m.name, label: m.name }));
 
   const isUsed   = form.condition === 'USED';
   const STEPS    = isUsed ? STEPS_USED : STEPS_NEW;
@@ -562,12 +574,28 @@ export default function NewVehiclePage() {
 
                   <div>
                     <label className="input-label">{isAr ? 'الشركة المصنعة' : 'Make'} <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <SearchableCombobox options={MAKES} value={form.make} onChange={(v) => set('make', v)} placeholder={isAr ? 'اختر الشركة…' : 'Select make…'} />
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      {selectedCarMake?.logoUrl && (
+                        <div style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 6, background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                          <img src={selectedCarMake.logoUrl} alt={selectedCarMake.name} style={{ width: 26, height: 26, objectFit: 'contain' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        </div>
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <SearchableCombobox options={MAKE_OPTS} value={form.make}
+                          onChange={(v) => { set('make', v); set('model', ''); }}
+                          placeholder={isAr ? 'اختر الشركة…' : 'Select make…'} />
+                      </div>
+                    </div>
                   </div>
 
                   <div>
                     <label className="input-label">{isAr ? 'الطراز' : 'Model'} <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <input className="input" value={form.model} onChange={(e) => set('model', e.target.value)} placeholder={isAr ? 'مثال: كورولا، توسان…' : 'e.g. Corolla, Tucson…'} />
+                    {form.make && MODEL_OPTS.length > 0
+                      ? <SearchableCombobox options={MODEL_OPTS} value={form.model} onChange={(v) => set('model', v)} placeholder={isAr ? 'اختر الطراز…' : 'Select model…'} />
+                      : <input className="input" value={form.model} onChange={(e) => set('model', e.target.value)}
+                          placeholder={form.make ? (isAr ? 'أدخل الطراز يدوياً…' : 'Type model name…') : (isAr ? 'اختر الشركة أولاً…' : 'Select a make first…')}
+                          disabled={!form.make} />
+                    }
                   </div>
 
                   <div>

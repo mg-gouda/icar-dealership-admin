@@ -31,7 +31,7 @@ interface CompanySettings {
   fiscalYearStartMonth?: number;
 }
 
-const NAV_ITEMS = ['General', 'Locations', 'Branding', 'Notifications', 'Email Templates', 'Integrations', 'Security', 'Parameters', 'Accredited Dealers'] as const;
+const NAV_ITEMS = ['General', 'Locations', 'Branding', 'Notifications', 'Email Templates', 'Integrations', 'Security', 'Parameters', 'Car Makes & Models', 'Accredited Dealers'] as const;
 type NavItem = typeof NAV_ITEMS[number];
 
 const MONTH_OPTS = [
@@ -85,6 +85,7 @@ const NAV_AR: Record<string, string> = {
   'Integrations':       'التكاملات',
   'Security':           'الأمان',
   'Parameters':         'المعاملات',
+  'Car Makes & Models': 'الشركات المصنعة والطرازات',
   'Accredited Dealers': 'الوكلاء المعتمدون',
 };
 
@@ -1317,6 +1318,259 @@ function DropdownListsTab() {
   );
 }
 
+// ── Car Makes & Models Tab ────────────────────────────────────────────────────
+interface CarMake {
+  id: string; name: string; slug: string; logoUrl?: string; isActive: boolean;
+  _count?: { models: number };
+}
+interface CarModel { id: string; name: string; isActive: boolean; }
+
+function CarMakesModelsTab() {
+  const { isAr } = useLang();
+  const [selectedMake, setSelectedMake] = useState<CarMake | null>(null);
+  const [showAddMake, setShowAddMake] = useState(false);
+  const [showAddModel, setShowAddModel] = useState(false);
+  const [editingMake, setEditingMake] = useState<CarMake | null>(null);
+  const [makeName, setMakeName] = useState('');
+  const [makeSlug, setMakeSlug] = useState('');
+  const [makeLogoUrl, setMakeLogoUrl] = useState('');
+  const [modelName, setModelName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const { data: makesRaw, loading: makesLoading, reload: reloadMakes } = useQuery<CarMake[]>('/settings/car-makes');
+  const { data: modelsRaw, reload: reloadModels } = useQuery<CarModel[]>(
+    selectedMake ? `/settings/car-makes/${selectedMake.id}/models` : null,
+    [selectedMake?.id],
+  );
+  const makes = Array.isArray(makesRaw) ? makesRaw : [];
+  const models = Array.isArray(modelsRaw) ? modelsRaw : [];
+
+  function slugify(name: string) {
+    return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  }
+
+  async function saveMake(e: React.FormEvent) {
+    e.preventDefault();
+    if (!makeName.trim()) return;
+    setSaving(true); setErr('');
+    try {
+      const slug = makeSlug || slugify(makeName);
+      const logoUrl = makeLogoUrl || `https://cdn.jsdelivr.net/npm/car-logos-dataset@2.2.0/src/${slug}/logo.png`;
+      if (editingMake) {
+        await apiFetch(`/settings/car-makes/${editingMake.id}`, { method: 'PATCH', body: JSON.stringify({ name: makeName, slug, logoUrl }) });
+      } else {
+        await apiFetch('/settings/car-makes', { method: 'POST', body: JSON.stringify({ name: makeName, slug, logoUrl }) });
+      }
+      setShowAddMake(false); setEditingMake(null); setMakeName(''); setMakeSlug(''); setMakeLogoUrl('');
+      reloadMakes();
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Error'); }
+    finally { setSaving(false); }
+  }
+
+  async function toggleMake(make: CarMake) {
+    await apiFetch(`/settings/car-makes/${make.id}`, { method: 'PATCH', body: JSON.stringify({ isActive: !make.isActive }) });
+    reloadMakes();
+  }
+
+  async function saveModel(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedMake || !modelName.trim()) return;
+    setSaving(true); setErr('');
+    try {
+      await apiFetch(`/settings/car-makes/${selectedMake.id}/models`, { method: 'POST', body: JSON.stringify({ name: modelName }) });
+      setShowAddModel(false); setModelName('');
+      reloadModels();
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Error'); }
+    finally { setSaving(false); }
+  }
+
+  async function toggleModel(model: CarModel) {
+    await apiFetch(`/settings/car-makes/models/${model.id}`, { method: 'PATCH', body: JSON.stringify({ isActive: !model.isActive }) });
+    reloadModels();
+  }
+
+  function openEditMake(make: CarMake) {
+    setEditingMake(make); setMakeName(make.name); setMakeSlug(make.slug); setMakeLogoUrl(make.logoUrl ?? '');
+    setShowAddMake(true);
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+        <div>
+          <h2 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-1)' }}>{isAr ? 'الشركات المصنعة والطرازات' : 'Car Makes & Models'}</h2>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-3)', marginTop: '0.2rem' }}>
+            {isAr ? 'إدارة قوائم الماركات والطرازات المتاحة في نماذج إضافة السيارات.' : 'Manage the makes and models available in vehicle add forms.'}
+          </p>
+        </div>
+        <button className="btn btn-primary btn-sm" onClick={() => { setEditingMake(null); setMakeName(''); setMakeSlug(''); setMakeLogoUrl(''); setShowAddMake(true); }}>
+          {isAr ? '+ إضافة ماركة' : '+ Add Make'}
+        </button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: selectedMake ? '1fr 1fr' : '1fr', gap: '1.25rem' }}>
+        {/* Makes list */}
+        <div className="card" style={{ overflow: 'hidden' }}>
+          <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {isAr ? 'الشركات المصنعة' : 'Makes'} ({makes.filter(m => m.isActive).length})
+          </div>
+          {makesLoading && <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>Loading…</div>}
+          <div style={{ maxHeight: 520, overflowY: 'auto' }}>
+            {makes.map((make) => (
+              <div key={make.id}
+                onClick={() => setSelectedMake(selectedMake?.id === make.id ? null : make)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 1rem',
+                  borderBottom: '1px solid var(--border)', cursor: 'pointer',
+                  background: selectedMake?.id === make.id ? 'color-mix(in srgb, var(--primary) 8%, transparent)' : undefined,
+                  opacity: make.isActive ? 1 : 0.45,
+                }}>
+                {/* Logo */}
+                <div style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, background: 'var(--surface-2)', overflow: 'hidden' }}>
+                  {make.logoUrl
+                    ? <img src={make.logoUrl} alt={make.name} style={{ width: 28, height: 28, objectFit: 'contain' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    : <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)' }}>{make.name[0]}</span>}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 500, fontSize: '0.8125rem', color: 'var(--text-1)' }}>{make.name}</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{make._count?.models ?? 0} {isAr ? 'طراز' : 'models'}</div>
+                </div>
+                <div style={{ display: 'flex', gap: '0.375rem' }}>
+                  <button className="btn btn-sm" style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-2)', borderRadius: 5 }}
+                    onClick={(e) => { e.stopPropagation(); openEditMake(make); }}>
+                    {isAr ? 'تعديل' : 'Edit'}
+                  </button>
+                  <button className="btn btn-sm" style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', background: make.isActive ? 'color-mix(in srgb,var(--danger) 10%,transparent)' : 'color-mix(in srgb,var(--success) 10%,transparent)', border: `1px solid ${make.isActive ? 'color-mix(in srgb,var(--danger) 30%,transparent)' : 'color-mix(in srgb,var(--success) 30%,transparent)'}`, color: make.isActive ? 'var(--danger)' : 'var(--success)', borderRadius: 5 }}
+                    onClick={(e) => { e.stopPropagation(); toggleMake(make); }}>
+                    {make.isActive ? (isAr ? 'تعطيل' : 'Disable') : (isAr ? 'تفعيل' : 'Enable')}
+                  </button>
+                </div>
+              </div>
+            ))}
+            {makes.length === 0 && !makesLoading && (
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>
+                {isAr ? 'لا توجد ماركات. ابدأ بإضافة ماركة.' : 'No makes yet. Add one to get started.'}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Models list — shown when a make is selected */}
+        {selectedMake && (
+          <div className="card" style={{ overflow: 'hidden' }}>
+            <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {selectedMake.logoUrl && (
+                  <img src={selectedMake.logoUrl} alt={selectedMake.name} style={{ width: 20, height: 20, objectFit: 'contain' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                )}
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {selectedMake.name} — {isAr ? 'الطرازات' : 'Models'} ({models.filter(m => m.isActive).length})
+                </span>
+              </div>
+              <button className="btn btn-primary btn-sm" style={{ fontSize: '0.75rem' }}
+                onClick={() => { setModelName(''); setShowAddModel(true); }}>
+                {isAr ? '+ طراز' : '+ Model'}
+              </button>
+            </div>
+            <div style={{ maxHeight: 520, overflowY: 'auto' }}>
+              {models.map((model) => (
+                <div key={model.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 1rem', borderBottom: '1px solid var(--border)', opacity: model.isActive ? 1 : 0.45 }}>
+                  <span style={{ fontSize: '0.8125rem', color: 'var(--text-1)' }}>{model.name}</span>
+                  <button className="btn btn-sm" style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', background: model.isActive ? 'color-mix(in srgb,var(--danger) 10%,transparent)' : 'color-mix(in srgb,var(--success) 10%,transparent)', border: `1px solid ${model.isActive ? 'color-mix(in srgb,var(--danger) 30%,transparent)' : 'color-mix(in srgb,var(--success) 30%,transparent)'}`, color: model.isActive ? 'var(--danger)' : 'var(--success)', borderRadius: 5 }}
+                    onClick={() => toggleModel(model)}>
+                    {model.isActive ? (isAr ? 'تعطيل' : 'Disable') : (isAr ? 'تفعيل' : 'Enable')}
+                  </button>
+                </div>
+              ))}
+              {models.length === 0 && (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>
+                  {isAr ? 'لا توجد طرازات لهذه الماركة.' : 'No models for this make.'}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Add/Edit Make Modal */}
+      {showAddMake && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }} onClick={() => setShowAddMake(false)} />
+          <div className="relative card shadow-2xl" style={{ maxWidth: 440, width: '100%', background: 'var(--surface)', zIndex: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)' }}>
+              <h3 style={{ fontSize: '0.9rem', fontWeight: 600 }}>{editingMake ? (isAr ? 'تعديل الماركة' : 'Edit Make') : (isAr ? 'إضافة ماركة جديدة' : 'Add New Make')}</h3>
+              <button onClick={() => setShowAddMake(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: '1.25rem' }}>×</button>
+            </div>
+            <form onSubmit={saveMake} style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label className="input-label">{isAr ? 'اسم الماركة *' : 'Make Name *'}</label>
+                <input className="input" required value={makeName}
+                  onChange={(e) => { setMakeName(e.target.value); if (!editingMake) setMakeSlug(slugify(e.target.value)); }}
+                  placeholder="e.g. Toyota" autoFocus />
+              </div>
+              <div>
+                <label className="input-label">{isAr ? 'الرابط المختصر (للشعار)' : 'Slug (for logo)'}</label>
+                <input className="input" value={makeSlug} onChange={(e) => setMakeSlug(e.target.value)} placeholder="e.g. toyota, mercedes-benz" />
+                <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: '0.25rem' }}>
+                  {isAr ? 'يُستخدم لجلب الشعار تلقائياً من CDN.' : 'Used to auto-fetch logo from CDN.'}
+                </p>
+              </div>
+              {/* Logo preview */}
+              {(makeSlug || makeLogoUrl) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 8, background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                    <img src={makeLogoUrl || `https://cdn.jsdelivr.net/npm/car-logos-dataset@2.2.0/src/${makeSlug}/logo.png`}
+                      alt="logo preview" style={{ width: 40, height: 40, objectFit: 'contain' }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0'; }} />
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{isAr ? 'معاينة الشعار' : 'Logo preview'}</div>
+                </div>
+              )}
+              <div>
+                <label className="input-label">{isAr ? 'رابط الشعار (اختياري)' : 'Logo URL (optional)'}</label>
+                <input className="input" value={makeLogoUrl} onChange={(e) => setMakeLogoUrl(e.target.value)} placeholder="https://…" />
+                <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: '0.25rem' }}>
+                  {isAr ? 'اتركه فارغاً لاستخدام الشعار التلقائي من CDN.' : 'Leave blank to use auto CDN logo.'}
+                </p>
+              </div>
+              {err && <p style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>{err}</p>}
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowAddMake(false)}>{isAr ? 'إلغاء' : 'Cancel'}</button>
+                <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? '…' : editingMake ? (isAr ? 'حفظ' : 'Save') : (isAr ? 'إضافة' : 'Add Make')}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Model Modal */}
+      {showAddModel && selectedMake && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }} onClick={() => setShowAddModel(false)} />
+          <div className="relative card shadow-2xl" style={{ maxWidth: 380, width: '100%', background: 'var(--surface)', zIndex: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)' }}>
+              <h3 style={{ fontSize: '0.9rem', fontWeight: 600 }}>{isAr ? `إضافة طراز لـ ${selectedMake.name}` : `Add Model to ${selectedMake.name}`}</h3>
+              <button onClick={() => setShowAddModel(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: '1.25rem' }}>×</button>
+            </div>
+            <form onSubmit={saveModel} style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label className="input-label">{isAr ? 'اسم الطراز *' : 'Model Name *'}</label>
+                <input className="input" required value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="e.g. Corolla, Camry…" autoFocus />
+              </div>
+              {err && <p style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>{err}</p>}
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowAddModel(false)}>{isAr ? 'إلغاء' : 'Cancel'}</button>
+                <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? '…' : (isAr ? 'إضافة' : 'Add Model')}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Accredited Dealers Tab ────────────────────────────────────────────────────
 interface AccDealer {
   id: string; name: string; contactName?: string; contactPhone?: string; contactEmail?: string;
@@ -1580,6 +1834,7 @@ export default function SettingsPage() {
             {activeNav === 'Integrations'    && <IntegrationsTab />}
             {activeNav === 'Security'        && <SecurityTab />}
             {activeNav === 'Parameters'         && <DropdownListsTab />}
+            {activeNav === 'Car Makes & Models' && <CarMakesModelsTab />}
             {activeNav === 'Accredited Dealers' && <AccreditedDealersTab />}
           </main>
         </div>
