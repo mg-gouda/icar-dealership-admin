@@ -1,8 +1,6 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiFetch, useQuery } from '../../../../../lib/useApi';
 import SearchableCombobox from '../../../../../components/ui/SearchableCombobox';
@@ -25,7 +23,7 @@ const PAYMENT_METHODS_AR = [
   { value: 'CARD',     label: 'بطاقة' },
 ];
 
-export default function NewPaymentPage() {
+function NewPaymentContent() {
   const router = useRouter();
   const { isAr } = useLang();
   const searchParams = useSearchParams();
@@ -44,7 +42,6 @@ export default function NewPaymentPage() {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
-  // load partners based on type
   const partnerType = form.type === 'INBOUND' ? 'CUSTOMER' : 'VENDOR';
   const { data: partnersRaw } = useQuery<Partner[]>(
     `/partners?limit=200&type=${partnerType}`,
@@ -64,7 +61,6 @@ export default function NewPaymentPage() {
     setForm((f) => ({
       ...f,
       [k]: v,
-      // reset partner when type changes
       ...(k === 'type' ? { partnerId: '' } : {}),
     }));
   }
@@ -197,5 +193,13 @@ export default function NewPaymentPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function NewPaymentPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-[--text-3]">Loading…</div>}>
+      <NewPaymentContent />
+    </Suspense>
   );
 }
