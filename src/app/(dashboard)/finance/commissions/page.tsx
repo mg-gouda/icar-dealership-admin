@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../components/ui/NumericInput';
 import { useLang } from '@/lib/lang-context';
 import { fmtDate } from '@/lib/fmt';
 import { ErrorBanner } from '@/components/ui/error-banner';
@@ -27,20 +28,15 @@ interface Commission {
   paidDate?: string;
 }
 
-interface CommissionPlan {
-  id: string;
-  name: string;
-  type: string; // FLAT_AMOUNT | PERCENT_OF_SALE_PRICE | PERCENT_OF_GROSS_PROFIT | TIERED
-  basisType?: string;
-  commissionBase?: string;
-  rate?: number;
-  percentage?: number;
-  flatAmount?: number;
-  appliesTo?: string;
-  applicableRole?: string;
-  isActive: boolean;
-  active?: boolean;
-  tiers?: TierRow[];
+interface CommissionConfigTier {
+  minTargetPct: number;
+  amount: number;
+  label?: string;
+}
+
+interface CommissionConfigData {
+  baseAmount: number;
+  tiers: CommissionConfigTier[];
 }
 
 interface PayHistory {
@@ -56,24 +52,6 @@ interface PayHistory {
 /* ── Helpers ────────────────────────────────────────────────────────────── */
 const egp = (n: number) =>
   'EGP ' + Number(n).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-function planTypeBadge(type: string, isAr: boolean) {
-  const t = (type ?? '').toUpperCase();
-  if (t.includes('FLAT'))  return <span className="badge badge-info">{isAr ? 'مبلغ ثابت' : 'Flat Amount'}</span>;
-  if (t.includes('GROSS')) return <span className="badge badge-purple">{isAr ? '% من الربح' : '% of Gross Profit'}</span>;
-  if (t.includes('SALE'))  return <span className="badge badge-orange">{isAr ? '% من السعر' : '% of Sale Price'}</span>;
-  if (t.includes('TIER'))  return <span className="badge badge-warning">{isAr ? 'متدرج' : 'Tiered by Volume'}</span>;
-  return <span className="badge badge-neutral">{type}</span>;
-}
-
-function planTypeDisplay(type: string, isAr: boolean) {
-  const t = (type ?? '').toUpperCase();
-  if (t.includes('FLAT'))  return isAr ? 'مبلغ ثابت' : 'Flat Amount';
-  if (t.includes('GROSS')) return isAr ? '% من الربح' : '% of Gross Profit';
-  if (t.includes('SALE'))  return isAr ? '% من السعر' : '% of Sale Price';
-  if (t.includes('TIER'))  return isAr ? 'متدرج' : 'Tiered';
-  return type;
-}
 
 function repInitials(name: string) {
   return name
@@ -94,75 +72,31 @@ function avatarBg(name: string) {
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 
-const TABS = ['Commission Plans', 'Accruals', 'Payable', 'Paid History'] as const;
+const TABS = ['Commission Config', 'Accruals', 'Payable', 'Paid History'] as const;
 type Tab = (typeof TABS)[number];
 
-// Bilingual tab labels — values kept as-is for state comparison
 const TAB_LABELS_AR: Record<Tab, string> = {
-  'Commission Plans': 'خطط العمولات',
-  'Accruals':         'المستحقات',
-  'Payable':          'واجبة الدفع',
-  'Paid History':     'سجل المدفوعات',
+  'Commission Config': 'إعدادات العمولات',
+  'Accruals':          'المستحقات',
+  'Payable':           'واجبة الدفع',
+  'Paid History':      'سجل المدفوعات',
 };
 
-const BASIS_OPTS_EN = [
-  { value: 'FLAT_AMOUNT',             label: 'Flat Amount' },
-  { value: 'PERCENT_OF_SALE_PRICE',   label: '% of Sale Price' },
-  { value: 'PERCENT_OF_GROSS_PROFIT', label: '% of Gross Profit' },
-  { value: 'TIERED',                  label: 'Tiered' },
-];
-const BASIS_OPTS_AR = [
-  { value: 'FLAT_AMOUNT',             label: 'مبلغ ثابت' },
-  { value: 'PERCENT_OF_SALE_PRICE',   label: '% من السعر' },
-  { value: 'PERCENT_OF_GROSS_PROFIT', label: '% من الربح' },
-  { value: 'TIERED',                  label: 'متدرج' },
-];
-
-const ROLE_OPTS_EN = [
-  { value: '',                    label: 'All Locations' },
-  { value: 'PRIMARY_SALES_REP',   label: 'Primary Sales Rep' },
-  { value: 'CLOSER',              label: 'Closer' },
-  { value: 'FINANCE_MANAGER',     label: 'Finance Manager' },
-];
-const ROLE_OPTS_AR = [
-  { value: '',                    label: 'كل الفروع' },
-  { value: 'PRIMARY_SALES_REP',   label: 'مندوب المبيعات الرئيسي' },
-  { value: 'CLOSER',              label: 'مسؤول الإغلاق' },
-  { value: 'FINANCE_MANAGER',     label: 'مدير مالي' },
-];
-
-const COMMISSION_BASE_OPTS_EN = [
-  { value: 'SALE_PRICE',              label: 'Sale Price',                  hint: 'The final agreed sale price (excludes admin fee, insurance & VAT)' },
-  { value: 'SALE_PRICE_PLUS_MARKUP',  label: 'Sale Price + Overprice',      hint: 'Sale price including any markup above the vehicle\'s base price' },
-  { value: 'OVERPRICE_ONLY',          label: 'Overprice / Markup Only',     hint: 'Only the dealer markup above the vehicle\'s cost/base price' },
-  { value: 'GROSS_PROFIT',            label: 'Gross Profit',                hint: 'Sale Price − Vehicle Cost (excludes admin fee & insurance)' },
-];
-const COMMISSION_BASE_OPTS_AR = [
-  { value: 'SALE_PRICE',              label: 'سعر البيع',                   hint: 'سعر البيع المتفق عليه نهائياً (باستثناء الرسوم والتأمين وضريبة القيمة المضافة)' },
-  { value: 'SALE_PRICE_PLUS_MARKUP',  label: 'سعر البيع + السعر الإضافي',  hint: 'سعر البيع شاملاً هامش الربح الإضافي فوق السعر الأساسي للسيارة' },
-  { value: 'OVERPRICE_ONLY',          label: 'السعر الإضافي فقط',           hint: 'هامش الربح فوق تكلفة السيارة / سعرها الأساسي فقط' },
-  { value: 'GROSS_PROFIT',            label: 'الربح الإجمالي',              hint: 'سعر البيع − تكلفة السيارة (باستثناء الرسوم والتأمين)' },
-];
-
-const BLANK_PLAN = {
-  name: '', basisType: 'PERCENT_OF_SALE_PRICE', commissionBase: 'SALE_PRICE',
-  percentage: '', flatAmount: '', applicableRole: '', active: true,
-};
-
-const BLANK_TIER = { minValue: '', maxValue: '', rateType: 'PERCENT', rateValue: '' };
-type TierRow = typeof BLANK_TIER;
+const BLANK_CONFIG: CommissionConfigData = { baseAmount: 0, tiers: [] };
+const BLANK_TIER_ROW: CommissionConfigTier = { minTargetPct: 100, amount: 0, label: '' };
 
 export default function CommissionsPage() {
   const { isAr } = useLang();
 
-  const [tab, setTab] = useState<Tab>('Commission Plans');
+  const [tab, setTab] = useState<Tab>('Commission Config');
   const [repFilter, setRepFilter] = useState('');
-  const [showNewPlan, setShowNewPlan] = useState(false);
-  const [editingPlan, setEditingPlan] = useState<CommissionPlan | null>(null);
-  const [planForm, setPlanForm] = useState(BLANK_PLAN);
-  const [tierRows, setTierRows] = useState<TierRow[]>([{ ...BLANK_TIER }]);
-  const [savingPlan, setSavingPlan] = useState(false);
-  const [planErr, setPlanErr] = useState('');
+
+  // Commission config state
+  const [configForm, setConfigForm] = useState<CommissionConfigData>(BLANK_CONFIG);
+  const [configTiers, setConfigTiers] = useState<CommissionConfigTier[]>([]);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [configErr, setConfigErr] = useState('');
+  const [configSaved, setConfigSaved] = useState(false);
 
   // Pay commission modal
   const [showPay, setShowPay] = useState<{ repId: string; repName: string; amount: number; ids: string[] } | null>(null);
@@ -170,15 +104,9 @@ export default function CommissionsPage() {
   const [payRef, setPayRef] = useState('');
   const [paying, setPaying] = useState(false);
 
-  const BASIS_OPTS = isAr ? BASIS_OPTS_AR : BASIS_OPTS_EN;
-  const ROLE_OPTS  = isAr ? ROLE_OPTS_AR  : ROLE_OPTS_EN;
-
   /* ── Queries ─────────────────────────────────────────────────────────── */
-  const { data: plansRaw, loading: loadingPlans, error: plansError, reload: reloadPlans } =
-    useQuery<CommissionPlan[] | { items: CommissionPlan[] }>('/finance/commission-plans');
-  const plans: CommissionPlan[] = Array.isArray(plansRaw)
-    ? plansRaw
-    : (plansRaw as { items?: CommissionPlan[] } | null)?.items ?? [];
+  const { data: configRaw, loading: loadingConfig, reload: reloadConfig } =
+    useQuery<CommissionConfigData | null>('/finance/commission-config');
 
   const commQs = new URLSearchParams();
   if (repFilter) commQs.set('repId', repFilter);
@@ -190,6 +118,18 @@ export default function CommissionsPage() {
     useQuery<{ items: PayHistory[] }>('/finance/commissions/report');
   const history = historyRaw?.items ?? [];
 
+  /* sync config from API */
+  const [configInitialized, setConfigInitialized] = useState(false);
+  if (configRaw && !configInitialized) {
+    setConfigForm({ baseAmount: Number(configRaw.baseAmount ?? 0), tiers: [] });
+    setConfigTiers((configRaw.tiers ?? []).map((t) => ({
+      minTargetPct: Number(t.minTargetPct),
+      amount:       Number(t.amount),
+      label:        t.label ?? '',
+    })));
+    setConfigInitialized(true);
+  }
+
   /* ── Summary stats ──────────────────────────────────────────────────── */
   const accrued = commissions.filter((c) => c.status === 'ACCRUED');
   const payable = commissions.filter((c) => c.status === 'PAYABLE');
@@ -197,7 +137,6 @@ export default function CommissionsPage() {
   const accruedTotal = accrued.reduce((s, c) => s + Number(c.amount), 0);
   const payableTotal = payable.reduce((s, c) => s + Number(c.amount), 0);
   const paidTotal    = paid.reduce((s, c) => s + Number(c.amount), 0);
-  const activePlans  = plans.filter((p) => p.isActive || p.active).length;
 
   /* Group payable by rep */
   const payableByRep = payable.reduce<Record<string, { name: string; total: number; ids: string[] }>>(
@@ -224,82 +163,28 @@ export default function CommissionsPage() {
     ),
   ];
 
-  /* ── Plan actions ───────────────────────────────────────────────────── */
-  function closePlanModal() {
-    setShowNewPlan(false); setEditingPlan(null);
-    setPlanForm(BLANK_PLAN); setTierRows([{ ...BLANK_TIER }]); setPlanErr('');
-  }
-
-  function openEditPlan(p: CommissionPlan) {
-    const bt = p.basisType ?? p.type ?? 'PERCENT_OF_SALE_PRICE';
-    setPlanForm({
-      name:           p.name,
-      basisType:      bt,
-      commissionBase: p.commissionBase ?? 'SALE_PRICE',
-      percentage:     String(p.percentage ?? p.rate ?? ''),
-      flatAmount:     String(p.flatAmount ?? ''),
-      applicableRole: p.applicableRole ?? '',
-      active:         p.isActive ?? p.active ?? true,
-    });
-    setTierRows(
-      (p.tiers && p.tiers.length > 0)
-        ? p.tiers.map((t) => ({
-            minValue:  String((t as TierRow).minValue  ?? ''),
-            maxValue:  String((t as TierRow).maxValue  ?? ''),
-            rateType:  (t as TierRow).rateType  ?? 'PERCENT',
-            rateValue: String((t as TierRow).rateValue ?? ''),
-          }))
-        : [{ ...BLANK_TIER }]
-    );
-    setEditingPlan(p);
-    setPlanErr('');
-  }
-
-  async function submitPlan(e: React.FormEvent) {
+  /* ── Commission config actions ──────────────────────────────────────── */
+  async function saveConfig(e: React.FormEvent) {
     e.preventDefault();
-    if (!planForm.name) { setPlanErr(isAr ? 'الاسم مطلوب.' : 'Name required.'); return; }
-    setSavingPlan(true); setPlanErr('');
+    if (configForm.baseAmount < 0) { setConfigErr(isAr ? 'المبلغ الأساسي يجب أن يكون صفراً أو أكثر.' : 'Base amount must be ≥ 0.'); return; }
+    setSavingConfig(true); setConfigErr('');
     try {
-      const body: Record<string, unknown> = {
-        name:           planForm.name,
-        basisType:      planForm.basisType,
-        commissionBase: planForm.commissionBase,
-        active:         planForm.active,
-        applicableRole: planForm.applicableRole || undefined,
-      };
-      if (planForm.basisType === 'FLAT_AMOUNT') {
-        body.flatAmount = Number(planForm.flatAmount);
-      } else if (planForm.basisType === 'TIERED') {
-        if (tierRows.some(t => !t.minValue || !t.rateValue)) {
-          setPlanErr(isAr ? 'جميع صفوف الشرائح يجب أن تحتوي على قيمة دنيا ومعدل.' : 'All tier rows must have Min Value and Rate.');
-          setSavingPlan(false); return;
-        }
-        body.tiers = tierRows.map(t => ({
-          minValue:  Number(t.minValue),
-          maxValue:  t.maxValue ? Number(t.maxValue) : null,
-          rateType:  t.rateType,
-          rateValue: Number(t.rateValue),
-        }));
-      } else {
-        body.percentage = Number(planForm.percentage);
-      }
-      if (editingPlan) {
-        await apiFetch(`/finance/commission-plans/${editingPlan.id}`, { method: 'PATCH', body: JSON.stringify(body) });
-      } else {
-        await apiFetch('/finance/commission-plans', { method: 'POST', body: JSON.stringify(body) });
-      }
-      closePlanModal(); reloadPlans();
-    } catch (e: unknown) { setPlanErr(e instanceof Error ? e.message : String(e)); }
-    finally { setSavingPlan(false); }
-  }
-
-  async function togglePlan(p: CommissionPlan) {
-    const active = !(p.isActive || p.active);
-    await apiFetch(`/finance/commission-plans/${p.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ active }),
-    }).catch(() => {});
-    reloadPlans();
+      await apiFetch('/finance/commission-config', {
+        method: 'PUT',
+        body: JSON.stringify({
+          baseAmount: configForm.baseAmount,
+          tiers: configTiers.map((t) => ({
+            minTargetPct: Number(t.minTargetPct),
+            amount:       Number(t.amount),
+            label:        t.label || undefined,
+          })),
+        }),
+      });
+      setConfigSaved(true);
+      setTimeout(() => setConfigSaved(false), 3000);
+      reloadConfig();
+    } catch (e: unknown) { setConfigErr(e instanceof Error ? e.message : String(e)); }
+    finally { setSavingConfig(false); }
   }
 
   /* ── Commission actions ──────────────────────────────────────────────── */
@@ -335,12 +220,9 @@ export default function CommissionsPage() {
         <div>
           <h1 className="page-title">{isAr ? 'عمولات المبيعات' : 'Sales Commissions'}</h1>
           <p className="page-subtitle">
-            {isAr ? 'خطط العمولات والمتابعة وإدارة المدفوعات' : 'Commission plans, tracking & payout management'}
+            {isAr ? 'إعدادات العمولات والمتابعة وإدارة المدفوعات' : 'Commission settings, tracking & payout management'}
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setTab('Commission Plans'); closePlanModal(); setShowNewPlan(true); }}>
-          {isAr ? '+ خطة جديدة' : '+ New Plan'}
-        </button>
       </div>
 
       <div className="page-body space-y-5">
@@ -374,13 +256,12 @@ export default function CommissionsPage() {
             </p>
           </div>
           <div className="card p-4">
-            <p className="section-label mb-1">{isAr ? 'الخطط النشطة' : 'Active Plans'}</p>
-            <p className="text-2xl font-bold" style={{ color: 'var(--text-1)' }}>
-              {activePlans}
+            <p className="section-label mb-1">{isAr ? 'معدل العمولة الأساسي' : 'Base Commission Rate'}</p>
+            <p className="text-2xl font-bold tabular-nums" style={{ color: 'var(--primary)' }}>
+              {egp(configForm.baseAmount)}
             </p>
             <p className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>
-              {plans.filter((p) => !(p.isActive || p.active)).length} {isAr ? 'ثابت' : 'Flat'} ·{' '}
-              {plans.filter((p) => (p.type ?? p.basisType ?? '').includes('TIER')).length} {isAr ? 'متدرج' : 'Tiered'}
+              {isAr ? `${configTiers.length} شرائح مستهدفة` : `${configTiers.length} target tier${configTiers.length !== 1 ? 's' : ''}`}
             </p>
           </div>
         </div>
@@ -425,7 +306,7 @@ export default function CommissionsPage() {
             </div>
 
             {/* Filters for non-plans tabs */}
-            {tab !== 'Commission Plans' && tab !== 'Paid History' && (
+            {tab !== 'Commission Config' && tab !== 'Paid History' && (
               <div className="flex items-center gap-2">
                 <div style={{ width: 180 }}>
                   <SearchableCombobox
@@ -453,96 +334,128 @@ export default function CommissionsPage() {
           </div>
 
           {/* ── Commission Plans tab ─────────────────────────────────────── */}
-          {tab === 'Commission Plans' && (
-            <>
-              {loadingPlans && (
-                <div className="p-6 text-center text-sm" style={{ color: 'var(--text-3)' }}>
-                  {isAr ? 'جاري التحميل…' : 'Loading plans…'}
+          {tab === 'Commission Config' && (
+            <div className="p-6" style={{ maxWidth: 680 }}>
+              {loadingConfig && (
+                <div className="text-sm mb-4" style={{ color: 'var(--text-3)' }}>
+                  {isAr ? 'جاري التحميل…' : 'Loading config…'}
                 </div>
               )}
-              {plansError && <div className="p-4"><ErrorBanner error={plansError} retry={reloadPlans} /></div>}
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>{isAr ? 'اسم الخطة' : 'Plan Name'}</th>
-                    <th>{isAr ? 'النوع' : 'Type'}</th>
-                    <th>{isAr ? 'المعدل' : 'Rate'}</th>
-                    <th>{isAr ? 'أساس الحساب' : 'Calc. Base'}</th>
-                    <th>{isAr ? 'ينطبق على' : 'Applies To'}</th>
-                    <th>{isAr ? 'الحالة' : 'Status'}</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {plans.map((p) => {
-                    const active = p.isActive || p.active;
-                    const type   = p.type ?? p.basisType ?? '';
-                    const rate   = p.percentage ?? p.rate;
-                    const flat   = p.flatAmount;
-                    const baseLabels: Record<string, { en: string; ar: string }> = {
-                      SALE_PRICE:             { en: 'Sale Price',            ar: 'سعر البيع' },
-                      SALE_PRICE_PLUS_MARKUP: { en: 'Sale Price + Markup',   ar: 'سعر البيع + الإضافي' },
-                      OVERPRICE_ONLY:         { en: 'Overprice Only',        ar: 'السعر الإضافي فقط' },
-                      GROSS_PROFIT:           { en: 'Gross Profit',          ar: 'الربح الإجمالي' },
-                    };
-                    const baseKey  = p.commissionBase ?? 'SALE_PRICE';
-                    const baseLabel = baseLabels[baseKey]?.[isAr ? 'ar' : 'en'] ?? baseKey;
-                    return (
-                      <tr key={p.id}>
-                        <td className="font-medium" style={{ color: 'var(--text-1)' }}>
-                          {p.name}
-                        </td>
-                        <td>{planTypeBadge(type, isAr)}</td>
-                        <td className="tabular-nums text-sm" style={{ color: 'var(--text-2)' }}>
-                          {type.includes('TIER') ? (isAr ? 'متدرج' : 'Tiered') :
-                           flat ? egp(Number(flat)) :
-                           rate ? `${rate}%` : '—'}
-                        </td>
-                        <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>
-                          {baseLabel}
-                        </td>
-                        <td style={{ color: 'var(--text-2)' }}>
-                          {p.applicableRole?.replace(/_/g, ' ') || (isAr ? 'كل الأدوار' : 'All Roles')}
-                        </td>
-                        <td>
-                          {active
-                            ? <span className="badge badge-success">{isAr ? 'نشط' : 'Active'}</span>
-                            : <span className="badge badge-neutral">{isAr ? 'غير نشط' : 'Inactive'}</span>}
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '0.375rem' }}>
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => openEditPlan(p)}
-                            >
-                              {isAr ? 'تعديل' : 'Edit'}
-                            </button>
-                            <button
-                              className="btn btn-ghost btn-sm"
-                              onClick={() => togglePlan(p)}
-                              style={{ color: active ? 'var(--danger-fg)' : 'var(--success-fg)' }}
-                            >
-                              {active ? (isAr ? 'تعطيل' : 'Deactivate') : (isAr ? 'تفعيل' : 'Activate')}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {plans.length === 0 && !loadingPlans && (
-                    <tr>
-                      <td
-                        colSpan={7}
-                        className="text-center text-sm"
-                        style={{ color: 'var(--text-3)', padding: '2.5rem 1rem' }}
-                      >
-                        {isAr ? 'لا توجد خطط عمولات. انقر على "+ خطة جديدة" لإنشاء واحدة.' : 'No commission plans. Click "+ New Plan" to create one.'}
-                      </td>
-                    </tr>
+              <form onSubmit={saveConfig} className="space-y-6">
+                {/* Base amount */}
+                <div>
+                  <label className="form-label">
+                    {isAr ? 'مبلغ العمولة الأساسي (جنيه) — لكل صفقة' : 'Base Commission Amount (EGP) — per deal'}
+                  </label>
+                  <p className="text-xs mb-2" style={{ color: 'var(--text-3)' }}>
+                    {isAr
+                      ? 'المبلغ الثابت الذي يحصل عليه مندوب المبيعات عند كل صفقة مكتملة (بغض النظر عن سعر البيع أو الربح). يمكن تجاوز هذا المبلغ لكل وكيل معتمد على حدة.'
+                      : 'Fixed EGP amount earned by the sales rep per finalized deal (regardless of sale price or profit). Can be overridden per Accredited Dealer.'}
+                  </p>
+                  <NumericInput
+                    value={configForm.baseAmount}
+                    onChange={(v) => setConfigForm((f) => ({ ...f, baseAmount: Number(v) }))}
+                    min={0}
+                    step={50}
+                    placeholder="0"
+                  />
+                </div>
+
+                {/* Target tiers */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="form-label mb-0">
+                      {isAr ? 'شرائح المكافأة عند تحقيق الهدف' : 'Target Achievement Bonus Tiers'}
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setConfigTiers((t) => [...t, { ...BLANK_TIER_ROW }])}
+                    >
+                      {isAr ? '+ شريحة' : '+ Tier'}
+                    </button>
+                  </div>
+                  <p className="text-xs mb-3" style={{ color: 'var(--text-3)' }}>
+                    {isAr
+                      ? 'عند بلوغ المندوب النسبة المحددة من هدفه الشهري، يصبح مبلغ العمولة بدءاً من تلك الصفقة هو مبلغ الشريحة المقابلة.'
+                      : 'When a rep reaches the specified % of their monthly unit target, the per-deal commission steps up to the tier amount.'}
+                  </p>
+                  {configTiers.length === 0 && (
+                    <p className="text-sm" style={{ color: 'var(--text-3)' }}>
+                      {isAr ? 'لا توجد شرائح — المبلغ الأساسي يُطبَّق على جميع الصفقات.' : 'No tiers — base amount applies to all deals.'}
+                    </p>
                   )}
-                </tbody>
-              </table>
-            </>
+                  {configTiers.length > 0 && (
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: '40%' }}>{isAr ? 'الحد الأدنى من الهدف (%)' : 'Min. Target % Achieved'}</th>
+                          <th style={{ width: '40%' }}>{isAr ? 'مبلغ العمولة (جنيه)' : 'Commission Amount (EGP)'}</th>
+                          <th style={{ width: '20%' }}>{isAr ? 'وصف اختياري' : 'Label (optional)'}</th>
+                          <th style={{ width: 40 }} />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {configTiers.map((tier, i) => (
+                          <tr key={i}>
+                            <td>
+                              <NumericInput
+                                value={tier.minTargetPct}
+                                onChange={(v) => setConfigTiers((rows) => rows.map((r, j) => j === i ? { ...r, minTargetPct: Number(v) } : r))}
+                                min={1}
+                                max={999}
+                                step={5}
+                                placeholder="100"
+                              />
+                            </td>
+                            <td>
+                              <NumericInput
+                                value={tier.amount}
+                                onChange={(v) => setConfigTiers((rows) => rows.map((r, j) => j === i ? { ...r, amount: Number(v) } : r))}
+                                min={0}
+                                step={50}
+                                placeholder="0"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                className="form-input"
+                                value={tier.label ?? ''}
+                                onChange={(e) => setConfigTiers((rows) => rows.map((r, j) => j === i ? { ...r, label: e.target.value } : r))}
+                                placeholder={isAr ? 'مثال: بلغت الهدف' : 'e.g. Target Met'}
+                              />
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ color: 'var(--danger-fg)' }}
+                                onClick={() => setConfigTiers((rows) => rows.filter((_, j) => j !== i))}
+                              >
+                                ×
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                {configErr && <div className="text-sm" style={{ color: 'var(--danger-fg)' }}>{configErr}</div>}
+                {configSaved && (
+                  <div className="text-sm" style={{ color: 'var(--success-fg)' }}>
+                    {isAr ? '✓ تم الحفظ بنجاح' : '✓ Saved successfully'}
+                  </div>
+                )}
+
+                <div>
+                  <button type="submit" className="btn btn-primary" disabled={savingConfig}>
+                    {savingConfig ? (isAr ? 'جاري الحفظ…' : 'Saving…') : (isAr ? 'حفظ الإعدادات' : 'Save Settings')}
+                  </button>
+                </div>
+              </form>
+            </div>
           )}
 
           {/* ── Accruals tab ─────────────────────────────────────────────── */}
@@ -561,10 +474,9 @@ export default function CommissionsPage() {
                     <th>{isAr ? 'مندوب المبيعات' : 'Sales Rep'}</th>
                     <th>{isAr ? 'السيارة' : 'Vehicle'}</th>
                     <th>{isAr ? 'الدور' : 'Role'}</th>
-                    <th>{isAr ? 'الخطة المستخدمة' : 'Plan Used'}</th>
                     <th style={{ textAlign: 'right' }}>{isAr ? 'سعر البيع' : 'Sale Price'}</th>
-                    <th style={{ textAlign: 'right' }}>{isAr ? 'أساس العمولة' : 'Commission Base'}</th>
                     <th style={{ textAlign: 'right' }}>{isAr ? 'العمولة' : 'Commission'}</th>
+                    <th>{isAr ? 'الشريحة' : 'Tier'}</th>
                     <th>{isAr ? 'الحالة' : 'Status'}</th>
                     <th />
                   </tr>
@@ -603,20 +515,19 @@ export default function CommissionsPage() {
                       <td style={{ color: 'var(--text-2)' }}>
                         {(c.roleInDeal ?? (isAr ? 'مندوب رئيسي' : 'Primary Rep')).replace(/_/g, ' ')}
                       </td>
-                      <td style={{ color: 'var(--text-3)' }}>
-                        {c.commissionPlan?.name ?? '—'}
-                      </td>
                       <td className="tabular-nums text-sm" style={{ textAlign: 'right', color: 'var(--text-1)' }}>
                         {egp(Number(c.salePrice))}
-                      </td>
-                      <td className="tabular-nums text-sm" style={{ textAlign: 'right', color: 'var(--text-2)' }}>
-                        {egp(Number(c.base))}
                       </td>
                       <td
                         className="tabular-nums text-sm font-medium"
                         style={{ textAlign: 'right', color: 'var(--text-1)' }}
                       >
                         {egp(Number(c.amount))}
+                      </td>
+                      <td style={{ color: 'var(--text-3)', fontSize: '0.75rem' }}>
+                        {(c as unknown as { tierPctApplied?: number }).tierPctApplied
+                          ? <span className="badge badge-purple">{(c as unknown as { tierPctApplied?: number }).tierPctApplied}%</span>
+                          : <span style={{ color: 'var(--text-3)' }}>—</span>}
                       </td>
                       <td>
                         {c.status === 'ACCRUED' && <span className="badge badge-info">{isAr ? 'مستحقة' : 'Accrued'}</span>}
@@ -817,7 +728,6 @@ export default function CommissionsPage() {
                   <th>{isAr ? 'السيارة' : 'Vehicle'}</th>
                   <th>{isAr ? 'مندوب المبيعات' : 'Sales Rep'}</th>
                   <th>{isAr ? 'الدور' : 'Role'}</th>
-                  <th>{isAr ? 'الخطة' : 'Plan Used'}</th>
                   <th style={{ textAlign: 'right' }}>{isAr ? 'العمولة' : 'Commission'}</th>
                   <th>{isAr ? 'الحالة' : 'Status'}</th>
                 </tr>
@@ -855,9 +765,6 @@ export default function CommissionsPage() {
                     <td className="text-xs" style={{ color: 'var(--text-2)' }}>
                       {(c.roleInDeal ?? (isAr ? 'مندوب رئيسي' : 'Primary Rep')).replace(/_/g, ' ')}
                     </td>
-                    <td className="text-xs" style={{ color: 'var(--text-3)' }}>
-                      {c.commissionPlan ? planTypeDisplay(c.commissionPlan.type ?? '', isAr) : '—'}
-                    </td>
                     <td
                       className="tabular-nums text-sm font-medium"
                       style={{ textAlign: 'right', color: 'var(--text-1)' }}
@@ -887,197 +794,6 @@ export default function CommissionsPage() {
           </div>
         )}
       </div>
-
-      {/* ── New / Edit Plan Modal ─────────────────────────────────────────── */}
-      {(showNewPlan || editingPlan) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0"
-            style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
-            onClick={closePlanModal}
-          />
-          <div className="card relative w-full shadow-2xl" style={{ maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' }}>
-            <div
-              className="flex items-center justify-between"
-              style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 1 }}
-            >
-              <h2 className="page-title" style={{ fontSize: '1rem' }}>
-                {editingPlan
-                  ? (isAr ? `تعديل — ${editingPlan.name}` : `Edit — ${editingPlan.name}`)
-                  : (isAr ? 'خطة عمولة جديدة' : 'New Commission Plan')}
-              </h2>
-              <button className="btn btn-ghost btn-sm" style={{ fontSize: '1.25rem', lineHeight: 1 }} onClick={closePlanModal}>×</button>
-            </div>
-
-            <form onSubmit={submitPlan} style={{ padding: '1.25rem' }}>
-              <div className="space-y-3">
-                <div>
-                  <label className="input-label">{isAr ? 'اسم الخطة *' : 'Plan Name *'}</label>
-                  <input
-                    required className="input"
-                    placeholder={isAr ? 'مثال: ثابت قياسي' : 'e.g. Standard Flat'}
-                    value={planForm.name}
-                    onChange={(e) => setPlanForm((p) => ({ ...p, name: e.target.value }))}
-                  />
-                </div>
-
-                <SearchableCombobox
-                  label={isAr ? 'نوع الخطة *' : 'Plan Type *'}
-                  options={BASIS_OPTS}
-                  value={planForm.basisType}
-                  onChange={(v) => setPlanForm((p) => ({ ...p, basisType: v }))}
-                  placeholder={isAr ? 'اختر النوع' : 'Select type'}
-                />
-
-                {/* Commission Base — only relevant for % and tiered types */}
-                {planForm.basisType !== 'FLAT_AMOUNT' && (() => {
-                  const baseOpts = isAr ? COMMISSION_BASE_OPTS_AR : COMMISSION_BASE_OPTS_EN;
-                  const selected = baseOpts.find((o) => o.value === planForm.commissionBase);
-                  return (
-                    <div>
-                      <SearchableCombobox
-                        label={isAr ? 'أساس حساب العمولة *' : 'Commission Calculated On *'}
-                        options={baseOpts.map((o) => ({ value: o.value, label: o.label }))}
-                        value={planForm.commissionBase}
-                        onChange={(v) => setPlanForm((p) => ({ ...p, commissionBase: v }))}
-                        placeholder={isAr ? 'اختر الأساس' : 'Select base'}
-                      />
-                      {selected && (
-                        <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginTop: '0.3rem', paddingInlineStart: '0.25rem' }}>
-                          ℹ {selected.hint}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {planForm.basisType === 'FLAT_AMOUNT' && (
-                  <div>
-                    <label className="input-label">{isAr ? 'المبلغ الثابت (ج.م.) *' : 'Flat Amount (EGP) *'}</label>
-                    <input
-                      type="number" required min="0" step="0.01" className="input"
-                      placeholder="2,500"
-                      value={planForm.flatAmount}
-                      onChange={(e) => setPlanForm((p) => ({ ...p, flatAmount: e.target.value }))}
-                    />
-                  </div>
-                )}
-
-                {(planForm.basisType === 'PERCENT_OF_SALE_PRICE' ||
-                  planForm.basisType === 'PERCENT_OF_GROSS_PROFIT') && (
-                  <div>
-                    <label className="input-label">{isAr ? 'المعدل (%) *' : 'Rate (%) *'}</label>
-                    <input
-                      type="number" required min="0" max="100" step="0.01" className="input"
-                      placeholder="2.5"
-                      value={planForm.percentage}
-                      onChange={(e) => setPlanForm((p) => ({ ...p, percentage: e.target.value }))}
-                    />
-                  </div>
-                )}
-
-                {planForm.basisType === 'TIERED' && (
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="input-label mb-0">{isAr ? 'الشرائح *' : 'Tiers *'}</label>
-                      <button type="button" className="btn btn-ghost btn-sm text-xs"
-                        onClick={() => setTierRows(r => [...r, { ...BLANK_TIER }])}>
-                        {isAr ? '+ إضافة صف' : '+ Add Row'}
-                      </button>
-                    </div>
-                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                      <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse' }}>
-                        <thead>
-                          <tr style={{ background: 'var(--surface-2)', color: 'var(--text-3)' }}>
-                            <th className="text-left px-2 py-1.5">{isAr ? 'من (ج.م.)' : 'Min (EGP)'}</th>
-                            <th className="text-left px-2 py-1.5">{isAr ? 'إلى (ج.م.)' : 'Max (EGP)'}</th>
-                            <th className="text-left px-2 py-1.5">{isAr ? 'النوع' : 'Type'}</th>
-                            <th className="text-left px-2 py-1.5">{isAr ? 'المعدل' : 'Rate'}</th>
-                            <th className="px-2 py-1.5"></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {tierRows.map((tier, i) => (
-                            <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
-                              <td className="px-2 py-1">
-                                <input type="number" min="0" step="1" className="input py-0.5 px-1 text-xs" style={{ minWidth: 70 }}
-                                  placeholder="0" value={tier.minValue}
-                                  onChange={e => setTierRows(r => r.map((t, j) => j === i ? { ...t, minValue: e.target.value } : t))} />
-                              </td>
-                              <td className="px-2 py-1">
-                                <input type="number" min="0" step="1" className="input py-0.5 px-1 text-xs" style={{ minWidth: 70 }}
-                                  placeholder="∞" value={tier.maxValue}
-                                  onChange={e => setTierRows(r => r.map((t, j) => j === i ? { ...t, maxValue: e.target.value } : t))} />
-                              </td>
-                              <td className="px-2 py-1">
-                                <SearchableCombobox
-                                  options={[
-                                    { value: 'PERCENT', label: isAr ? 'نسبة %' : '%' },
-                                    { value: 'FLAT',    label: isAr ? 'ثابت' : 'Flat' },
-                                  ]}
-                                  value={tier.rateType}
-                                  onChange={(v) => setTierRows(r => r.map((t, j) => j === i ? { ...t, rateType: v } : t))}
-                                />
-                              </td>
-                              <td className="px-2 py-1">
-                                <input type="number" min="0" step="0.01" className="input py-0.5 px-1 text-xs" style={{ minWidth: 60 }}
-                                  placeholder="2.5" value={tier.rateValue}
-                                  onChange={e => setTierRows(r => r.map((t, j) => j === i ? { ...t, rateValue: e.target.value } : t))} />
-                              </td>
-                              <td className="px-2 py-1">
-                                {tierRows.length > 1 && (
-                                  <button type="button" style={{ color: 'var(--danger)', fontSize: '1rem', lineHeight: 1 }}
-                                    onClick={() => setTierRows(r => r.filter((_, j) => j !== i))}>×</button>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                <SearchableCombobox
-                  label={isAr ? 'ينطبق على (الدور)' : 'Applies To (Role)'}
-                  options={ROLE_OPTS}
-                  value={planForm.applicableRole}
-                  onChange={(v) => setPlanForm((p) => ({ ...p, applicableRole: v }))}
-                  placeholder={isAr ? 'كل الأدوار' : 'All Roles'}
-                  clearable
-                />
-
-                <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--text-1)' }}>
-                  <input
-                    type="checkbox"
-                    checked={planForm.active}
-                    onChange={(e) => setPlanForm((p) => ({ ...p, active: e.target.checked }))}
-                    className="rounded"
-                  />
-                  {isAr ? 'نشط فوراً' : 'Active immediately'}
-                </label>
-
-                {planErr && (
-                  <p className="text-xs" style={{ color: 'var(--danger)' }}>{planErr}</p>
-                )}
-
-                <div className="flex gap-3 pt-1">
-                  <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={closePlanModal}>
-                    {isAr ? 'إلغاء' : 'Cancel'}
-                  </button>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={savingPlan}>
-                    {savingPlan
-                      ? (isAr ? 'جاري الحفظ…' : 'Saving…')
-                      : editingPlan
-                        ? (isAr ? 'حفظ التغييرات' : 'Save Changes')
-                        : (isAr ? 'إنشاء الخطة' : 'Create Plan')}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* ── Pay Commission Modal ──────────────────────────────────────────── */}
       {showPay && (

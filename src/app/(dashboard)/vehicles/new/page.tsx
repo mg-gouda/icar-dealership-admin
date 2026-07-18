@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../components/ui/NumericInput';
 import ScannerModal, { VIN_FORMATS } from '../../../../components/ScannerModal';
 import { useLang } from '@/lib/lang-context';
 import { API_BASE } from '@/lib/config';
@@ -48,17 +49,23 @@ const STEPS_USED = [
 ];
 
 const DOC_SLOTS_BASE: { key: string; label: string; required: boolean }[] = [
-  { key: 'vehicle_title', label: 'Vehicle Title / Ownership Certificate', required: true },
-  { key: 'inspection_report', label: 'Inspection Report', required: false },
-  { key: 'import_customs', label: 'Import Customs Certificate', required: false },
-  { key: 'prev_registration', label: 'Previous Registration', required: false },
+  { key: 'vehicle_title',    label: 'Vehicle Title / Ownership Certificate', required: false },
+  { key: 'inspection_report',label: 'Inspection Report',                     required: false },
+  { key: 'import_customs',   label: 'Import Customs Certificate',            required: false },
+  { key: 'circular_book',    label: 'Circular Book / Publication',           required: false },
+  { key: 'ministerial_decree', label: 'Ministerial Decree',                  required: false },
+  { key: 'commercial_register', label: 'Commercial Register',                required: false },
+  { key: 'tax_card',         label: 'Tax Card',                              required: false },
 ];
 
 const DOC_LABELS_AR: Record<string, string> = {
-  'Vehicle Title / Ownership Certificate': 'عقد الملكية / شهادة الملكية',
+  'Vehicle Title / Ownership Certificate': 'المبايعة',
   'Inspection Report': 'تقرير المعاينة',
-  'Import Customs Certificate': 'شهادة الجمارك',
-  'Previous Registration': 'التسجيل السابق',
+  'Import Customs Certificate': 'الإفراج الجمركي',
+  'Circular Book / Publication': 'الكتاب / المنشور الدوري',
+  'Ministerial Decree': 'القرار الوزاري',
+  'Commercial Register': 'السجل التجاري',
+  'Tax Card': 'البطاقة الضريبية',
 };
 
 const fmt = (n: number) => 'EGP ' + n.toLocaleString('en-EG', { maximumFractionDigits: 0 });
@@ -70,9 +77,10 @@ function initForm() {
     engineType: '', transmission: '', fuelType: '', doors: '', seats: '',
     hp: '', torque: '', driveType: '', gearType: '',
     features: [] as string[],
-    acquisitionCost: '', salePrice: '', adminFeeOverride: '', insuranceFeeOverride: '',
+    acquisitionCost: '', ourProfit: '', newOverprice: '', salePrice: '', adminFeeOverride: '', insuranceFeeOverride: '',
     locationId: '', status: 'AVAILABLE',
     accreditedDealerId: '',
+    ownershipType: 'OWNED' as 'OWNED' | 'CONSIGNMENT' | 'THIRD_PARTY_SALE',
   };
 }
 
@@ -137,10 +145,11 @@ export default function NewVehiclePage() {
   const [dragOver, setDragOver] = useState(false);
   const photoFileRef = useRef<HTMLInputElement>(null);
   const [docs, setDocs] = useState<Record<string, File>>({});
-  const [dealers, setDealers] = useState<{id:string;name:string}[]>([]);
+  const [dealers, setDealers] = useState<{id:string;name:string;gracePeriodDays:number}[]>([]);
+  const [graceModal, setGraceModal] = useState<{name:string;days:number} | null>(null);
 
   useEffect(() => {
-    apiFetch<{id:string;name:string}[]>('/accredited-dealers').then(setDealers).catch(() => {});
+    apiFetch<{id:string;name:string;gracePeriodDays:number}[]>('/accredited-dealers').then(setDealers).catch(() => {});
   }, []);
 
   const STEP_LABELS_AR: Record<string, string> = {
@@ -333,10 +342,13 @@ export default function NewVehiclePage() {
         ...(form.doors && { doors: Number(form.doors) }),
         ...(form.seats && { seats: Number(form.seats) }),
         ...(form.acquisitionCost && { cost: Number(form.acquisitionCost) }),
+        ...(!isUsed && form.newOverprice && { overprice: Number(form.newOverprice) }),
+        ...(!isUsed && form.ourProfit && { ourProfit: Number(form.ourProfit) }),
         ...(form.adminFeeOverride && { adminFeeOverride: Number(form.adminFeeOverride) }),
         ...(form.insuranceFeeOverride && { insuranceFeeOverride: Number(form.insuranceFeeOverride) }),
         ...(form.features.length && { features: form.features }),
         ...(form.accreditedDealerId && { accreditedDealerId: form.accreditedDealerId }),
+        ownershipType: form.ownershipType,
         ...(isUsed && {
           regLicenseNumber: usedForm.regLicenseNumber,
           licenseExpiryDate: usedForm.licenseExpiryDate,
@@ -412,7 +424,7 @@ export default function NewVehiclePage() {
                   icon={<CarNewIcon />}
                   title={isAr ? 'مركبة جديدة' : 'New Vehicle'}
                   desc={isAr ? 'جديدة تماماً، لم تسجل من قبل' : 'Brand new, never registered'}
-                  onClick={() => set('condition', 'NEW')}
+                  onClick={() => { set('condition', 'NEW'); setForm(f => ({ ...f, ownershipType: 'OWNED' })); }}
                   hoverBorder="var(--primary)"
                   hoverBg="var(--info-bg)"
                 />
@@ -421,7 +433,7 @@ export default function NewVehiclePage() {
                   icon={<CarUsedIcon />}
                   title={isAr ? 'مركبة مستعملة' : 'Used Vehicle'}
                   desc={isAr ? 'مركبة مستعملة مع سجل' : 'Pre-owned vehicle with history'}
-                  onClick={() => set('condition', 'USED')}
+                  onClick={() => { set('condition', 'USED'); setForm(f => ({ ...f, ownershipType: 'THIRD_PARTY_SALE' })); }}
                   hoverBorder="var(--warning)"
                   hoverBg="var(--warning-bg)"
                 />
@@ -523,19 +535,51 @@ export default function NewVehiclePage() {
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  {!isUsed && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <label className="input-label">{isAr ? 'الوكيل المعتمد' : 'Accredited Dealer'}</label>
+                      <SearchableCombobox
+                        options={[
+                          { value: '', label: isAr ? '— بدون وكيل —' : '— No dealer —' },
+                          ...dealers.map(d => ({ value: d.id, label: d.name }))
+                        ]}
+                        value={form.accreditedDealerId ?? ''}
+                        onChange={v => setForm(f => ({ ...f, accreditedDealerId: v }))}
+                        placeholder={isAr ? 'اختر الوكيل…' : 'Select dealer…'}
+                        className="w-full"
+                      />
+                    </div>
+                  )}
+
+                  {/* Ownership type — options differ by condition */}
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <label className="input-label">{isAr ? 'الوكيل المعتمد' : 'Accredited Dealer'}</label>
-                    <SearchableCombobox
-                      options={[
-                        { value: '', label: isAr ? '— بدون وكيل —' : '— No dealer —' },
-                        ...dealers.map(d => ({ value: d.id, label: d.name }))
-                      ]}
-                      value={form.accreditedDealerId ?? ''}
-                      onChange={v => setForm(f => ({ ...f, accreditedDealerId: v }))}
-                      placeholder={isAr ? 'اختر الوكيل…' : 'Select dealer…'}
-                      className="w-full"
-                    />
+                    <label className="input-label">{isAr ? 'نوع الملكية' : 'Ownership Type'}</label>
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '0.375rem' }}>
+                      {(isUsed
+                        ? [['THIRD_PARTY_SALE', 'بيع لحساب الغير', 'Sale on Behalf'] , ['OWNED', 'مملوكة', 'Owned']] as const
+                        : [['CONSIGNMENT', 'أمانات', 'Consignment'], ['OWNED', 'مملوكة', 'Owned']] as const
+                      ).map(([val, ar, en]) => (
+                        <label key={val} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem', color: form.ownershipType === val ? 'var(--text-1)' : 'var(--text-2)' }}>
+                          <input
+                            type="radio"
+                            name="ownershipType"
+                            value={val}
+                            checked={form.ownershipType === val}
+                            onChange={() => {
+                              setForm(f => ({ ...f, ownershipType: val as typeof form.ownershipType }));
+                              if (val === 'CONSIGNMENT' && form.accreditedDealerId) {
+                                const d = dealers.find(x => x.id === form.accreditedDealerId);
+                                if (d) setGraceModal({ name: d.name, days: d.gracePeriodDays });
+                              }
+                            }}
+                            style={{ accentColor: 'var(--primary)', width: '1rem', height: '1rem' }}
+                          />
+                          {isAr ? ar : en}
+                        </label>
+                      ))}
+                    </div>
                   </div>
+
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label className="input-label">
                       {isAr ? 'رقم الشاسيه' : 'VIN Number'}{' '}
@@ -612,9 +656,9 @@ export default function NewVehiclePage() {
                     <label className="input-label">
                       {isAr ? 'عداد الكيلومترات' : 'Mileage (km)'}{isUsed && <span style={{ color: 'var(--danger)' }}> *</span>}
                     </label>
-                    <input
-                      className="input" type="number" min="0"
-                      value={form.mileage} onChange={(e) => set('mileage', e.target.value)}
+                    <NumericInput
+                      className="input"
+                      value={form.mileage} onChange={(val) => set('mileage', val)}
                       placeholder={isUsed ? (isAr ? 'أدخل قراءة العداد' : 'Enter odometer reading') : (isAr ? '0 للمركبات الجديدة' : '0 for new vehicles')}
                     />
                   </div>
@@ -772,15 +816,15 @@ export default function NewVehiclePage() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div>
                       <label className="input-label">{isAr ? 'سعر الطلب (جنيه)' : 'Customer Asking Price (EGP)'}</label>
-                      <input className="input" type="number" min="0" value={usedForm.customerAskingPrice ?? ''} onChange={(e) => setU('customerAskingPrice', e.target.value)} placeholder="0" />
+                      <NumericInput className="input" value={usedForm.customerAskingPrice ?? ''} onChange={(val) => setU('customerAskingPrice', val)} placeholder="0" />
                     </div>
                     <div>
                       <label className="input-label">{isAr ? 'أدنى سعر مقبول (جنيه)' : 'Minimum Asking Price (EGP)'}</label>
-                      <input className="input" type="number" min="0" value={usedForm.minimumAskingPrice ?? ''} onChange={(e) => setU('minimumAskingPrice', e.target.value)} placeholder="0" />
+                      <NumericInput className="input" value={usedForm.minimumAskingPrice ?? ''} onChange={(val) => setU('minimumAskingPrice', val)} placeholder="0" />
                     </div>
                     <div style={{ gridColumn: '1 / -1' }}>
                       <label className="input-label">{isAr ? 'هامش الربح (جنيه)' : 'Overprice (EGP)'}</label>
-                      <input className="input" type="number" min="0" value={usedForm.overprice ?? ''} onChange={(e) => setU('overprice', e.target.value)} placeholder="0" />
+                      <NumericInput className="input" value={usedForm.overprice ?? ''} onChange={(val) => setU('overprice', val)} placeholder="0" />
                       <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', marginTop: '0.25rem' }}>
                         {isAr ? 'المبلغ المضاف فوق سعر الطلب كهامش ربح للمعرض' : 'Amount added on top of asking price as showroom margin'}
                         {overprice > 0 && Number(usedForm.customerAskingPrice) > 0
@@ -805,11 +849,11 @@ export default function NewVehiclePage() {
                     </div>
                     <div>
                       <label className="input-label">{isAr ? 'القوة (حصان)' : 'Horsepower (HP)'}</label>
-                      <input className="input" type="number" min="0" value={form.hp ?? ''} onChange={(e) => set('hp', e.target.value)} placeholder="e.g. 180" />
+                      <NumericInput className="input" value={form.hp ?? ''} onChange={(val) => set('hp', val)} placeholder="e.g. 180" />
                     </div>
                     <div>
                       <label className="input-label">{isAr ? 'عزم الدوران (ن.م)' : 'Torque (N·m)'}</label>
-                      <input className="input" type="number" min="0" value={form.torque ?? ''} onChange={(e) => set('torque', e.target.value)} placeholder="e.g. 350" />
+                      <NumericInput className="input" value={form.torque ?? ''} onChange={(val) => set('torque', val)} placeholder="e.g. 350" />
                     </div>
                     <div>
                       <label className="input-label">{isAr ? 'ناقل الحركة' : 'Transmission'}</label>
@@ -875,11 +919,11 @@ export default function NewVehiclePage() {
 
                     <div>
                       <label className="input-label">{isAr ? 'الأبواب' : 'Doors'}</label>
-                      <input className="input" type="number" min="2" max="6" value={form.doors ?? ''} onChange={(e) => set('doors', e.target.value)} placeholder="e.g. 4" />
+                      <NumericInput className="input" value={form.doors ?? ''} onChange={(val) => set('doors', val)} placeholder="e.g. 4" min={2} max={6} />
                     </div>
                     <div>
                       <label className="input-label">{isAr ? 'المقاعد' : 'Seats'}</label>
-                      <input className="input" type="number" min="2" max="9" value={form.seats ?? ''} onChange={(e) => set('seats', e.target.value)} placeholder="e.g. 5" />
+                      <NumericInput className="input" value={form.seats ?? ''} onChange={(val) => set('seats', val)} placeholder="e.g. 5" min={2} max={9} />
                     </div>
                   </div>
                 </div>
@@ -917,12 +961,20 @@ export default function NewVehiclePage() {
                 <div className="card" style={{ padding: '1.5rem' }}>
                   <p className="section-label">{isAr ? 'التسعير' : 'Pricing'}</p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    {/* Accredited / Official Dealer Price */}
                     <div>
-                      <label className="input-label">{isAr ? 'التكلفة / سعر الاستحواذ (جنيه)' : 'Purchase / Acquisition Cost (EGP)'}</label>
-                      <input
-                        className="input" type="number" min="0"
+                      <label className="input-label">{isAr ? 'السعر الرسمي للوكيل (جنيه)' : 'Purchase / Acquisition Cost (EGP)'}</label>
+                      <NumericInput
+                        className="input"
                         value={form.acquisitionCost}
-                        onChange={(e) => set('acquisitionCost', e.target.value)}
+                        onChange={(acq) => {
+                          const op = form.newOverprice;
+                          const pr = form.ourProfit;
+                          setForm(f => ({
+                            ...f, acquisitionCost: acq,
+                            ...(!isUsed && acq ? { salePrice: String((Number(acq)||0) + (Number(pr)||0) + (Number(op)||0)) } : {}),
+                          }));
+                        }}
                         placeholder="0"
                       />
                       {isUsed && usedForm.customerAskingPrice && (
@@ -933,17 +985,74 @@ export default function NewVehiclePage() {
                         </p>
                       )}
                     </div>
+
+                    {/* New-car-only: Our Profit */}
+                    {!isUsed && (
+                      <div>
+                        <label className="input-label">{isAr ? 'ربحنا (جنيه)' : 'Our Profit (EGP)'}</label>
+                        <NumericInput
+                          className="input"
+                          value={form.ourProfit}
+                          onChange={(pr) => {
+                            const acq = form.acquisitionCost;
+                            const op = form.newOverprice;
+                            setForm(f => ({
+                              ...f, ourProfit: pr,
+                              ...(acq ? { salePrice: String((Number(acq)||0) + (Number(pr)||0) + (Number(op)||0)) } : {}),
+                            }));
+                          }}
+                          placeholder="0"
+                        />
+                      </div>
+                    )}
+
+                    {/* New-car-only: Overprice */}
+                    {!isUsed && (
+                      <div>
+                        <label className="input-label">{isAr ? 'أوفر برايس (جنيه)' : 'Overprice (EGP)'}</label>
+                        <NumericInput
+                          className="input"
+                          value={form.newOverprice}
+                          onChange={(op) => {
+                            const acq = form.acquisitionCost;
+                            const pr = form.ourProfit;
+                            setForm(f => ({
+                              ...f, newOverprice: op,
+                              ...(acq ? { salePrice: String((Number(acq)||0) + (Number(pr)||0) + (Number(op)||0)) } : {}),
+                            }));
+                          }}
+                          placeholder="0"
+                        />
+                        {form.acquisitionCost && (form.ourProfit || form.newOverprice) && (
+                          <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', marginTop: '0.25rem' }}>
+                            {fmt(Number(form.acquisitionCost))}
+                            {form.ourProfit ? ` + ${fmt(Number(form.ourProfit))}` : ''}
+                            {form.newOverprice ? ` + ${fmt(Number(form.newOverprice))}` : ''}
+                            {' = '}{fmt((Number(form.acquisitionCost)||0) + (Number(form.ourProfit)||0) + (Number(form.newOverprice)||0))}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Selling Price — auto-calc for new cars */}
                     <div>
-                      <label className="input-label">{isAr ? 'سعر البيع المعروض (جنيه)' : 'Listed Sale Price (EGP)'} <span style={{ color: 'var(--danger)' }}>*</span></label>
-                      <input
-                        className="input" type="number" min="0"
+                      <label className="input-label">{isAr ? 'سعر البيع (جنيه)' : 'Listed Sale Price (EGP)'} <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <NumericInput
+                        className="input"
                         value={form.salePrice}
-                        onChange={(e) => set('salePrice', e.target.value)}
+                        onChange={(val) => set('salePrice', val)}
                         placeholder="0"
+                        readOnly={!isUsed && !!(form.acquisitionCost)}
+                        style={!isUsed && form.acquisitionCost ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
                       />
                       {isUsed && form.acquisitionCost && usedForm.overprice && (
                         <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', marginTop: '0.25rem' }}>
                           {fmt(Number(form.acquisitionCost))} + {fmt(overprice)} overprice = {fmt(Number(form.acquisitionCost) + overprice)}
+                        </p>
+                      )}
+                      {!isUsed && form.acquisitionCost && (
+                        <p style={{ fontSize: '0.6875rem', color: 'var(--success-fg)', marginTop: '0.25rem' }}>
+                          {isAr ? 'محسوب تلقائياً' : 'Auto-calculated'}
                         </p>
                       )}
                     </div>
@@ -972,9 +1081,9 @@ export default function NewVehiclePage() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div>
                       <label className="input-label">{isAr ? 'الرسوم الإدارية (جنيه)' : 'Administration Fee (EGP)'}</label>
-                      <input
-                        className="input" type="number" min="0"
-                        value={form.adminFeeOverride} onChange={(e) => set('adminFeeOverride', e.target.value)}
+                      <NumericInput
+                        className="input"
+                        value={form.adminFeeOverride} onChange={(val) => set('adminFeeOverride', val)}
                         placeholder={selectedLocation?.defaultAdminFee
                           ? `${Number(selectedLocation.defaultAdminFee).toLocaleString()} (${isAr ? 'افتراضي الفرع' : 'Location Default'})`
                           : `3,500 (${isAr ? 'افتراضي الفرع' : 'Location Default'})`}
@@ -982,9 +1091,9 @@ export default function NewVehiclePage() {
                     </div>
                     <div>
                       <label className="input-label">{isAr ? 'التأمين الإلزامي (جنيه)' : 'Compulsory Insurance (EGP)'}</label>
-                      <input
-                        className="input" type="number" min="0"
-                        value={form.insuranceFeeOverride} onChange={(e) => set('insuranceFeeOverride', e.target.value)}
+                      <NumericInput
+                        className="input"
+                        value={form.insuranceFeeOverride} onChange={(val) => set('insuranceFeeOverride', val)}
                         placeholder={selectedLocation?.defaultInsuranceFee
                           ? `${Number(selectedLocation.defaultInsuranceFee).toLocaleString()} (${isAr ? 'افتراضي الفرع' : 'Location Default'})`
                           : `4,800 (${isAr ? 'افتراضي الفرع' : 'Location Default'})`}
@@ -1479,6 +1588,43 @@ export default function NewVehiclePage() {
       </div>
     </div>
 
+    {/* Grace period modal */}
+    {graceModal && (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setGraceModal(null)} />
+        <div style={{ position: 'relative', width: '100%', maxWidth: '28rem', borderRadius: '1rem', background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: '0 24px 60px rgba(0,0,0,0.5)', padding: '1.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', marginBottom: '1.25rem' }}>
+            <div style={{ width: '2.5rem', height: '2.5rem', borderRadius: '50%', background: 'var(--warning-bg)', border: '1px solid var(--warning)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--warning-fg)' }}>
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-1)' }}>
+                {isAr ? 'فترة السماح — الوكيل المعتمد' : 'Grace Period — Accredited Dealer'}
+              </h3>
+              <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--text-3)' }}>{graceModal.name}</p>
+            </div>
+          </div>
+          <div style={{ background: 'var(--surface-2)', borderRadius: '0.625rem', padding: '1rem 1.25rem', marginBottom: '1.25rem', border: '1px solid var(--border)' }}>
+            <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-1)', lineHeight: 1.6 }}>
+              {isAr
+                ? <>وفقاً لاتفاقية الوكيل <strong>{graceModal.name}</strong>، تبلغ فترة السماح <strong style={{ color: 'var(--warning-fg)' }}>{graceModal.days} يوماً</strong> من تاريخ استلام السيارة حتى موعد استحقاق الدفع الكامل.</>
+                : <>Per the agreement with <strong>{graceModal.name}</strong>, the grace period is <strong style={{ color: 'var(--warning-fg)' }}>{graceModal.days} days</strong> from vehicle receipt until full payment is due.</>
+              }
+            </p>
+          </div>
+          <button
+            className="btn btn-primary"
+            style={{ width: '100%' }}
+            onClick={() => setGraceModal(null)}
+          >
+            {isAr ? 'فهمت، متابعة' : 'Understood, Continue'}
+          </button>
+        </div>
+      </div>
+    )}
+
     {showVinScanner && (
       <ScannerModal
         formats={VIN_FORMATS}
@@ -1567,9 +1713,9 @@ function ConditionPctField({ label, value, onChange }: {
     <div style={{ gridColumn: '1 / -1' }}>
       <label className="input-label">{label}</label>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        <input
-          className="input" type="number" min="0" max="100"
-          value={value ?? ''} onChange={(e) => onChange(e.target.value)}
+        <NumericInput
+          className="input" min={0} max={100}
+          value={value ?? ''} onChange={(val) => onChange(val)}
           placeholder="e.g. 80"
           style={{ width: '120px' }}
         />

@@ -30,45 +30,31 @@ interface OverdueInstallment {
   amount: number;
 }
 
-/* ── demo data ───────────────────────────────────────────────────────────── */
-const DEMO_KPIS = {
-  totalRevenueMTD:  4_400_000,
-  unitsSoldMTD:     23,
-  grossMarginPct:   18.4,
-  avgDaysToSale:    34,
-  leadConvRate:     26.7,
-  overdueAmount:    127_500,
-  overdueCount:     7,
-  revTrend:         12.3,
-  unitsTrend:       -4.1,
-  marginTrend:      1.8,
-  daysTrend:        -2.5,
-  convTrend:        3.2,
-  overdTrend:       5.1,
+/* ── zero-state KPIs (shown until API responds) ──────────────────────────── */
+const ZERO_KPIS = {
+  totalRevenueMTD:  0,
+  unitsSoldMTD:     0,
+  grossMarginPct:   0,
+  avgDaysToSale:    0,
+  leadConvRate:     0,
+  overdueAmount:    0,
+  overdueCount:     0,
+  revTrend:     null as number | null,
+  unitsTrend:   null as number | null,
+  marginTrend:  null as number | null,
+  daysTrend:    null as number | null,
+  convTrend:    null as number | null,
+  overdTrend:   null as number | null,
 };
 
-const DEMO_BRANCHES: BranchRow[] = [
-  { branch: 'Cairo',          revenueMTD: 2_200_000, grossProfit: 420_000, unitsSold: 12, topModel: 'Hyundai Tucson' },
-  { branch: 'Alexandria',     revenueMTD: 1_100_000, grossProfit: 198_000, unitsSold: 6,  topModel: 'KIA Sportage'   },
-  { branch: 'Giza',           revenueMTD: 770_000,   grossProfit: 138_000, unitsSold: 4,  topModel: 'Toyota Corolla' },
-  { branch: 'Sharm El Sheikh',revenueMTD: 330_000,   grossProfit: 62_000,  unitsSold: 1,  topModel: 'Hyundai Elantra'},
-];
-
-const DEMO_RECENT: RecentDeal[] = [
-  { id: 'd1', vehicle: { make: 'Hyundai', model: 'Tucson 2024' },  customer: { name: 'Omar Abdallah'  }, salePrice: 480_000, purchaseMethod: 'BANK_FINANCING',          createdAt: '2026-07-05T11:20:00Z', user: { name: 'Ahmed Hassan' } },
-  { id: 'd2', vehicle: { make: 'KIA',     model: 'Sportage 2024'}, customer: { name: 'Mona El Sharif' }, salePrice: 430_000, purchaseMethod: 'CASH',                    createdAt: '2026-07-04T14:45:00Z', user: { name: 'Sara Mohamed' } },
-  { id: 'd3', vehicle: { make: 'Toyota',  model: 'Corolla 2023' }, customer: { name: 'Youssef Nabil'  }, salePrice: 295_000, purchaseMethod: 'DEALERSHIP_INSTALLMENT',   createdAt: '2026-07-03T09:10:00Z', user: { name: 'Omar Khaled'  } },
-  { id: 'd4', vehicle: { make: 'Hyundai', model: 'Elantra 2024' }, customer: { name: 'Layla Hassan'   }, salePrice: 265_000, purchaseMethod: 'CASH',                    createdAt: '2026-07-02T16:30:00Z', user: { name: 'Nour Ibrahim' } },
-  { id: 'd5', vehicle: { make: 'MG',      model: 'ZS 2024'      }, customer: { name: 'Sherif Mansour' }, salePrice: 310_000, purchaseMethod: 'BANK_FINANCING',          createdAt: '2026-07-01T10:00:00Z', user: { name: 'Ahmed Hassan' } },
-];
-
 /* ── formatters ─────────────────────────────────────────────────────────── */
-function fmtEGP(n: number) {
-  if (n >= 1_000_000) return `EGP ${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000)     return `EGP ${(n / 1_000).toFixed(0)}K`;
-  return `EGP ${n.toLocaleString()}`;
+function fmtEGP(n: number | undefined | null) {
+  const v = Number(n ?? 0);
+  if (v >= 1_000_000) return `EGP ${(v / 1_000_000).toFixed(2)}M`;
+  if (v >= 1_000)     return `EGP ${(v / 1_000).toFixed(0)}K`;
+  return `EGP ${v.toLocaleString()}`;
 }
-function fmtPct(n: number) { return `${n.toFixed(1)}%`; }
+function fmtPct(n: number | undefined | null) { return `${(Number(n ?? 0)).toFixed(1)}%`; }
 function fmtDate(s: string, ar: boolean) {
   return new Date(s).toLocaleDateString(ar ? 'ar-EG' : 'en-EG', { month: 'short', day: 'numeric' });
 }
@@ -79,23 +65,24 @@ function methodLabel(m: string, ar: boolean) {
 }
 
 /* ── TrendArrow ─────────────────────────────────────────────────────────── */
-function TrendArrow({ trend, invert = false }: { trend: number; invert?: boolean }) {
-  const positive = invert ? trend < 0 : trend > 0;
+function TrendArrow({ trend, invert = false }: { trend?: number | null; invert?: boolean }) {
+  const v = Number(trend ?? 0);
+  const positive = invert ? v < 0 : v > 0;
   const color = positive ? 'var(--success-fg)' : 'var(--danger-fg)';
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: '0.6875rem', fontWeight: 500, color }}>
       <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-        style={{ transform: trend < 0 ? 'rotate(180deg)' : 'none', transition: 'transform 200ms' }}>
+        style={{ transform: v < 0 ? 'rotate(180deg)' : 'none', transition: 'transform 200ms' }}>
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" />
       </svg>
-      {Math.abs(trend).toFixed(1)}%
+      {Math.abs(v).toFixed(1)}%
     </span>
   );
 }
 
 /* ── KpiCell ────────────────────────────────────────────────────────────── */
 interface KpiCellProps {
-  label: string; value: string; trend?: number; invertTrend?: boolean;
+  label: string; value: string; trend?: number | null; invertTrend?: boolean;
 }
 function KpiCell({ label, value, trend, invertTrend }: KpiCellProps) {
   return (
@@ -118,19 +105,35 @@ function KpiCell({ label, value, trend, invertTrend }: KpiCellProps) {
 /* ── main page ───────────────────────────────────────────────────────────── */
 export default function ExecutivePage() {
   const { isAr } = useLang();
-  const [kpis,      setKpis]      = useState(DEMO_KPIS);
-  const [branches,  setBranches]  = useState<BranchRow[]>(DEMO_BRANCHES);
-  const [recent,    setRecent]    = useState<RecentDeal[]>(DEMO_RECENT);
+  const [kpis,      setKpis]      = useState(ZERO_KPIS);
+  const [branches,  setBranches]  = useState<BranchRow[]>([]);
+  const [recent,    setRecent]    = useState<RecentDeal[]>([]);
   const [overdue,   setOverdue]   = useState<OverdueInstallment[]>([]);
 
   useEffect(() => {
-    // revenue by month — extract current month total
+    // revenue by month — current total + month-over-month trend
     apiFetch<{ months?: Array<{ revenue: number; expenses: number; month: string }> }>('/finance/reports/revenue-by-month')
       .then(d => {
         if (d?.months?.length) {
-          const last = d.months[d.months.length - 1];
-          if (last) setKpis(k => ({ ...k, totalRevenueMTD: last.revenue }));
+          const ms = d.months;
+          const last = ms[ms.length - 1];
+          const prev = ms.length >= 2 ? ms[ms.length - 2] : null;
+          const revTrend = prev && Number(prev.revenue) > 0
+            ? Math.round(((Number(last.revenue) - Number(prev.revenue)) / Number(prev.revenue)) * 1000) / 10
+            : null;
+          if (last) setKpis(k => ({ ...k, totalRevenueMTD: Number(last.revenue), revTrend }));
         }
+      })
+      .catch(() => {});
+
+    // income statement — gross margin %
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    apiFetch<{ totalIncome?: string | number; netProfit?: string | number }>(`/finance/reports/income-statement?dateFrom=${monthStart}`)
+      .then(d => {
+        const income = Number(d?.totalIncome ?? 0);
+        const profit = Number(d?.netProfit ?? 0);
+        if (income > 0) setKpis(k => ({ ...k, grossMarginPct: Math.round((profit / income) * 1000) / 10 }));
       })
       .catch(() => {});
 
@@ -222,7 +225,7 @@ export default function ExecutivePage() {
             <KpiCell label={isAr ? 'الإيرادات (الشهر)' : 'Revenue MTD'}      value={fmtEGP(kpis.totalRevenueMTD)} trend={kpis.revTrend}   />
             <KpiCell label={isAr ? 'وحدات مباعة (الشهر)' : 'Units Sold MTD'} value={String(kpis.unitsSoldMTD)}    trend={kpis.unitsTrend} />
             <KpiCell label={isAr ? 'هامش الربح' : 'Gross Margin'}            value={fmtPct(kpis.grossMarginPct)}  trend={kpis.marginTrend}/>
-            <KpiCell label={isAr ? 'متوسط أيام البيع' : 'Avg Days to Sale'}  value={isAr ? `${kpis.avgDaysToSale} يوم` : `${kpis.avgDaysToSale} days`} trend={kpis.daysTrend} invertTrend />
+            <KpiCell label={isAr ? 'متوسط أيام البيع' : 'Avg Days to Sale'}  value={isAr ? `${Number(kpis.avgDaysToSale ?? 0)} يوم` : `${Number(kpis.avgDaysToSale ?? 0)} days`} trend={kpis.daysTrend} invertTrend />
             <KpiCell label={isAr ? 'معدل التحويل' : 'Lead Conv. Rate'}       value={fmtPct(kpis.leadConvRate)}    trend={kpis.convTrend}  />
             <div style={{ flex: '1 1 0', minWidth: 0, padding: '0.875rem 1rem', display: 'flex', flexDirection: 'column', gap: 3 }}>
               <p style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)' }}>
@@ -262,7 +265,7 @@ export default function ExecutivePage() {
                     <td style={{ fontWeight: 500, color: 'var(--text-1)' }}>{b.branch}</td>
                     <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtEGP(b.revenueMTD)}</td>
                     <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--success-fg)', fontWeight: 600 }}>{fmtEGP(b.grossProfit)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-1)' }}>{b.unitsSold}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-1)' }}>{Number(b.unitsSold ?? 0)}</td>
                     <td style={{ fontSize: '0.8rem', color: 'var(--text-3)' }}>{b.topModel}</td>
                   </tr>
                 ))}
@@ -271,13 +274,13 @@ export default function ExecutivePage() {
                 <tr style={{ borderTop: '2px solid var(--border)' }}>
                   <td style={{ fontWeight: 700, color: 'var(--text-1)', fontSize: '0.8125rem' }}>{isAr ? 'الإجمالي' : 'Total'}</td>
                   <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-1)', fontVariantNumeric: 'tabular-nums' }}>
-                    {fmtEGP(branches.reduce((s, b) => s + b.revenueMTD, 0))}
+                    {fmtEGP(branches.reduce((s, b) => s + Number(b.revenueMTD ?? 0), 0))}
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--success-fg)', fontVariantNumeric: 'tabular-nums' }}>
-                    {fmtEGP(branches.reduce((s, b) => s + b.grossProfit, 0))}
+                    {fmtEGP(branches.reduce((s, b) => s + Number(b.grossProfit ?? 0), 0))}
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-1)' }}>
-                    {branches.reduce((s, b) => s + b.unitsSold, 0)}
+                    {branches.reduce((s, b) => s + Number(b.unitsSold ?? 0), 0)}
                   </td>
                   <td />
                 </tr>

@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import { canViewField, canWriteField } from '../../../../lib/fieldPermissions';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../components/ui/NumericInput';
 import { useLang } from '../../../../lib/lang-context';
 import { fmtDateTime } from '@/lib/fmt';
 
@@ -521,23 +522,21 @@ export default function VehicleDetailPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
                   <div>
                     <label className="input-label">{isAr ? 'سعر البيع المدرج (ج.م)' : 'Listed Sale Price (EGP)'}</label>
-                    <input
+                    <NumericInput
                       className="input"
-                      type="number"
                       min="0"
                       value={form.price ?? ''}
-                      onChange={(e) => set('price', Number(e.target.value))}
+                      onChange={(val) => set('price', Number(val))}
                     />
                   </div>
                   {canViewField('Vehicle', 'cost') && (
                     <div>
                       <label className="input-label">{isAr ? 'تكلفة الاستحواذ (ج.م)' : 'Acquisition Cost (EGP)'}</label>
-                      <input
+                      <NumericInput
                         className="input"
-                        type="number"
                         min="0"
                         value={form.cost ?? ''}
-                        onChange={(e) => set('cost', Number(e.target.value))}
+                        onChange={(val) => set('cost', Number(val))}
                         disabled={!canWriteField('Vehicle', 'cost')}
                         style={{ opacity: canWriteField('Vehicle', 'cost') ? 1 : 0.5, cursor: canWriteField('Vehicle', 'cost') ? undefined : 'not-allowed' }}
                       />
@@ -595,12 +594,11 @@ export default function VehicleDetailPage() {
                   {canViewField('Vehicle', 'adminFeeOverride') && (
                     <div>
                       <label className="input-label">{isAr ? 'تجاوز رسوم الإدارة (ج.م)' : 'Admin Fee Override (EGP)'}</label>
-                      <input
+                      <NumericInput
                         className="input"
-                        type="number"
                         min="0"
                         value={form.adminFeeOverride ?? ''}
-                        onChange={(e) => set('adminFeeOverride', e.target.value ? Number(e.target.value) : undefined)}
+                        onChange={(val) => set('adminFeeOverride', val ? Number(val) : undefined)}
                         disabled={!canWriteField('Vehicle', 'adminFeeOverride')}
                         placeholder={isAr ? 'فارغ = افتراضي الفرع' : 'Blank = location default'}
                       />
@@ -609,12 +607,11 @@ export default function VehicleDetailPage() {
                   {canViewField('Vehicle', 'insuranceFeeOverride') && (
                     <div>
                       <label className="input-label">{isAr ? 'تجاوز رسوم التأمين (ج.م)' : 'Insurance Override (EGP)'}</label>
-                      <input
+                      <NumericInput
                         className="input"
-                        type="number"
                         min="0"
                         value={form.insuranceFeeOverride ?? ''}
-                        onChange={(e) => set('insuranceFeeOverride', e.target.value ? Number(e.target.value) : undefined)}
+                        onChange={(val) => set('insuranceFeeOverride', val ? Number(val) : undefined)}
                         disabled={!canWriteField('Vehicle', 'insuranceFeeOverride')}
                         placeholder={isAr ? 'فارغ = افتراضي الفرع' : 'Blank = location default'}
                       />
@@ -716,34 +713,31 @@ export default function VehicleDetailPage() {
                   </div>
                   <div>
                     <label className="input-label">{isAr ? 'المسافة المقطوعة (كم)' : 'Mileage (km)'}</label>
-                    <input
+                    <NumericInput
                       className="input"
-                      type="number"
                       min="0"
                       value={form.mileage ?? ''}
-                      onChange={(e) => set('mileage', Number(e.target.value))}
+                      onChange={(val) => set('mileage', Number(val))}
                     />
                   </div>
                   <div>
                     <label className="input-label">{isAr ? 'عدد المقاعد' : 'Seats'}</label>
-                    <input
+                    <NumericInput
                       className="input"
-                      type="number"
                       min="2"
                       max="9"
                       value={form.seats ?? ''}
-                      onChange={(e) => set('seats', Number(e.target.value))}
+                      onChange={(val) => set('seats', Number(val))}
                     />
                   </div>
                   <div>
                     <label className="input-label">{isAr ? 'عدد الأبواب' : 'Doors'}</label>
-                    <input
+                    <NumericInput
                       className="input"
-                      type="number"
                       min="2"
                       max="6"
                       value={form.doors ?? ''}
-                      onChange={(e) => set('doors', Number(e.target.value))}
+                      onChange={(val) => set('doors', Number(val))}
                     />
                   </div>
                 </div>

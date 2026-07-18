@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../components/ui/NumericInput';
 import { useQuery, apiFetch } from '../../../lib/useApi';
 import { useLang } from '../../../lib/lang-context';
 import { fmtDate } from '@/lib/fmt';
@@ -161,19 +162,19 @@ function NewShipmentModal({ locations, onClose, onSuccess }: {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
               <div>
                 <label className="input-label">{isAr ? 'رسوم الميناء' : 'Port Fees'}</label>
-                <input className="input" type="number" min="0" value={form.portFees} onChange={(e) => set('portFees', e.target.value)} />
+                <NumericInput className="input" min="0" value={form.portFees} onChange={(val) => set('portFees', val)} />
               </div>
               <div>
                 <label className="input-label">{isAr ? 'تكلفة الشحن' : 'Shipping Cost'}</label>
-                <input className="input" type="number" min="0" value={form.shippingCost} onChange={(e) => set('shippingCost', e.target.value)} />
+                <NumericInput className="input" min="0" value={form.shippingCost} onChange={(val) => set('shippingCost', val)} />
               </div>
               <div>
                 <label className="input-label">{isAr ? 'رسوم وكيل الجمارك' : 'Clearance Agent Fee'}</label>
-                <input className="input" type="number" min="0" value={form.clearanceAgentFee} onChange={(e) => set('clearanceAgentFee', e.target.value)} />
+                <NumericInput className="input" min="0" value={form.clearanceAgentFee} onChange={(val) => set('clearanceAgentFee', val)} />
               </div>
               <div>
                 <label className="input-label">{isAr ? 'تكاليف أخرى' : 'Other Costs'}</label>
-                <input className="input" type="number" min="0" value={form.otherCosts} onChange={(e) => set('otherCosts', e.target.value)} />
+                <NumericInput className="input" min="0" value={form.otherCosts} onChange={(val) => set('otherCosts', val)} />
               </div>
             </div>
           </div>
@@ -372,15 +373,12 @@ function ShipmentDetailModal({ shipmentId, onClose, onChanged }: {
                           <td style={{ textAlign: 'right' }}>
                             {editVehicleId === v.id ? (
                               <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end', alignItems: 'center' }}>
-                                <input
+                                <NumericInput
                                   className="input"
-                                  type="number"
                                   min="0"
                                   value={editDuty}
-                                  onChange={(e) => setEditDuty(e.target.value)}
+                                  onChange={(val) => setEditDuty(val)}
                                   style={{ width: '7rem', padding: '0.25rem 0.5rem', fontSize: '0.75rem', height: 'auto' }}
-                                  autoFocus
-                                  onKeyDown={(e) => { if (e.key === 'Enter') saveDuty(v.id); if (e.key === 'Escape') setEditVehicleId(null); }}
                                 />
                                 <button className="btn btn-primary btn-sm" disabled={savingDuty} onClick={() => saveDuty(v.id)}>
                                   {savingDuty ? '…' : (isAr ? 'حفظ' : 'Save')}

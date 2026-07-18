@@ -18,11 +18,10 @@ function toArr(res: unknown): Record<string, unknown>[] {
 }
 function toTotal(res: unknown): number {
   if (!res) return 0;
-  const arr = toArr(res);
-  if (arr.length) return arr.length;
   const r = res as Record<string, unknown>;
   if (typeof r.total === 'number') return r.total;
-  return 0;
+  if (typeof r.count === 'number') return r.count;
+  return toArr(res).length;
 }
 function timeAgo(d: string, ar: boolean) {
   const ms = Date.now() - new Date(d).getTime();
@@ -140,10 +139,11 @@ export default function DashboardHome() {
   const { data: vehiclesReserv } = useQuery<unknown>('/vehicles?status=RESERVED&limit=1');
   const { data: vehiclesSold }   = useQuery<unknown>('/vehicles?status=SOLD&limit=1');
   const { data: vehiclesTransit }= useQuery<unknown>('/vehicles?status=IN_TRANSIT&limit=1');
-  const { data: leadsRes }       = useQuery<unknown>('/leads?limit=5');
+  const { data: leadsRes }       = useQuery<unknown>('/leads?limit=50');
   const { data: dealsRes }       = useQuery<unknown>('/deals?limit=100');
   const { data: appointRes }     = useQuery<unknown>('/appointments?limit=200');
   const { data: pendingFinRes }  = useQuery<unknown>('/deals?status=PENDING_FINANCE&limit=1');
+  const { data: revenueMonthRes } = useQuery<{ months?: Array<{ month: string; revenue: number }> }>('/finance/reports/revenue-by-month');
 
   const available = toTotal(vehiclesAvail);
   const reserved  = toTotal(vehiclesReserv);
@@ -165,10 +165,6 @@ export default function DashboardHome() {
     const c = String(d.createdAt ?? '');
     return c.startsWith(TODAY.slice(0, 7));
   });
-
-  const monthRevenue = dealsThisMonth
-    .filter(d => d.status === 'FINALIZED')
-    .reduce((s, d) => s + Number(d.salePrice ?? 0), 0);
 
   // Lead sources
   const sourceMap = leads.reduce<Record<string, number>>((acc, l) => {
@@ -196,9 +192,17 @@ export default function DashboardHome() {
 
   const locale = isAr ? 'ar-EG' : 'en-EG';
 
-  const arMonths = ['يناير','فبراير','مارس','أبريل','مايو','يونيو'];
-  const enMonths = ['Jan','Feb','Mar','Apr','May','Jun'];
-  const months   = isAr ? arMonths : enMonths;
+  // revenue chart + month revenue — from revenue-by-month API
+  const revenueMonths = revenueMonthRes?.months ?? [];
+  const monthRevenue = revenueMonths.length > 0
+    ? Number(revenueMonths[revenueMonths.length - 1].revenue)
+    : dealsThisMonth.filter(d => d.status === 'FINALIZED').reduce((s, d) => s + Number(d.salePrice ?? 0), 0);
+  const chartData = revenueMonths.slice(-6);
+  const maxRev    = Math.max(1, ...chartData.map(m => Number(m.revenue)));
+  const chartBars = chartData.map(m => ({
+    label: new Date(m.month + '-01').toLocaleDateString(isAr ? 'ar-EG' : 'en-EG', { month: 'short' }),
+    height: Math.max(4, Math.round((Number(m.revenue) / maxRev) * 100)),
+  }));
 
   return (
     <>
@@ -224,10 +228,8 @@ export default function DashboardHome() {
           />
           <KpiCard
             label={isAr ? 'العملاء المحتملون' : 'Active Leads'}
-            value={leads.length}
-            sub={isAr
-              ? `↑ ${leads.filter(l=>l.createdAt && String(l.createdAt).slice(0,10)===TODAY).length} جديد اليوم`
-              : `↑ ${leads.filter(l=>l.createdAt && String(l.createdAt).slice(0,10)===TODAY).length} new today`}
+            value={toTotal(leadsRes)}
+            sub={isAr ? 'إجمالي العملاء المحتملين' : 'Total open leads'}
             color="var(--purple)" href="/crm"
             icon={<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.2"/><path d="M2 14c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>}
           />
@@ -260,17 +262,18 @@ export default function DashboardHome() {
               </p>
               <span className="badge badge-info">{isAr ? 'هذا العام' : 'This year'}</span>
             </div>
-            {/* Simple CSS bar chart */}
+            {/* CSS bar chart — real data from revenue-by-month */}
             <div className="flex items-end gap-1.5 h-24">
-              {months.map((m, i) => {
-                const h = [45, 60, 38, 72, 55, 80][i];
-                return (
-                  <div key={m} className="flex-1 flex flex-col items-center gap-1">
-                    <div className="w-full rounded-t-sm" style={{ height: `${h}%`, background: 'var(--primary)', opacity: i === 5 ? 1 : 0.35 }} />
-                    <span style={{ fontSize: '10px', color: 'var(--text-3)' }}>{m}</span>
-                  </div>
-                );
-              })}
+              {chartBars.length > 0 ? chartBars.map((bar, i) => (
+                <div key={bar.label + i} className="flex-1 flex flex-col items-center gap-1">
+                  <div className="w-full rounded-t-sm" style={{ height: `${bar.height}%`, background: 'var(--primary)', opacity: i === chartBars.length - 1 ? 1 : 0.35 }} />
+                  <span style={{ fontSize: '10px', color: 'var(--text-3)' }}>{bar.label}</span>
+                </div>
+              )) : (
+                <div className="flex-1 flex items-center justify-center" style={{ color: 'var(--text-3)', fontSize: '0.75rem' }}>
+                  {isAr ? 'لا توجد بيانات إيرادات' : 'No revenue data yet'}
+                </div>
+              )}
             </div>
           </div>
 

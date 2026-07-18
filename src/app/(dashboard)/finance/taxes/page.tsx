@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../components/ui/NumericInput';
 import { useLang } from '@/lib/lang-context';
 import { ErrorBanner } from '@/components/ui/error-banner';
 
@@ -184,8 +185,8 @@ export default function TaxesPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="input-label">{isAr ? 'المبلغ *' : 'Amount *'}</label>
-                  <input required type="number" step="0.01" className="input" value={taxForm.amount}
-                    onChange={(e) => setT('amount', e.target.value)} placeholder="14" />
+                  <NumericInput step="0.01" className="input" value={taxForm.amount}
+                    onChange={(val) => setT('amount', val)} placeholder="14" />
                 </div>
                 <SearchableCombobox label={isAr ? 'طريقة الحساب' : 'Computation'} options={COMPUTATIONS} value={taxForm.computation} onChange={(v) => setT('computation', v)} />
               </div>

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../components/ui/NumericInput';
 import { useLang } from '@/lib/lang-context';
 
 interface User { id: string; name: string; role: string; }
@@ -144,7 +145,7 @@ export default function NewLeadPage() {
           </div>
           <div style={{ marginBottom: '0.875rem' }}>
             <label className="input-label">{isAr ? 'الميزانية (جنيه)' : 'Budget (EGP)'}</label>
-            <input type="number" min="0" step="1000" className="input" value={form.budget} onChange={(e) => set('budget', e.target.value)} placeholder="e.g. 500000" />
+            <NumericInput min="0" step="1000" className="input" value={form.budget} onChange={(val) => set('budget', val)} placeholder="e.g. 500000" />
           </div>
           <div>
             <label className="input-label">{isAr ? 'ملاحظات' : 'Notes'}</label>

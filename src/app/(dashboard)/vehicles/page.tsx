@@ -19,6 +19,7 @@ interface Vehicle {
   price: number;
   acquisitionCost?: number;
   cost?: number;
+  overprice?: number;
   bodyType: string;
   condition: string;
   status: string;
@@ -450,10 +451,10 @@ export default function VehiclesPage() {
                   <th>{isAr ? 'السيارة' : 'Vehicle'}</th>
                   <th>{isAr ? 'السنة' : 'Year'}</th>
                   <th>{isAr ? 'اللون' : 'Color'}</th>
-                  <th style={{ textAlign: 'right' }}>{isAr ? 'السعر (ج.م)' : 'Price (EGP)'}</th>
                   <th style={{ textAlign: 'right' }}>
-                    {canSeeCost ? (isAr ? 'التكلفة (ج.م)' : 'Cost (EGP)') : (isAr ? 'التكلفة' : 'Cost')}
+                    {canSeeCost ? (isAr ? 'السعر الرسمي للوكيل (ج.م)' : 'Official Price (EGP)') : (isAr ? 'السعر الرسمي' : 'Official Price')}
                   </th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'أوفر برايس (ج.م)' : 'Overprice (EGP)'}</th>
                   <th style={{ textAlign: 'right' }}>{isAr ? 'أيام في المخزن' : 'Days In Stock'}</th>
                   <th>{isAr ? 'الفرع' : 'Location'}</th>
                   <th>{isAr ? 'الوكيل' : 'Dealer'}</th>
@@ -511,12 +512,12 @@ export default function VehiclesPage() {
                         <td style={{ color: 'var(--text-2)' }}>{v.year}</td>
                         <td style={{ color: 'var(--text-2)' }}>{v.color || '—'}</td>
                         <td style={{ textAlign: 'right', fontWeight: 500, color: 'var(--text-1)' }}>
-                          {fmt(price)}
-                        </td>
-                        <td style={{ textAlign: 'right', color: 'var(--text-2)' }}>
                           {canSeeCost
                             ? (cost != null ? fmt(cost) : '—')
                             : <span style={{ letterSpacing: '0.15em', color: 'var(--text-3)' }}>···</span>}
+                        </td>
+                        <td style={{ textAlign: 'right', color: v.overprice ? 'var(--success-fg)' : 'var(--text-3)' }}>
+                          {v.overprice ? fmt(Number(v.overprice)) : '—'}
                         </td>
                         <td style={{ textAlign: 'right', color: 'var(--text-2)' }}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>

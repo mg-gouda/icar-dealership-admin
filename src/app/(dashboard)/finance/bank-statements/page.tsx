@@ -4,6 +4,7 @@ import { useQuery, apiFetch } from '../../../../lib/useApi';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../components/ui/NumericInput';
 import { useLang } from '@/lib/lang-context';
 import { fmtDate } from '@/lib/fmt';
 import { ErrorBanner } from '@/components/ui/error-banner';
@@ -130,10 +131,10 @@ export default function BankStatementsPage() {
                   className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-xs text-gray-500 mb-1">{isAr ? 'الرصيد الافتتاحي' : 'Opening Balance'}</label>
-                  <input type="number" value={form.startingBalance} onChange={(e) => set('startingBalance', e.target.value)}
+                  <NumericInput value={form.startingBalance} onChange={(val) => set('startingBalance', val)}
                     className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" /></div>
                 <div><label className="block text-xs text-gray-500 mb-1">{isAr ? 'الرصيد الختامي' : 'Closing Balance'}</label>
-                  <input type="number" value={form.endingBalance} onChange={(e) => set('endingBalance', e.target.value)}
+                  <NumericInput value={form.endingBalance} onChange={(val) => set('endingBalance', val)}
                     className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" /></div>
               </div>
               {err && <p className="text-red-400 text-xs">{err}</p>}

@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../components/ui/NumericInput';
 import { useLang } from '@/lib/lang-context';
 import { fmtDate, fmtDateTime } from '@/lib/fmt';
 import jsPDF from 'jspdf';
@@ -669,15 +670,15 @@ export default function DealDetailPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.875rem' }}>
                   <div>
                     <label className="input-label">{isAr ? 'الدفعة الأولى (جنيه)' : 'Down Payment (EGP)'}</label>
-                    <input type="number" min="0" step="1000" className="input"
+                    <NumericInput min="0" step="1000" className="input"
                       value={ipForm.downPayment}
-                      onChange={(e) => setIpForm((p) => ({ ...p, downPayment: Number(e.target.value) }))} />
+                      onChange={(val) => setIpForm((p) => ({ ...p, downPayment: Number(val) }))} />
                   </div>
                   <div>
                     <label className="input-label">{isAr ? 'معدل الفائدة السنوي (%)' : 'Annual Interest Rate (%)'}</label>
-                    <input type="number" min="0" step="0.1" className="input"
+                    <NumericInput min="0" step="0.1" className="input"
                       value={ipForm.interestRate}
-                      onChange={(e) => setIpForm((p) => ({ ...p, interestRate: Number(e.target.value) }))} />
+                      onChange={(val) => setIpForm((p) => ({ ...p, interestRate: Number(val) }))} />
                   </div>
                 </div>
                 <div style={{ marginBottom: '0.875rem' }}>
@@ -1031,7 +1032,9 @@ function ModalField({ label, value, onChange, type = 'text', required }: { label
   return (
     <div>
       <label className="input-label">{label}</label>
-      <input type={type} className="input" value={value} onChange={(e) => onChange(e.target.value)} required={required} />
+      {type === 'number'
+        ? <NumericInput className="input" value={value} onChange={onChange} />
+        : <input type={type} className="input" value={value} onChange={(e) => onChange(e.target.value)} required={required} />}
     </div>
   );
 }

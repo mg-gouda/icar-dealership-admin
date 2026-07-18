@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: '/finance/vendor-bills',     en: 'Vendor Bills',     ar: 'فواتير الموردين' },
   { href: '/finance/gl',               en: 'GL Journal',       ar: 'يومية الأستاذ' },
   { href: '/finance/payments',         en: 'Payments',         ar: 'المدفوعات' },
+  { href: '/finance/cheques',          en: 'Cheques',          ar: 'الشيكات' },
   { href: '/finance/reconciliation',   en: 'Reconciliation',   ar: 'التسوية' },
   { href: '/finance/bank-statements',  en: 'Bank Statements',  ar: 'كشوف البنك' },
   { href: '/finance/assets',           en: 'Assets',           ar: 'الأصول' },
@@ -21,7 +22,6 @@ const NAV_ITEMS = [
   { href: '/finance/taxes',            en: 'Taxes',            ar: 'الضرائب' },
   { href: '/finance/currencies',       en: 'Currencies',       ar: 'العملات' },
   { href: '/finance/commissions',      en: 'Commissions',      ar: 'العمولات' },
-  { href: '/finance/commission-plans', en: 'Commission Plans', ar: 'خطط العمولات' },
 ];
 
 export default function FinanceLayout({ children }: { children: React.ReactNode }) {

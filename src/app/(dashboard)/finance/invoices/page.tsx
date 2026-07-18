@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../components/ui/NumericInput';
 import { useLang } from '@/lib/lang-context';
 import { fmtDate } from '@/lib/fmt';
 
@@ -540,38 +541,35 @@ export default function CustomerInvoicesPage() {
                               />
                             </td>
                             <td>
-                              <input
-                                type="number"
+                              <NumericInput
                                 min="0.01"
                                 step="0.01"
                                 className="input text-right"
                                 style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
                                 value={line.qty}
-                                onChange={(e) => setLine(i, 'qty', e.target.value)}
+                                onChange={(val) => setLine(i, 'qty', val)}
                               />
                             </td>
                             <td>
-                              <input
-                                type="number"
+                              <NumericInput
                                 min="0"
                                 step="0.01"
                                 className="input text-right tabular-nums"
                                 style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
                                 placeholder="0.00"
                                 value={line.unitPrice}
-                                onChange={(e) => setLine(i, 'unitPrice', e.target.value)}
+                                onChange={(val) => setLine(i, 'unitPrice', val)}
                               />
                             </td>
                             <td>
-                              <input
-                                type="number"
+                              <NumericInput
                                 min="0"
                                 max="100"
                                 step="0.01"
                                 className="input text-right"
                                 style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
                                 value={line.taxRate}
-                                onChange={(e) => setLine(i, 'taxRate', e.target.value)}
+                                onChange={(val) => setLine(i, 'taxRate', val)}
                               />
                             </td>
                             <td className="text-right tabular-nums" style={{ fontSize: '0.8rem', fontWeight: 500 }}>

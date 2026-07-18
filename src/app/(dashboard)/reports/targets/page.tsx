@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import SearchableCombobox from '@/components/ui/SearchableCombobox';
+import NumericInput from '@/components/ui/NumericInput';
 import { apiFetch } from '@/lib/useApi';
 import { useLang } from '@/lib/lang-context';
 
@@ -29,19 +30,6 @@ interface SalesTarget {
 interface User     { id: string; name: string; }
 interface Location { id: string; name: string; }
 
-/* ── demo data ───────────────────────────────────────────────────────────── */
-const DEMO_ATTAINMENT: AttainmentRow[] = [
-  { repId: '1', repName: 'Ahmed Hassan', targetUnits: 10, actualUnits: 12, targetRevenue: 2_000_000, actualRevenue: 2_400_000 },
-  { repId: '2', repName: 'Sara Mohamed', targetUnits: 8,  actualUnits: 3,  targetRevenue: 1_600_000, actualRevenue: 680_000   },
-  { repId: '3', repName: 'Omar Khaled',  targetUnits: 12, actualUnits: 7,  targetRevenue: 2_400_000, actualRevenue: 1_250_000 },
-  { repId: '4', repName: 'Nour Ibrahim', targetUnits: 6,  actualUnits: 6,  targetRevenue: 1_200_000, actualRevenue: 1_230_000 },
-];
-
-const DEMO_TARGETS: SalesTarget[] = [
-  { id: 't1', userId: '1', user: { name: 'Ahmed Hassan' }, locationId: 'l1', location: { name: 'Cairo'       }, period: '2026-07', targetUnits: 10, targetRevenue: 2_000_000 },
-  { id: 't2', userId: '2', user: { name: 'Sara Mohamed' }, locationId: 'l1', location: { name: 'Cairo'       }, period: '2026-07', targetUnits: 8,  targetRevenue: 1_600_000 },
-  { id: 't3', userId: '3', user: { name: 'Omar Khaled'  }, locationId: 'l2', location: { name: 'Alexandria'  }, period: '2026-07', targetUnits: 12, targetRevenue: 2_400_000 },
-];
 
 /* ── helpers ────────────────────────────────────────────────────────────── */
 function fmtEGP(n: number) {
@@ -147,13 +135,13 @@ function SetTargetModal({ reps, locations, defaultPeriod, onClose, onCreated }: 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
             <div>
               <label className="input-label">{isAr ? 'هدف الوحدات' : 'Target Units'}</label>
-              <input type="number" className="input" min="0" placeholder="0"
-                value={form.targetUnits} onChange={e => setForm(f => ({ ...f, targetUnits: e.target.value }))} required />
+              <NumericInput className="input" min="0" placeholder="0"
+                value={form.targetUnits} onChange={val => setForm(f => ({ ...f, targetUnits: val }))} />
             </div>
             <div>
               <label className="input-label">{isAr ? 'هدف الإيرادات (ج.م)' : 'Target Revenue (EGP)'}</label>
-              <input type="number" className="input" min="0" placeholder="0"
-                value={form.targetRevenue} onChange={e => setForm(f => ({ ...f, targetRevenue: e.target.value }))} required />
+              <NumericInput className="input" min="0" placeholder="0"
+                value={form.targetRevenue} onChange={val => setForm(f => ({ ...f, targetRevenue: val }))} />
             </div>
           </div>
           {err && <p style={{ fontSize: '0.75rem', color: 'var(--danger-fg)' }}>{err}</p>}
@@ -178,8 +166,8 @@ export default function SalesTargetsPage() {
 
   const [period,     setPeriod]     = useState(defaultPeriod);
   const [locationId, setLocationId] = useState('');
-  const [attainment, setAttainment] = useState<AttainmentRow[]>(DEMO_ATTAINMENT);
-  const [targets,    setTargets]    = useState<SalesTarget[]>(DEMO_TARGETS);
+  const [attainment, setAttainment] = useState<AttainmentRow[]>([]);
+  const [targets,    setTargets]    = useState<SalesTarget[]>([]);
   const [reps,       setReps]       = useState<User[]>([]);
   const [locations,  setLocations]  = useState<Location[]>([]);
   const [showModal,  setShowModal]  = useState(false);
@@ -202,7 +190,7 @@ export default function SalesTargetsPage() {
     if (locationId) qs.set('locationId', locationId);
     apiFetch<{ items: AttainmentRow[] } | AttainmentRow[]>(`/sales-targets/attainment?${qs}`)
       .then(d => setAttainment(Array.isArray(d) ? d : d.items ?? []))
-      .catch(() => { /* keep demo */ });
+      .catch(() => {});
   }
 
   function loadTargets() {
@@ -210,7 +198,7 @@ export default function SalesTargetsPage() {
     if (locationId) qs.set('locationId', locationId);
     apiFetch<{ items: SalesTarget[] } | SalesTarget[]>(`/sales-targets?${qs}`)
       .then(d => setTargets(Array.isArray(d) ? d : d.items ?? []))
-      .catch(() => { /* keep demo */ });
+      .catch(() => {});
   }
 
   useEffect(() => { loadAttainment(); loadTargets(); }, [period, locationId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -367,10 +355,10 @@ export default function SalesTargetsPage() {
                   <td style={{ color: 'var(--text-3)' }}>{t.period}</td>
                   <td style={{ textAlign: 'right' }}>
                     {editingId === t.id ? (
-                      <input
-                        type="number" min="0"
+                      <NumericInput
+                        min="0"
                         value={editForm.targetUnits}
-                        onChange={e => setEditForm(f => ({ ...f, targetUnits: Number(e.target.value) }))}
+                        onChange={val => setEditForm(f => ({ ...f, targetUnits: Number(val) }))}
                         style={{
                           width: 70, padding: '0.25rem 0.5rem', fontSize: '0.8rem',
                           border: '1px solid var(--primary)', borderRadius: '0.35rem',
@@ -383,10 +371,10 @@ export default function SalesTargetsPage() {
                   </td>
                   <td style={{ textAlign: 'right' }}>
                     {editingId === t.id ? (
-                      <input
-                        type="number" min="0"
+                      <NumericInput
+                        min="0"
                         value={editForm.targetRevenue}
-                        onChange={e => setEditForm(f => ({ ...f, targetRevenue: Number(e.target.value) }))}
+                        onChange={val => setEditForm(f => ({ ...f, targetRevenue: Number(val) }))}
                         style={{
                           width: 120, padding: '0.25rem 0.5rem', fontSize: '0.8rem',
                           border: '1px solid var(--primary)', borderRadius: '0.35rem',

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../components/ui/NumericInput';
 import { useLang } from '@/lib/lang-context';
 import { fmtDate } from '@/lib/fmt';
 
@@ -576,27 +577,24 @@ export default function AssetsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="input-label">{isAr ? 'التكلفة (ج.م) *' : 'Cost (EGP) *'}</label>
-                    <input
-                      type="number"
-                      required
+                    <NumericInput
                       min="0"
                       step="0.01"
                       className="input"
                       placeholder="450,000"
                       value={form.cost}
-                      onChange={(e) => setF('cost', e.target.value)}
+                      onChange={(val) => setF('cost', val)}
                     />
                   </div>
                   <div>
                     <label className="input-label">{isAr ? 'قيمة الخردة (ج.م)' : 'Salvage Value (EGP)'}</label>
-                    <input
-                      type="number"
+                    <NumericInput
                       min="0"
                       step="0.01"
                       className="input"
                       placeholder="0"
                       value={form.salvageValue}
-                      onChange={(e) => setF('salvageValue', e.target.value)}
+                      onChange={(val) => setF('salvageValue', val)}
                     />
                   </div>
                 </div>
@@ -604,15 +602,13 @@ export default function AssetsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="input-label">{isAr ? 'العمر الإنتاجي (سنوات) *' : 'Useful Life (years) *'}</label>
-                    <input
-                      type="number"
-                      required
+                    <NumericInput
                       min="1"
                       max="50"
                       className="input"
                       placeholder="5"
                       value={form.usefulLife}
-                      onChange={(e) => setF('usefulLife', e.target.value)}
+                      onChange={(val) => setF('usefulLife', val)}
                     />
                   </div>
                   <div>

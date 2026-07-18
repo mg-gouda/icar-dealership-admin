@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { useQuery, apiFetch } from '../../../lib/useApi';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../components/ui/NumericInput';
 import { useLang, type Lang } from '../../../lib/lang-context';
 import { useBrand } from '../../../lib/brand-context';
 
@@ -59,7 +60,6 @@ const LANG_OPTS = [
 
 // ── Parameters Tab ────────────────────────────────────────────────────────
 const CATEGORY_LABELS: Record<string, string> = {
-  car_make:     'Car Makes',
   car_color:    'Colors',
   body_type:    'Body Types',
   fuel_type:    'Fuel Types',
@@ -68,7 +68,6 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const CATEGORY_LABELS_AR: Record<string, string> = {
-  car_make:     'شركات السيارات',
   car_color:    'الألوان',
   body_type:    'أنواع الهيكل',
   fuel_type:    'أنواع الوقود',
@@ -185,11 +184,11 @@ function LocationModal({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="input-label">{isAr ? 'الرسوم الإدارية الافتراضية (جنيه)' : 'Default Admin Fee (EGP)'}</label>
-                <input type="number" min="0" className="input" value={form.defaultAdminFee} onChange={(e) => set('defaultAdminFee', e.target.value)} placeholder="3,500" />
+                <NumericInput min="0" className="input" value={form.defaultAdminFee} onChange={(val) => set('defaultAdminFee', val)} placeholder="3,500" />
               </div>
               <div>
                 <label className="input-label">{isAr ? 'رسوم التأمين الافتراضية (جنيه)' : 'Default Insurance Fee (EGP)'}</label>
-                <input type="number" min="0" className="input" value={form.defaultInsuranceFee} onChange={(e) => set('defaultInsuranceFee', e.target.value)} placeholder="4,000" />
+                <NumericInput min="0" className="input" value={form.defaultInsuranceFee} onChange={(val) => set('defaultInsuranceFee', val)} placeholder="4,000" />
               </div>
             </div>
           </div>
@@ -1121,15 +1120,15 @@ function SecurityTab() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="input-label">{isAr ? 'الحد الأدنى للطول' : 'Minimum Length'}</label>
-            <input type="number" min="6" max="32" className="input"
+            <NumericInput min="6" max="32" className="input"
               value={policy.minLength}
-              onChange={(e) => setPolicy((p) => ({ ...p, minLength: Number(e.target.value) }))} />
+              onChange={(val) => setPolicy((p) => ({ ...p, minLength: Number(val) }))} />
           </div>
           <div>
             <label className="input-label">{isAr ? 'مهلة الجلسة (دقيقة)' : 'Session Timeout (minutes)'}</label>
-            <input type="number" min="5" max="1440" className="input"
+            <NumericInput min="5" max="1440" className="input"
               value={policy.sessionTimeout}
-              onChange={(e) => setPolicy((p) => ({ ...p, sessionTimeout: Number(e.target.value) }))} />
+              onChange={(val) => setPolicy((p) => ({ ...p, sessionTimeout: Number(val) }))} />
           </div>
         </div>
         {([
@@ -1337,6 +1336,7 @@ function CarMakesModelsTab() {
   const [modelName, setModelName] = useState('');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
+  const [makeSearch, setMakeSearch] = useState('');
 
   const { data: makesRaw, loading: makesLoading, reload: reloadMakes } = useQuery<CarMake[]>('/settings/car-makes');
   const { data: modelsRaw, reload: reloadModels } = useQuery<CarModel[]>(
@@ -1344,6 +1344,9 @@ function CarMakesModelsTab() {
     [selectedMake?.id],
   );
   const makes = Array.isArray(makesRaw) ? makesRaw : [];
+  const filteredMakes = makeSearch.trim()
+    ? makes.filter(m => m.name.toLowerCase().includes(makeSearch.toLowerCase()))
+    : makes;
   const models = Array.isArray(modelsRaw) ? modelsRaw : [];
 
   function slugify(name: string) {
@@ -1415,9 +1418,23 @@ function CarMakesModelsTab() {
           <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {isAr ? 'الشركات المصنعة' : 'Makes'} ({makes.filter(m => m.isActive).length})
           </div>
+          <div style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ position: 'relative' }}>
+              <svg style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, color: 'var(--text-3)', pointerEvents: 'none' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                className="input"
+                style={{ paddingLeft: '2rem', fontSize: '0.8rem', height: '2rem' }}
+                placeholder={isAr ? 'بحث عن ماركة…' : 'Search makes…'}
+                value={makeSearch}
+                onChange={e => setMakeSearch(e.target.value)}
+              />
+            </div>
+          </div>
           {makesLoading && <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>Loading…</div>}
-          <div style={{ maxHeight: 520, overflowY: 'auto' }}>
-            {makes.map((make) => (
+          <div style={{ maxHeight: 480, overflowY: 'auto' }}>
+            {filteredMakes.map((make) => (
               <div key={make.id}
                 onClick={() => setSelectedMake(selectedMake?.id === make.id ? null : make)}
                 style={{
@@ -1448,9 +1465,11 @@ function CarMakesModelsTab() {
                 </div>
               </div>
             ))}
-            {makes.length === 0 && !makesLoading && (
+            {filteredMakes.length === 0 && !makesLoading && (
               <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>
-                {isAr ? 'لا توجد ماركات. ابدأ بإضافة ماركة.' : 'No makes yet. Add one to get started.'}
+                {makeSearch.trim()
+                  ? (isAr ? `لا توجد نتائج لـ "${makeSearch}"` : `No makes matching "${makeSearch}"`)
+                  : (isAr ? 'لا توجد ماركات. ابدأ بإضافة ماركة.' : 'No makes yet. Add one to get started.')}
               </div>
             )}
           </div>
@@ -1576,6 +1595,7 @@ interface AccDealer {
   id: string; name: string; contactName?: string; contactPhone?: string; contactEmail?: string;
   carMakes: string[]; gracePeriodDays: number;
   monthlyTarget: number; minimumMonthly: number; targetBonus: number; kickbackPercent: number;
+  agentCommissionOverride?: number | null;
   active: boolean;
 }
 
@@ -1583,6 +1603,7 @@ const BLANK_DEALER: Omit<AccDealer, 'id' | 'active'> = {
   name: '', contactName: '', contactPhone: '', contactEmail: '',
   carMakes: [], gracePeriodDays: 30,
   monthlyTarget: 0, minimumMonthly: 0, targetBonus: 0, kickbackPercent: 0,
+  agentCommissionOverride: null,
 };
 
 function AccreditedDealersTab() {
@@ -1602,7 +1623,7 @@ function AccreditedDealersTab() {
   const [saved, setSaved] = useState(false);
 
   function openNew() { setForm({ ...BLANK_DEALER }); setSelected(null); setIsNew(true); setErr(''); setSaved(false); }
-  function openEdit(d: AccDealer) { setForm({ name: d.name, contactName: d.contactName ?? '', contactPhone: d.contactPhone ?? '', contactEmail: d.contactEmail ?? '', carMakes: d.carMakes ?? [], gracePeriodDays: d.gracePeriodDays, monthlyTarget: d.monthlyTarget, minimumMonthly: d.minimumMonthly, targetBonus: d.targetBonus, kickbackPercent: d.kickbackPercent }); setSelected(d.id); setIsNew(false); setErr(''); setSaved(false); }
+  function openEdit(d: AccDealer) { setForm({ name: d.name, contactName: d.contactName ?? '', contactPhone: d.contactPhone ?? '', contactEmail: d.contactEmail ?? '', carMakes: d.carMakes ?? [], gracePeriodDays: d.gracePeriodDays, monthlyTarget: d.monthlyTarget, minimumMonthly: d.minimumMonthly, targetBonus: d.targetBonus, kickbackPercent: d.kickbackPercent, agentCommissionOverride: d.agentCommissionOverride ?? null }); setSelected(d.id); setIsNew(false); setErr(''); setSaved(false); }
   function setF(k: string, v: unknown) { setForm((p) => ({ ...p, [k]: v })); }
 
   async function save() {
@@ -1721,12 +1742,12 @@ function AccreditedDealersTab() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.5rem' }}>
               <div>
                 <label className="input-label">{isAr ? 'فترة السماح (أيام)' : 'Grace Period (days)'}</label>
-                <input type="number" min="0" className="input" value={form.gracePeriodDays} onChange={(e) => setF('gracePeriodDays', Number(e.target.value))} />
+                <NumericInput min="0" className="input" value={form.gracePeriodDays} onChange={(val) => setF('gracePeriodDays', Number(val))} />
                 <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: '0.2rem' }}>{isAr ? 'أيام قبل طلب الدفع الكامل' : 'Days before dealer requires full payment'}</p>
               </div>
               <div>
                 <label className="input-label">{isAr ? 'نسبة العمولة (%)' : 'Kickback Commission (%)'}</label>
-                <input type="number" min="0" step="0.01" className="input" value={form.kickbackPercent} onChange={(e) => setF('kickbackPercent', Number(e.target.value))} />
+                <NumericInput min="0" step="0.01" className="input" value={form.kickbackPercent} onChange={(val) => setF('kickbackPercent', Number(val))} />
                 <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: '0.2rem' }}>{isAr ? '% من سعر الوكيل لكل سيارة مباعة' : '% of dealer price per car sold'}</p>
               </div>
             </div>
@@ -1738,16 +1759,21 @@ function AccreditedDealersTab() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginTop: '0.5rem' }}>
               <div>
                 <label className="input-label">{isAr ? 'الهدف الشهري (سيارة)' : 'Monthly Target (cars)'}</label>
-                <input type="number" min="0" className="input" value={form.monthlyTarget} onChange={(e) => setF('monthlyTarget', Number(e.target.value))} />
+                <NumericInput min="0" className="input" value={form.monthlyTarget} onChange={(val) => setF('monthlyTarget', Number(val))} />
               </div>
               <div>
                 <label className="input-label">{isAr ? 'الحد الأدنى الشهري (سيارة)' : 'Minimum Monthly (cars)'}</label>
-                <input type="number" min="0" className="input" value={form.minimumMonthly} onChange={(e) => setF('minimumMonthly', Number(e.target.value))} />
+                <NumericInput min="0" className="input" value={form.minimumMonthly} onChange={(val) => setF('minimumMonthly', Number(val))} />
               </div>
               <div>
                 <label className="input-label">{isAr ? 'مكافأة الهدف (جنيه)' : 'Target Bonus (EGP)'}</label>
-                <input type="number" min="0" className="input" value={form.targetBonus} onChange={(e) => setF('targetBonus', Number(e.target.value))} />
+                <NumericInput min="0" className="input" value={form.targetBonus} onChange={(val) => setF('targetBonus', Number(val))} />
                 <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: '0.2rem' }}>{isAr ? 'مكافأة تُدفع عند تحقيق الهدف الشهري' : 'Bonus paid when monthly target met'}</p>
+              </div>
+              <div>
+                <label className="input-label">{isAr ? 'تجاوز عمولة المندوب (جنيه) — اختياري' : 'Agent Commission Override (EGP) — optional'}</label>
+                <NumericInput min="0" className="input" value={form.agentCommissionOverride ?? ''} onChange={(val) => setF('agentCommissionOverride', val === '' ? null : Number(val))} />
+                <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: '0.2rem' }}>{isAr ? 'إذا تم تحديده، يُستبدل مبلغ العمولة الأساسي لجميع صفقات سيارات هذا الوكيل' : 'If set, overrides the global base commission amount for all deals on this dealer\'s cars'}</p>
               </div>
             </div>
           </div>

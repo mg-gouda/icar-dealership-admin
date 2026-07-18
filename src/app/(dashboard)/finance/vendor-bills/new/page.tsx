@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../../lib/useApi';
 import SearchableCombobox from '../../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../../components/ui/NumericInput';
 import { useLang } from '@/lib/lang-context';
 import { ErrorBanner } from '@/components/ui/error-banner';
 
@@ -384,22 +385,20 @@ export default function NewVendorBillPage() {
                         />
                       </td>
                       <td className="px-3 py-2">
-                        <input
-                          type="number"
+                        <NumericInput
                           min="0"
                           step="1"
                           value={line.qty}
-                          onChange={(e) => setLine(i, 'qty', e.target.value)}
+                          onChange={(val) => setLine(i, 'qty', val)}
                           className="input text-xs py-1.5 text-right tabular-nums"
                         />
                       </td>
                       <td className="px-3 py-2">
-                        <input
-                          type="number"
+                        <NumericInput
                           min="0"
                           step="0.01"
                           value={line.unitPrice}
-                          onChange={(e) => setLine(i, 'unitPrice', e.target.value)}
+                          onChange={(val) => setLine(i, 'unitPrice', val)}
                           placeholder="0.00"
                           className="input text-xs py-1.5 text-right tabular-nums"
                         />

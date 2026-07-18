@@ -13,12 +13,17 @@ const fmt = (n: number) => 'EGP ' + n.toLocaleString('en-EG', { maximumFractionD
 interface ServiceOrder {
   id: string;
   orderNumber?: string;
-  vehicle?: { make: string; model: string; year: number; licensePlate?: string };
+  vehicle?: { make: string; model: string; year: number; regLicenseNumber?: string };
+  externalVehicle?: { licensePlate: string; make: string; model: string; year?: number; ownerName: string; ownerPhone: string };
   customer?: { name: string };
+  walkInCustomerName?: string;
+  walkInCustomerPhone?: string;
   serviceType: string;
+  type: string;
   status: string;
   technician?: { name: string };
   total: number;
+  totalAmount: number;
   createdAt: string;
 }
 
@@ -168,21 +173,23 @@ export default function ServiceOrdersPage() {
                       </span>
                     </td>
                     <td style={{ color: 'var(--text-2)' }}>
-                      {o.vehicle ? `${o.vehicle.year} ${o.vehicle.make} ${o.vehicle.model}` : '—'}
-                      {o.vehicle?.licensePlate && (
-                        <span style={{ marginLeft: '0.4rem', fontSize: '0.7rem', color: 'var(--text-3)' }}>
-                          {o.vehicle.licensePlate}
-                        </span>
-                      )}
+                      {o.vehicle
+                        ? <>{o.vehicle.year} {o.vehicle.make} {o.vehicle.model}{o.vehicle.regLicenseNumber && <span style={{ marginLeft: '0.4rem', fontSize: '0.7rem', color: 'var(--text-3)' }}>{o.vehicle.regLicenseNumber}</span>}</>
+                        : o.externalVehicle
+                        ? <>{o.externalVehicle.year ? `${o.externalVehicle.year} ` : ''}{o.externalVehicle.make} {o.externalVehicle.model}<span style={{ marginLeft: '0.4rem', fontSize: '0.7rem', color: 'var(--text-3)', background: 'var(--surface-2)', padding: '0.05rem 0.35rem', borderRadius: 4 }}>{o.externalVehicle.licensePlate}</span></>
+                        : '—'}
                     </td>
-                    <td style={{ fontWeight: 500 }}>{o.customer?.name ?? '—'}</td>
-                    <td style={{ color: 'var(--text-2)', fontSize: '0.8rem' }}>{o.serviceType.replace(/_/g, ' ')}</td>
+                    <td style={{ fontWeight: 500 }}>
+                      {o.customer?.name ?? o.walkInCustomerName ?? '—'}
+                      {o.walkInCustomerName && <span style={{ marginLeft: 4, fontSize: '0.7rem', color: 'var(--text-3)' }}>({isAr ? 'زيارة' : 'walk-in'})</span>}
+                    </td>
+                    <td style={{ color: 'var(--text-2)', fontSize: '0.8rem' }}>{(o.type ?? o.serviceType ?? '').replace(/_/g, ' ')}</td>
                     <td>
                       <span className={`badge ${statusBadgeClass(o.status)}`}>{o.status.replace(/_/g, ' ')}</span>
                     </td>
                     <td style={{ color: 'var(--text-2)' }}>{o.technician?.name ?? '—'}</td>
                     <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--primary)' }}>
-                      {fmt(Number(o.total ?? 0))}
+                      {fmt(Number(o.totalAmount ?? o.total ?? 0))}
                     </td>
                     <td style={{ color: 'var(--text-3)', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
                       {fmtDate(o.createdAt, isAr, { day: 'numeric', month: 'short', year: 'numeric' })}

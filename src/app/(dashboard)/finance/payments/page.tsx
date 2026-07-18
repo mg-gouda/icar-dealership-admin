@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../components/ui/NumericInput';
 import { useLang } from '@/lib/lang-context';
 import { fmtDate } from '@/lib/fmt';
 
@@ -174,10 +175,10 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="input-label">{isAr ? 'المبلغ (ج.م) *' : 'Amount (EGP) *'}</label>
-              <input
-                type="number" step="0.01" min="0.01" required className="input"
+              <NumericInput
+                step="0.01" min="0.01" className="input"
                 value={form.amount}
-                onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
+                onChange={(val) => setForm((p) => ({ ...p, amount: val }))}
                 placeholder="0.00"
               />
             </div>
@@ -288,12 +289,12 @@ function RegisterPaymentPanel({ onClose, onSuccess, tab }: {
                           </td>
                           <td className="text-right" style={{ width: 110 }}>
                             {alloc ? (
-                              <input
-                                type="number" step="0.01" min="0"
+                              <NumericInput
+                                step="0.01" min="0"
                                 className="input text-right"
                                 style={{ padding: '0.2rem 0.4rem', fontSize: '0.75rem', width: 100 }}
                                 value={alloc.amount}
-                                onChange={(e) => updateAllocAmt(inv.id, e.target.value)}
+                                onChange={(val) => updateAllocAmt(inv.id, val)}
                               />
                             ) : (
                               <span style={{ color: 'var(--text-3)', fontSize: '0.8rem' }}>—</span>

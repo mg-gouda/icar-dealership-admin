@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../../lib/useApi';
 import StatusBadge from '../../../../../components/StatusBadge';
 import SearchableCombobox from '../../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../../components/ui/NumericInput';
 import { useLang } from '@/lib/lang-context';
 import { fmtDate } from '@/lib/fmt';
 
@@ -378,7 +379,7 @@ export default function BankStatementDetailPage() {
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">{isAr ? 'المبلغ *' : 'Amount *'}</label>
-              <input type="number" step="0.01" required value={form.amount} onChange={(e) => set('amount', e.target.value)}
+              <NumericInput step="0.01" value={form.amount} onChange={(val) => set('amount', val)}
                 placeholder="0.00"
                 className="w-full px-3 py-1.5 bg-gray-800 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500" />
             </div>

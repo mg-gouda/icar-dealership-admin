@@ -5,6 +5,7 @@ import { useState, useMemo, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../components/ui/NumericInput';
 import { useLang } from '@/lib/lang-context';
 
 interface User { id: string; name: string; phone?: string; role: string; }
@@ -206,21 +207,21 @@ function NewDealContent() {
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">{isAr ? 'سعر البيع (ج.م) *' : 'Sale Price (EGP) *'}</label>
-              <input type="number" required value={form.salePrice}
-                onChange={(e) => set('salePrice', e.target.value)}
+              <NumericInput value={form.salePrice}
+                onChange={(val) => set('salePrice', val)}
                 className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">{isAr ? 'الرسوم الإدارية (ج.م)' : 'Admin Fee (EGP)'}</label>
-              <input type="number" value={form.adminFee}
-                onChange={(e) => set('adminFee', e.target.value)}
+              <NumericInput value={form.adminFee}
+                onChange={(val) => set('adminFee', val)}
                 placeholder={isAr ? 'من إعداد الفرع' : 'From location default'}
                 className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">{isAr ? 'رسوم التأمين (ج.م)' : 'Insurance Fee (EGP)'}</label>
-              <input type="number" value={form.insuranceFee}
-                onChange={(e) => set('insuranceFee', e.target.value)}
+              <NumericInput value={form.insuranceFee}
+                onChange={(val) => set('insuranceFee', val)}
                 placeholder={isAr ? 'من إعداد الفرع' : 'From location default'}
                 className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500" />
             </div>

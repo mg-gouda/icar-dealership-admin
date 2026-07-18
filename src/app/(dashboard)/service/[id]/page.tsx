@@ -1,21 +1,130 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import SearchableCombobox from '../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../components/ui/NumericInput';
 import ScannerModal, { PART_FORMATS } from '../../../../components/ScannerModal';
 import { useLang } from '@/lib/lang-context';
 import { fmtDate } from '@/lib/fmt';
+
+interface PartResult {
+  id: string; partNumber: string; name: string;
+  salePrice: number; onHand: number; unitOfMeasure: string;
+}
+
+function PartPicker({ onSelect, isAr }: {
+  onSelect: (part: PartResult) => void;
+  isAr: boolean;
+}) {
+  const [q, setQ] = useState('');
+  const [results, setResults] = useState<PartResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<PartResult | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  function search(val: string) {
+    setQ(val); setSelected(null);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (!val.trim()) { setResults([]); setOpen(false); return; }
+    timerRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await apiFetch<{ data: PartResult[] }>(`/parts?q=${encodeURIComponent(val)}&limit=20`);
+        setResults(res?.data ?? []);
+        setOpen(true);
+      } catch { setResults([]); }
+      finally { setLoading(false); }
+    }, 280);
+  }
+
+  function pick(part: PartResult) {
+    setSelected(part); setOpen(false); setQ('');
+    onSelect(part);
+  }
+
+  function clear() { setSelected(null); setQ(''); setResults([]); }
+
+  if (selected) {
+    return (
+      <div style={{ padding: '0.625rem 0.75rem', background: 'color-mix(in srgb, var(--primary) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--primary) 20%, transparent)', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+        <div>
+          <p style={{ fontWeight: 600, fontSize: '0.825rem', color: 'var(--text-1)', margin: 0 }}>{selected.name}</p>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: '0.1rem 0 0' }}>
+            {selected.partNumber} · {isAr ? 'المتاح' : 'Stock'}: {Number(selected.onHand)} {selected.unitOfMeasure}
+          </p>
+        </div>
+        <button type="button" onClick={clear} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: '1rem', lineHeight: 1, padding: '0.125rem' }}>×</button>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '0.4rem', padding: '0.4rem 0.625rem' }}>
+        <svg style={{ width: '0.875rem', height: '0.875rem', color: 'var(--text-3)', flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: '0.8125rem', color: 'var(--text-1)', width: '100%' }}
+          placeholder={isAr ? 'بحث عن القطعة بالاسم أو الكود…' : 'Search by name, part #, OEM…'}
+          value={q}
+          onChange={e => search(e.target.value)}
+        />
+        {loading && <span style={{ fontSize: '0.75rem', color: 'var(--text-3)', flexShrink: 0 }}>…</span>}
+      </div>
+      {open && results.length > 0 && (
+        <div style={{ position: 'absolute', zIndex: 50, top: '100%', left: 0, right: 0, marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: '0 8px 24px oklch(0 0 0 / 0.14)', overflow: 'hidden' }}>
+          <div style={{ maxHeight: '13rem', overflowY: 'auto' }}>
+            {results.map(p => (
+              <button key={p.id} type="button" onClick={() => pick(p)}
+                style={{ width: '100%', textAlign: 'start', padding: '0.5rem 0.75rem', background: 'transparent', border: 'none', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <div style={{ fontWeight: 500, fontSize: '0.825rem', color: 'var(--text-1)' }}>{p.name}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-3)', display: 'flex', gap: '0.5rem', marginTop: '0.1rem' }}>
+                  <span>{p.partNumber}</span>
+                  <span>·</span>
+                  <span style={{ color: Number(p.onHand) > 0 ? 'var(--success-fg)' : 'var(--danger)' }}>
+                    {isAr ? 'متاح' : 'Stock'}: {Number(p.onHand)} {p.unitOfMeasure}
+                  </span>
+                  <span>·</span>
+                  <span>EGP {Number(p.salePrice).toLocaleString()}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {open && results.length === 0 && !loading && (
+        <div style={{ position: 'absolute', zIndex: 50, top: '100%', left: 0, right: 0, marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '0.75rem', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-3)' }}>
+          {isAr ? 'لا توجد قطع مطابقة' : 'No parts found'}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const fmt = (n: number) => 'EGP ' + n.toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 interface ServiceLine {
   id: string;
-  lineType: string;
+  type: string;
   description: string;
-  qty: number;
+  quantity: number;
   unitPrice: number;
   total: number;
 }
@@ -24,9 +133,12 @@ interface ServiceOrder {
   id: string;
   orderNumber?: string;
   status: string;
-  serviceType: string;
-  vehicle?: { make: string; model: string; year: number; licensePlate?: string; vin?: string };
+  type: string;
+  vehicle?: { make: string; model: string; year: number; regLicenseNumber?: string; vin?: string };
+  externalVehicle?: { licensePlate: string; make: string; model: string; year?: number; color?: string; regNumber?: string; ownerName: string; ownerPhone: string; serviceOrders?: { id: string; orderNumber: string; status: string; createdAt: string; totalAmount: number }[] };
   customer?: { name: string; phone?: string; email?: string };
+  walkInCustomerName?: string;
+  walkInCustomerPhone?: string;
   technician?: { name: string };
   location?: { name: string };
   description?: string;
@@ -36,12 +148,14 @@ interface ServiceOrder {
   lines: ServiceLine[];
   laborTotal: number;
   partsTotal: number;
-  total: number;
+  totalAmount: number;
 }
 
 function lineTypeBadge(t: string): string {
-  if (t === 'LABOR') return 'badge-info';
-  if (t === 'PART') return 'badge-success';
+  if (t === 'LABOR')      return 'badge-info';
+  if (t === 'PART')       return 'badge-success';
+  if (t === 'CONSUMABLE') return 'badge-warning';
+  if (t === 'SUBLET')     return 'badge-neutral';
   return 'badge-neutral';
 }
 
@@ -68,25 +182,31 @@ export default function ServiceOrderDetailPage() {
   const { isAr } = useLang();
 
   const LINE_TYPE_OPTS = [
-    { value: 'LABOR', label: isAr ? 'عمالة' : 'Labor' },
-    { value: 'PART', label: isAr ? 'قطعة' : 'Part' },
-    { value: 'OTHER', label: isAr ? 'أخرى' : 'Other' },
+    { value: 'LABOR',      label: isAr ? 'عمالة'      : 'Labor'       },
+    { value: 'PART',       label: isAr ? 'قطعة غيار'  : 'Spare Part'  },
+    { value: 'CONSUMABLE', label: isAr ? 'مستهلكات'   : 'Consumable'  },
+    { value: 'SUBLET',     label: isAr ? 'عمل خارجي'  : 'Sublet Work' },
   ];
 
   const { data: order, loading, error, reload } = useQuery<ServiceOrder>(`/service-orders/${id}`, [id]);
 
   const [showAddLine, setShowAddLine] = useState(false);
-  const [lineForm, setLineForm] = useState({ lineType: 'LABOR', description: '', qty: '1', unitPrice: '' });
+  const [lineForm, setLineForm] = useState({ type: 'LABOR', description: '', quantity: '1', unitPrice: '', partId: '' });
   const [showPartScanner, setShowPartScanner] = useState(false);
   const [scanningPart, setScanningPart] = useState(false);
   const [lineErr, setLineErr] = useState('');
   const [lineSaving, setLineSaving] = useState(false);
+  const [lineFormKey, setLineFormKey] = useState(0); // forces PartPicker remount on reset
 
   const [actionErr, setActionErr] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
   const submitLine = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    if (lineForm.type === 'PART' && !lineForm.partId) {
+      setLineErr(isAr ? 'يرجى اختيار القطعة من قائمة المخزون.' : 'Select a part from inventory.');
+      return;
+    }
     if (!lineForm.description || !lineForm.unitPrice) {
       setLineErr(isAr ? 'الوصف وسعر الوحدة مطلوبان.' : 'Description and unit price required.');
       return;
@@ -96,13 +216,15 @@ export default function ServiceOrderDetailPage() {
       await apiFetch(`/service-orders/${id}/lines`, {
         method: 'POST',
         body: JSON.stringify({
-          lineType: lineForm.lineType,
+          type: lineForm.type,
           description: lineForm.description,
-          qty: Number(lineForm.qty) || 1,
+          quantity: Number(lineForm.quantity) || 1,
           unitPrice: Number(lineForm.unitPrice),
+          ...(lineForm.partId && { partId: lineForm.partId }),
         }),
       });
-      setLineForm({ lineType: 'LABOR', description: '', qty: '1', unitPrice: '' });
+      setLineForm({ type: 'LABOR', description: '', quantity: '1', unitPrice: '', partId: '' });
+      setLineFormKey(k => k + 1);
       setShowAddLine(false);
       reload();
     } catch (err: unknown) {
@@ -184,29 +306,43 @@ export default function ServiceOrderDetailPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem 2rem' }}>
                 <div>
                   <p style={FIELD_LABEL}>{isAr ? 'السيارة' : 'Vehicle'}</p>
-                  <p style={{ fontWeight: 500 }}>
-                    {order.vehicle ? `${order.vehicle.year} ${order.vehicle.make} ${order.vehicle.model}` : '—'}
-                  </p>
-                  {order.vehicle?.licensePlate && (
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{order.vehicle.licensePlate}</p>
-                  )}
-                  {order.vehicle?.vin && (
-                    <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', fontFamily: 'monospace' }}>{isAr ? 'الشاسيه' : 'VIN'}: {order.vehicle.vin}</p>
-                  )}
+                  {order.vehicle ? (
+                    <>
+                      <p style={{ fontWeight: 500 }}>{order.vehicle.year} {order.vehicle.make} {order.vehicle.model}</p>
+                      {order.vehicle.regLicenseNumber && <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{order.vehicle.regLicenseNumber}</p>}
+                      {order.vehicle.vin && <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', fontFamily: 'monospace' }}>VIN: {order.vehicle.vin}</p>}
+                    </>
+                  ) : order.externalVehicle ? (
+                    <>
+                      <p style={{ fontWeight: 500 }}>{order.externalVehicle.year ? `${order.externalVehicle.year} ` : ''}{order.externalVehicle.make} {order.externalVehicle.model}</p>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{order.externalVehicle.licensePlate}{order.externalVehicle.color ? ` · ${order.externalVehicle.color}` : ''}</p>
+                      {order.externalVehicle.regNumber && <p style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{isAr ? 'ترخيص' : 'Reg'}: {order.externalVehicle.regNumber}</p>}
+                      {order.externalVehicle.serviceOrders && order.externalVehicle.serviceOrders.length > 1 && (
+                        <p style={{ fontSize: '0.7rem', color: 'var(--primary)', marginTop: 2 }}>
+                          {order.externalVehicle.serviceOrders.length - 1} {isAr ? 'زيارة سابقة لهذه السيارة' : 'previous visits for this vehicle'}
+                        </p>
+                      )}
+                    </>
+                  ) : <p>—</p>}
                 </div>
                 <div>
                   <p style={FIELD_LABEL}>{isAr ? 'العميل' : 'Customer'}</p>
-                  <p style={{ fontWeight: 500 }}>{order.customer?.name ?? '—'}</p>
-                  {order.customer?.phone && (
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{order.customer.phone}</p>
-                  )}
-                  {order.customer?.email && (
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{order.customer.email}</p>
-                  )}
+                  {order.customer ? (
+                    <>
+                      <p style={{ fontWeight: 500 }}>{order.customer.name}</p>
+                      {order.customer.phone && <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{order.customer.phone}</p>}
+                      {order.customer.email && <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{order.customer.email}</p>}
+                    </>
+                  ) : order.walkInCustomerName ? (
+                    <>
+                      <p style={{ fontWeight: 500 }}>{order.walkInCustomerName} <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>({isAr ? 'زيارة' : 'walk-in'})</span></p>
+                      {order.walkInCustomerPhone && <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{order.walkInCustomerPhone}</p>}
+                    </>
+                  ) : <p style={{ color: 'var(--text-3)' }}>—</p>}
                 </div>
                 <div>
                   <p style={FIELD_LABEL}>{isAr ? 'نوع الخدمة' : 'Service Type'}</p>
-                  <p style={{ color: 'var(--text-2)' }}>{order.serviceType.replace(/_/g, ' ')}</p>
+                  <p style={{ color: 'var(--text-2)' }}>{(order.type ?? '').replace(/_/g, ' ')}</p>
                 </div>
                 <div>
                   <p style={FIELD_LABEL}>{isAr ? 'الميكانيكي' : 'Technician'}</p>
@@ -269,10 +405,10 @@ export default function ServiceOrderDetailPage() {
                   {(order.lines ?? []).map((l) => (
                     <tr key={l.id}>
                       <td>
-                        <span className={`badge ${lineTypeBadge(l.lineType)}`}>{isAr ? ({ LABOR: 'عمالة', PART: 'قطعة', OTHER: 'أخرى' }[l.lineType] ?? l.lineType) : l.lineType}</span>
+                        <span className={`badge ${lineTypeBadge(l.type)}`}>{isAr ? ({ LABOR: 'عمالة', PART: 'قطعة غيار', CONSUMABLE: 'مستهلكات', SUBLET: 'عمل خارجي' } as Record<string,string>)[l.type] ?? l.type : l.type.replace(/_/g, ' ')}</span>
                       </td>
                       <td style={{ color: 'var(--text-1)' }}>{l.description}</td>
-                      <td style={{ textAlign: 'right', color: 'var(--text-2)' }}>{l.qty}</td>
+                      <td style={{ textAlign: 'right', color: 'var(--text-2)' }}>{l.quantity}</td>
                       <td style={{ textAlign: 'right', color: 'var(--text-2)' }}>{fmt(Number(l.unitPrice))}</td>
                       <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(Number(l.total))}</td>
                     </tr>
@@ -305,66 +441,63 @@ export default function ServiceOrderDetailPage() {
                     <label className="input-label">{isAr ? 'النوع' : 'Type'}</label>
                     <SearchableCombobox
                       options={LINE_TYPE_OPTS}
-                      value={lineForm.lineType}
-                      onChange={(v) => setLineForm({ ...lineForm, lineType: v })}
+                      value={lineForm.type}
+                      onChange={(v) => {
+                        setLineForm({ ...lineForm, type: v, partId: '', description: '', unitPrice: '' });
+                        setLineFormKey(k => k + 1);
+                      }}
                     />
                   </div>
-                  <div style={{ flex: '1 1 200px' }}>
-                    <label className="input-label">{isAr ? 'الوصف *' : 'Description *'}</label>
-                    <div style={{ display: 'flex', gap: '0.375rem' }}>
-                      <input
-                        className="input"
-                        placeholder={isAr ? 'الوصف…' : 'Description…'}
-                        value={lineForm.description}
-                        onChange={(e) => setLineForm({ ...lineForm, description: e.target.value })}
-                        required
-                        style={{ flex: 1 }}
-                      />
-                      {lineForm.lineType === 'PART' && (
-                        <button
-                          type="button"
-                          title={isAr ? 'مسح الباركود' : 'Scan part barcode'}
-                          disabled={scanningPart}
-                          onClick={() => setShowPartScanner(true)}
-                          style={{
-                            flexShrink: 0, width: 36, height: 38, borderRadius: 8,
-                            border: '1px solid var(--border)', background: 'var(--surface)',
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            color: 'var(--primary)',
-                          }}
-                        >
-                          {scanningPart ? '…' : (
-                            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                              <path d="M1.5 5.5A1 1 0 0 1 2.5 4.5h1l1-2h5l1 2h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-6z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
-                              <circle cx="8" cy="9" r="2" stroke="currentColor" strokeWidth="1.2"/>
-                            </svg>
-                          )}
-                        </button>
-                      )}
-                    </div>
+                  <div style={{ flex: '1 1 240px' }}>
+                    {lineForm.type === 'PART' ? (
+                      <>
+                        <label className="input-label">{isAr ? 'القطعة *' : 'Part *'}</label>
+                        <PartPicker key={lineFormKey} isAr={isAr} onSelect={(part) => {
+                          setLineForm(f => ({
+                            ...f,
+                            partId: part.id,
+                            description: `${part.name} (${part.partNumber})`,
+                            unitPrice: String(Number(part.salePrice)),
+                          }));
+                        }} />
+                        {lineForm.partId && (
+                          <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: '0.25rem' }}>
+                            {isAr ? 'سيتم خصم الكمية من المخزون وإرسال طلب للمستودع' : 'Quantity will be deducted from stock and a pick request sent to warehouse'}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <label className="input-label">{isAr ? 'الوصف *' : 'Description *'}</label>
+                        <input
+                          className="input"
+                          placeholder={isAr ? 'الوصف…' : 'Description…'}
+                          value={lineForm.description}
+                          onChange={(e) => setLineForm({ ...lineForm, description: e.target.value })}
+                          required
+                        />
+                      </>
+                    )}
                   </div>
                   <div style={{ width: 80 }}>
                     <label className="input-label">{isAr ? 'الكمية' : 'Qty'}</label>
-                    <input
-                      type="number"
+                    <NumericInput
                       min="0.01"
                       step="0.01"
                       className="input"
-                      value={lineForm.qty}
-                      onChange={(e) => setLineForm({ ...lineForm, qty: e.target.value })}
+                      value={lineForm.quantity}
+                      onChange={(val) => setLineForm({ ...lineForm, quantity: val })}
                     />
                   </div>
                   <div style={{ width: 130 }}>
                     <label className="input-label">{isAr ? 'سعر الوحدة *' : 'Unit Price *'}</label>
-                    <input
-                      type="number"
+                    <NumericInput
                       min="0"
                       step="0.01"
                       className="input"
                       placeholder="0.00"
                       value={lineForm.unitPrice}
-                      onChange={(e) => setLineForm({ ...lineForm, unitPrice: e.target.value })}
-                      required
+                      onChange={(val) => setLineForm({ ...lineForm, unitPrice: val })}
                     />
                   </div>
                   {lineErr && (
@@ -410,7 +543,7 @@ export default function ServiceOrderDetailPage() {
                 >
                   <span>{isAr ? 'الإجمالي الكلي' : 'Grand Total'}</span>
                   <span className="tabular-nums" style={{ color: 'var(--primary)' }}>
-                    {fmt(Number(order.total ?? 0))}
+                    {fmt(Number(order.totalAmount ?? 0))}
                   </span>
                 </div>
               </div>
@@ -467,16 +600,18 @@ export default function ServiceOrderDetailPage() {
             if (part) {
               setLineForm(f => ({
                 ...f,
-                lineType: 'PART',
-                description: `${part.partNumber} — ${part.name}`,
+                type: 'PART',
+                partId: part.id ?? '',
+                description: `${part.name} (${part.partNumber})`,
                 unitPrice: String(Number(part.salePrice ?? 0)),
               }));
+              setLineFormKey(k => k + 1);
             } else {
-              setLineForm(f => ({ ...f, lineType: 'PART', description: code }));
+              setLineForm(f => ({ ...f, type: 'PART', partId: '', description: code }));
               setLineErr(isAr ? `القطعة "${code}" غير موجودة في المخزن — أدخل التفاصيل يدوياً.` : `Part "${code}" not in inventory — enter details manually.`);
             }
           } catch {
-            setLineForm(f => ({ ...f, lineType: 'PART', description: code }));
+            setLineForm(f => ({ ...f, type: 'PART', partId: '', description: code }));
             setLineErr(isAr ? 'فشل البحث — تم ملء الكود، تحقق يدوياً.' : 'Lookup failed — filled code, verify manually.');
           } finally {
             setScanningPart(false);

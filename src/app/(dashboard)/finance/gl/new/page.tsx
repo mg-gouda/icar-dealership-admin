@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../../../lib/useApi';
 import SearchableCombobox from '../../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../../components/ui/NumericInput';
 import { useLang } from '@/lib/lang-context';
 import { ErrorBanner } from '@/components/ui/error-banner';
 
@@ -301,23 +302,21 @@ export default function NewJournalEntryPage() {
                       <span className="text-xs text-[--text-3]">—</span>
                     </td>
                     <td className="px-3 py-2">
-                      <input
-                        type="number"
+                      <NumericInput
                         min="0"
                         step="0.01"
                         value={line.debit}
-                        onChange={(e) => clearOther(i, 'debit', e.target.value)}
+                        onChange={(val) => clearOther(i, 'debit', val)}
                         placeholder="—"
                         className="input text-xs py-1.5 text-right tabular-nums"
                       />
                     </td>
                     <td className="px-3 py-2">
-                      <input
-                        type="number"
+                      <NumericInput
                         min="0"
                         step="0.01"
                         value={line.credit}
-                        onChange={(e) => clearOther(i, 'credit', e.target.value)}
+                        onChange={(val) => clearOther(i, 'credit', val)}
                         placeholder="—"
                         className="input text-xs py-1.5 text-right tabular-nums"
                       />

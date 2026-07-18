@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../lib/useApi';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../components/ui/NumericInput';
 import { useLang } from '../../../lib/lang-context';
 import { fmtDate } from '@/lib/fmt';
 
@@ -383,15 +384,15 @@ function NewBillForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                           onChange={(e) => updateLine(i, 'description', e.target.value)} />
                       </td>
                       <td>
-                        <input type="number" min="0.01" step="0.01" required className="input text-right"
+                        <NumericInput min="0.01" step="0.01" className="input text-right"
                           style={{ fontSize: '0.8rem', padding: '0.3rem 0.5rem' }}
-                          value={l.quantity} onChange={(e) => updateLine(i, 'quantity', e.target.value)} />
+                          value={l.quantity} onChange={(val) => updateLine(i, 'quantity', val)} />
                       </td>
                       <td>
-                        <input type="number" min="0" step="0.01" required className="input text-right tabular-nums"
+                        <NumericInput min="0" step="0.01" className="input text-right tabular-nums"
                           style={{ fontSize: '0.8rem', padding: '0.3rem 0.5rem' }}
                           placeholder="0.00" value={l.unitCost}
-                          onChange={(e) => updateLine(i, 'unitCost', e.target.value)} />
+                          onChange={(val) => updateLine(i, 'unitCost', val)} />
                       </td>
                       <td className="text-right tabular-nums" style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-2)' }}>
                         {egp((Number(l.quantity) || 0) * (Number(l.unitCost) || 0))}

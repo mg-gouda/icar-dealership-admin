@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../../lib/useApi';
 import SearchableCombobox from '../../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../../components/ui/NumericInput';
 import { useLang } from '@/lib/lang-context';
 
 interface TemplateLine {
@@ -283,14 +284,14 @@ export default function RecurringTemplatePage() {
                         placeholder={isAr ? 'وصف' : 'Description'}
                         className="px-2.5 py-2 bg-gray-800 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500"
                       />
-                      <input
-                        type="number" min="0" step="0.01" value={line.debit}
-                        onChange={(e) => { setLine(i, 'debit', e.target.value); if (e.target.value) setLine(i, 'credit', ''); }}
+                      <NumericInput
+                        min="0" step="0.01" value={line.debit}
+                        onChange={(val) => { setLine(i, 'debit', val); if (val) setLine(i, 'credit', ''); }}
                         className="px-2.5 py-2 bg-gray-800 border border-white/10 rounded-lg text-xs text-right text-white tabular-nums focus:outline-none focus:border-blue-500"
                       />
-                      <input
-                        type="number" min="0" step="0.01" value={line.credit}
-                        onChange={(e) => { setLine(i, 'credit', e.target.value); if (e.target.value) setLine(i, 'debit', ''); }}
+                      <NumericInput
+                        min="0" step="0.01" value={line.credit}
+                        onChange={(val) => { setLine(i, 'credit', val); if (val) setLine(i, 'debit', ''); }}
                         className="px-2.5 py-2 bg-gray-800 border border-white/10 rounded-lg text-xs text-right text-white tabular-nums focus:outline-none focus:border-blue-500"
                       />
                       <button

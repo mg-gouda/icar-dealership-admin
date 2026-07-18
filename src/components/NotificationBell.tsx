@@ -10,20 +10,21 @@ interface Counts {
   payableCommissions: number;
   overdueInstallments: number;
   newLeads: number;
+  pendingPartPicks: number;
 }
 
 const POLL_MS = 60_000;
 
 export default function NotificationBell() {
   const { isAr } = useLang();
-  const [counts, setCounts] = useState<Counts>({ draftInvoices: 0, payableCommissions: 0, overdueInstallments: 0, newLeads: 0 });
+  const [counts, setCounts] = useState<Counts>({ draftInvoices: 0, payableCommissions: 0, overdueInstallments: 0, newLeads: 0, pendingPartPicks: 0 });
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   const fetchCounts = useCallback(async () => {
     try {
       // ponytail: invoices returns raw array → use limit=200 for count; commissions returns {items,total}
-      const [invoices, commissions, installments, leads] = await Promise.all([
+      const [invoices, commissions, installments, leads, partPicks] = await Promise.all([
         apiFetch<unknown[]>('/finance/invoices?status=DRAFT&limit=200').then(
           (r) => (Array.isArray(r) ? r.length : 0),
           () => 0,
@@ -40,6 +41,10 @@ export default function NotificationBell() {
           (r) => (r as any)?.total ?? 0,
           () => 0,
         ),
+        apiFetch<{ pending: number }>('/service-orders/part-picks/count').then(
+          (r) => r?.pending ?? 0,
+          () => 0,
+        ),
       ]);
 
       setCounts({
@@ -47,6 +52,7 @@ export default function NotificationBell() {
         payableCommissions: commissions as number,
         overdueInstallments: installments as number,
         newLeads: leads as number,
+        pendingPartPicks: partPicks as number,
       });
     } catch {
       // silent — notification badge is best-effort
@@ -68,7 +74,7 @@ export default function NotificationBell() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const total = counts.draftInvoices + counts.payableCommissions + counts.overdueInstallments + counts.newLeads;
+  const total = counts.draftInvoices + counts.payableCommissions + counts.overdueInstallments + counts.newLeads + counts.pendingPartPicks;
 
   return (
     <div ref={ref} className="relative">
@@ -140,6 +146,18 @@ export default function NotificationBell() {
                 <span>{isAr ? 'عملاء محتملون جدد' : 'New B2C Leads'}</span>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${counts.newLeads > 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-gray-500'}`}>
                   {counts.newLeads}
+                </span>
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/service/part-picks"
+                onClick={() => setOpen(false)}
+                className="flex items-center justify-between px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition"
+              >
+                <span>{isAr ? 'قطع غيار للسحب من المستودع' : 'Parts to Fetch'}</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${counts.pendingPartPicks > 0 ? 'bg-orange-500/20 text-orange-400' : 'bg-white/5 text-gray-500'}`}>
+                  {counts.pendingPartPicks}
                 </span>
               </Link>
             </li>

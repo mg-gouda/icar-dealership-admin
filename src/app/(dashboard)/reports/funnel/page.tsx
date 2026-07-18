@@ -28,15 +28,6 @@ const STAGE_COLORS: Record<string, string> = {
 };
 
 
-/* ── demo data ───────────────────────────────────────────────────────────── */
-const DEMO_LEADS: Lead[] = [
-  ...Array.from({ length: 45 }, (_, i) => ({ id: `n${i}`, status: 'NEW',         source: ['Walk-in','Website','Referral','Social Media'][i % 4], createdAt: new Date(Date.now() - i * 86400_000 * 2).toISOString(), assignedTo: { id: `r${i % 3}`, name: ['Ahmed Hassan','Sara Mohamed','Omar Khaled'][i % 3] } })),
-  ...Array.from({ length: 38 }, (_, i) => ({ id: `c${i}`, status: 'CONTACTED',   source: ['Walk-in','Website','Referral','Call Center'][i % 4],  createdAt: new Date(Date.now() - i * 86400_000 * 3).toISOString(), assignedTo: { id: `r${i % 3}`, name: ['Ahmed Hassan','Sara Mohamed','Omar Khaled'][i % 3] } })),
-  ...Array.from({ length: 28 }, (_, i) => ({ id: `q${i}`, status: 'QUALIFIED',   source: ['Website','Referral','Walk-in','Social Media'][i % 4],  createdAt: new Date(Date.now() - i * 86400_000 * 4).toISOString(), assignedTo: { id: `r${i % 3}`, name: ['Ahmed Hassan','Sara Mohamed','Omar Khaled'][i % 3] } })),
-  ...Array.from({ length: 18 }, (_, i) => ({ id: `g${i}`, status: 'NEGOTIATING', source: ['Referral','Walk-in','Website','Call Center'][i % 4],   createdAt: new Date(Date.now() - i * 86400_000 * 5).toISOString(), assignedTo: { id: `r${i % 3}`, name: ['Ahmed Hassan','Sara Mohamed','Omar Khaled'][i % 3] } })),
-  ...Array.from({ length: 12 }, (_, i) => ({ id: `w${i}`, status: 'CLOSED_WON',  source: ['Walk-in','Website','Referral','Social Media'][i % 4],  createdAt: new Date(Date.now() - i * 86400_000 * 6).toISOString(), updatedAt: new Date(Date.now() - i * 86400_000).toISOString(), assignedTo: { id: `r${i % 2}`, name: ['Ahmed Hassan','Sara Mohamed'][i % 2] } })),
-  ...Array.from({ length: 8  }, (_, i) => ({ id: `l${i}`, status: 'CLOSED_LOST', source: ['Website','Call Center','Walk-in','Social Media'][i % 4], createdAt: new Date(Date.now() - i * 86400_000 * 7).toISOString(), assignedTo: { id: `r${i % 3}`, name: ['Ahmed Hassan','Sara Mohamed','Omar Khaled'][i % 3] } })),
-];
 
 const STAGE_AR: Record<string, string> = {
   NEW:          'جديد',
@@ -109,8 +100,8 @@ export default function SalesFunnelPage() {
   ];
 
   const [days,    setDays]    = useState('30');
-  const [leads,   setLeads]   = useState<Lead[]>(DEMO_LEADS);
-  const [loading, setLoading] = useState(false);
+  const [leads,   setLeads]   = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
 
   function load(daysBack: string) {
     setLoading(true);
@@ -119,9 +110,9 @@ export default function SalesFunnelPage() {
     apiFetch<{ items?: Lead[] } | Lead[]>(`/leads?page=1&limit=1000&createdAfter=${createdAfter}`)
       .then(d => {
         const list = Array.isArray(d) ? d : (d as { items?: Lead[] }).items ?? [];
-        if (list.length) setLeads(list);
+        setLeads(list);
       })
-      .catch(() => { /* keep demo */ })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }
 

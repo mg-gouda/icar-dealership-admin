@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../components/ui/NumericInput';
 import { useQuery, apiFetch } from '../../../lib/useApi';
 import { useLang } from '../../../lib/lang-context';
 import { fmtDate } from '@/lib/fmt';
@@ -100,8 +101,8 @@ function FundModal({ locations, onClose, onSuccess }: {
           </div>
           <div>
             <label className="input-label">{isAr ? 'الرصيد الأولي (ج.م)' : 'Initial Balance (EGP)'}</label>
-            <input className="input" type="number" min="0" value={form.initialBalance}
-              onChange={(e) => set('initialBalance', e.target.value)} />
+            <NumericInput className="input" min="0" value={form.initialBalance}
+              onChange={(val) => set('initialBalance', val)} />
           </div>
           {err && <p style={{ color: 'var(--danger)', fontSize: '0.75rem' }}>{err}</p>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', paddingTop: '0.5rem' }}>
@@ -160,8 +161,8 @@ function ReplenishModal({ fund, onClose, onSuccess }: {
           </div>
           <div>
             <label className="input-label">{isAr ? 'مبلغ التعبئة (ج.م) *' : 'Replenish Amount (EGP) *'}</label>
-            <input className="input" type="number" min="1" value={amount}
-              onChange={(e) => setAmount(e.target.value)} autoFocus />
+            <NumericInput className="input" min="1" value={amount}
+              onChange={(val) => setAmount(val)} />
           </div>
           {err && <p style={{ color: 'var(--danger)', fontSize: '0.75rem' }}>{err}</p>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', paddingTop: '0.5rem' }}>
@@ -231,8 +232,8 @@ function VoucherModal({ funds, onClose, onSuccess }: {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
             <div>
               <label className="input-label">{isAr ? 'المبلغ (ج.م) *' : 'Amount (EGP) *'}</label>
-              <input className="input" type="number" min="1" value={form.amount}
-                onChange={(e) => set('amount', e.target.value)} />
+              <NumericInput className="input" min="1" value={form.amount}
+                onChange={(val) => set('amount', val)} />
             </div>
             <div>
               <label className="input-label">{isAr ? 'الفئة' : 'Category'}</label>

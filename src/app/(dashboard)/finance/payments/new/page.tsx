@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiFetch, useQuery } from '../../../../../lib/useApi';
 import SearchableCombobox from '../../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../../components/ui/NumericInput';
 import { useLang } from '@/lib/lang-context';
 
 interface Partner { id: string; name: string; }
@@ -134,13 +135,11 @@ export default function NewPaymentPage() {
             <label className="form-label">{isAr ? 'المبلغ *' : 'Amount *'}</label>
             <div className="flex items-center gap-2">
               <span className="text-xs text-[--text-3] font-mono">EGP</span>
-              <input
-                required
-                type="number"
+              <NumericInput
                 min="0.01"
                 step="0.01"
                 value={form.amount}
-                onChange={(e) => set('amount', e.target.value)}
+                onChange={(val) => set('amount', val)}
                 placeholder="0.00"
                 className="form-input flex-1 tabular-nums"
               />

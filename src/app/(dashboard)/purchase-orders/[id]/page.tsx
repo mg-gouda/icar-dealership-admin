@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
 import StatusBadge from '../../../../components/StatusBadge';
+import NumericInput from '../../../../components/ui/NumericInput';
 import { useLang } from '../../../../lib/lang-context';
 import { fmtDate } from '@/lib/fmt';
 
@@ -164,8 +165,8 @@ export default function PODetailPage() {
                       <p className="text-xs text-white truncate">{l.description}</p>
                       <p className="text-xs text-gray-500">{isAr ? `${remaining} متبقي` : `${remaining} remaining`}</p>
                     </div>
-                    <input type="number" min="0" max={remaining} step="0.01"
-                      value={receiveQty[l.id] ?? ''} onChange={(e) => setReceiveQty({ ...receiveQty, [l.id]: e.target.value })}
+                    <NumericInput min="0" max={remaining} step="0.01"
+                      value={receiveQty[l.id] ?? ''} onChange={(val) => setReceiveQty({ ...receiveQty, [l.id]: val })}
                       placeholder="0"
                       className="w-24 px-3 py-1.5 bg-gray-800 border border-white/10 rounded-lg text-xs text-white text-right focus:outline-none focus:border-blue-500" />
                   </div>

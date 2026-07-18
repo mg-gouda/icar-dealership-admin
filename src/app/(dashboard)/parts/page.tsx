@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { useQuery, apiFetch } from '../../../lib/useApi';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../components/ui/NumericInput';
 import ScannerModal, { PART_FORMATS } from '../../../components/ScannerModal';
 import { useLang } from '../../../lib/lang-context';
 
@@ -170,7 +171,7 @@ export default function PartsPage() {
         {([
           ['inventory', isAr ? 'المخزون' : 'Inventory'],
           ['returns',   isAr ? 'المرتجعات' : 'Returns'],
-          ['rmas',      isAr ? 'RMA المورد' : 'Manufacturer RMAs'],
+          ['rmas',      isAr ? 'إرجاع للموردين' : 'Manufacturer RMAs'],
           ['credits',   isAr ? 'أرصدة الموردين' : 'Supplier Credits'],
         ] as [string, string][]).map(([key, label]) => (
           <button
@@ -238,7 +239,7 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
   );
 
   const { data: locationsRaw } = useQuery<any[]>('/locations');
-  const { data: suppliersRaw } = useQuery<any[]>('/partners?type=SUPPLIER&limit=100');
+  const { data: suppliersRaw } = useQuery<any[]>('/partners?type=VENDOR&limit=100');
 
   const parts = data?.data ?? [];
   const total = data?.total ?? 0;
@@ -399,8 +400,8 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
           <form onSubmit={submitAdjust} style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
               <label className="input-label">{isAr ? 'الكمية (+ للإضافة، − للخصم)' : 'Quantity (+ to add, − to remove)'}</label>
-              <input type="number" step="1" className="input" placeholder="e.g. 5 or -2"
-                value={adjustQty} onChange={(e) => setAdjustQty(e.target.value)} required autoFocus />
+              <NumericInput step="1" className="input" placeholder="e.g. 5 or -2"
+                value={adjustQty} onChange={(val) => setAdjustQty(val)} />
             </div>
             <div>
               <label className="input-label">{isAr ? 'السبب' : 'Reason'}</label>
@@ -450,17 +451,17 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
                 </div>
                 <div>
                   <label className="input-label">{isAr ? 'مستوى إعادة الطلب' : 'Reorder Level'}</label>
-                  <input type="number" min="0" className="input" value={partForm.reorderLevel} onChange={(e) => setPF('reorderLevel', e.target.value)} />
+                  <NumericInput min="0" className="input" value={partForm.reorderLevel} onChange={(val) => setPF('reorderLevel', val)} />
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label className="input-label">{isAr ? 'تكلفة الوحدة' : 'Cost Price'}</label>
-                  <input type="number" min="0" step="0.01" className="input" placeholder="0.00" value={partForm.costPrice} onChange={(e) => setPF('costPrice', e.target.value)} />
+                  <NumericInput min="0" step="0.01" className="input" placeholder="0.00" value={partForm.costPrice} onChange={(val) => setPF('costPrice', val)} />
                 </div>
                 <div>
                   <label className="input-label">{isAr ? 'سعر البيع' : 'Sale Price'}</label>
-                  <input type="number" min="0" step="0.01" className="input" placeholder="0.00" value={partForm.salePrice} onChange={(e) => setPF('salePrice', e.target.value)} />
+                  <NumericInput min="0" step="0.01" className="input" placeholder="0.00" value={partForm.salePrice} onChange={(val) => setPF('salePrice', val)} />
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -631,7 +632,7 @@ function ReturnsTab({ isAr }: { isAr: boolean }) {
       <div style={{ marginBottom: '1rem', padding: '0.75rem 1rem', borderRadius: 8, background: 'color-mix(in srgb, var(--info) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--info) 30%, transparent)', fontSize: '0.8rem', color: 'var(--text-2)', display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
         <span style={{ color: 'var(--info)', flexShrink: 0 }}>ℹ</span>
         {isAr
-          ? 'القطع المعيبة تذهب إلى الحجر الصحي بعد الموافقة وتُجمَّع لإرسالها إلى المورد عند الطلب التالي.'
+          ? 'القطع المعيبة تذهب إلى مخزن المرتجع بعد الموافقة وتُجمَّع لإرسالها إلى المورد عند الطلب التالي.'
           : 'Defective parts go to Quarantine after approval and are batched for manufacturer RMA with the next order delivery.'}
       </div>
 
@@ -682,6 +683,9 @@ function ReturnsTab({ isAr }: { isAr: boolean }) {
                     {r.inventoryStatus === 'QUARANTINE' && (
                       <span className="badge badge-danger">{isAr ? 'حجر صحي' : 'Quarantine'}</span>
                     )}
+                    {r.inventoryStatus === 'IN_RMA' && (
+                      <span className="badge badge-warning">{isAr ? 'في طلب إرجاع' : 'In RMA'}</span>
+                    )}
                     {r.inventoryStatus === 'RETURNED_TO_STOCK' && (
                       <span className="badge badge-success">{isAr ? 'أُعيد للمخزن' : 'In Stock'}</span>
                     )}
@@ -720,7 +724,7 @@ function ReturnsTab({ isAr }: { isAr: boolean }) {
                 </div>
                 <div>
                   <label className="input-label">{isAr ? 'الكمية *' : 'Quantity *'}</label>
-                  <input type="number" min="1" step="1" className="input" placeholder="1" value={form.qty} onChange={(e) => setF('qty', e.target.value)} required />
+                  <NumericInput min="1" step="1" className="input" placeholder="1" value={form.qty} onChange={(val) => setF('qty', val)} />
                 </div>
               </div>
 
@@ -743,7 +747,7 @@ function ReturnsTab({ isAr }: { isAr: boolean }) {
               {form.reason === 'DEFECTIVE' && (
                 <div style={{ padding: '0.625rem 0.875rem', borderRadius: 6, background: 'color-mix(in srgb, var(--danger) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--danger) 25%, transparent)', fontSize: '0.8rem', color: 'var(--danger)' }}>
                   {isAr
-                    ? 'ستذهب هذه القطعة إلى الحجر الصحي بعد الموافقة ، وستُضاف لدُفعة RMA القادمة للمورد.'
+                    ? 'ستذهب هذه القطعة إلى مخزن المرتجع بعد الموافقة، وستُضاف لدُفعة الإرجاع القادمة للمورد.'
                     : 'This part will be placed in Quarantine after approval and added to the next manufacturer RMA batch.'}
                 </div>
               )}
@@ -766,7 +770,7 @@ function ReturnsTab({ isAr }: { isAr: boolean }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label className="input-label">{isAr ? 'المبلغ الأصلي (ج.م)' : 'Original Amount (EGP)'}</label>
-                  <input type="number" min="0" step="0.01" className="input" placeholder="0.00" value={form.originalAmount} onChange={(e) => setF('originalAmount', e.target.value)} />
+                  <NumericInput min="0" step="0.01" className="input" placeholder="0.00" value={form.originalAmount} onChange={(val) => setF('originalAmount', val)} />
                 </div>
                 <div>
                   <label className="input-label">{isAr ? 'الفرع *' : 'Location *'}</label>
@@ -876,7 +880,7 @@ function RMAsTab({ isAr }: { isAr: boolean }) {
     `/parts/rmas?${qs}`, [statusFilter, page],
   );
 
-  const { data: suppliersRaw } = useQuery<any[]>('/partners?type=SUPPLIER&limit=100');
+  const { data: suppliersRaw } = useQuery<any[]>('/partners?type=VENDOR&limit=100');
   const { data: locationsRaw } = useQuery<any[]>('/locations');
   // Quarantined returns available for RMA
   const { data: quarantineRaw } = useQuery<{ data: PartReturn[] }>('/parts/returns?status=APPROVED&inventoryStatus=QUARANTINE&limit=100');
@@ -972,11 +976,11 @@ function RMAsTab({ isAr }: { isAr: boolean }) {
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           {quarantinedReturns.length > 0 && (
             <span style={{ fontSize: '0.8rem', color: 'var(--danger)' }}>
-              {quarantinedReturns.length} {isAr ? 'قطعة في الحجر الصحي' : 'parts in quarantine'}
+              {quarantinedReturns.length} {isAr ? 'قطعة في مخزن المرتجع' : 'parts in quarantine'}
             </span>
           )}
           <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}>
-            {isAr ? '+ إنشاء RMA' : '+ Create RMA'}
+            {isAr ? '+ إنشاء طلب إرجاع' : '+ Create RMA'}
           </button>
         </div>
       </div>
@@ -989,7 +993,7 @@ function RMAsTab({ isAr }: { isAr: boolean }) {
           <table className="data-table">
             <thead>
               <tr>
-                <th>{isAr ? 'رقم RMA' : 'RMA #'}</th>
+                <th>{isAr ? 'رقم الإرجاع' : 'RMA #'}</th>
                 <th>{isAr ? 'المورد' : 'Supplier'}</th>
                 <th style={{ textAlign: 'right' }}>{isAr ? 'عدد القطع' : 'Lines'}</th>
                 <th>{isAr ? 'الحالة' : 'Status'}</th>
@@ -1020,7 +1024,7 @@ function RMAsTab({ isAr }: { isAr: boolean }) {
               ))}
               {rmas.length === 0 && (
                 <tr><td colSpan={7} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-3)' }}>
-                  {isAr ? 'لا توجد طلبات RMA.' : 'No RMAs found.'}
+                  {isAr ? 'لا توجد طلبات إرجاع.' : 'No RMAs found.'}
                 </td></tr>
               )}
             </tbody>
@@ -1038,7 +1042,7 @@ function RMAsTab({ isAr }: { isAr: boolean }) {
       {/* New RMA Modal */}
       {showNew && (
         <Modal onClose={() => setShowNew(false)} wide>
-          <ModalHeader title={isAr ? 'إنشاء طلب إرجاع للمورد (RMA)' : 'Create Manufacturer RMA'} onClose={() => setShowNew(false)} />
+          <ModalHeader title={isAr ? 'إنشاء طلب إرجاع للمورد' : 'Create Manufacturer RMA'} onClose={() => setShowNew(false)} />
           <form onSubmit={submitRMA}>
             <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -1055,11 +1059,11 @@ function RMAsTab({ isAr }: { isAr: boolean }) {
               {/* Quarantined parts selection */}
               <div>
                 <label className="input-label" style={{ marginBottom: '0.5rem' }}>
-                  {isAr ? 'القطع في الحجر الصحي *' : 'Quarantined Parts to Include *'}
+                  {isAr ? 'القطع في مخزن المرتجع *' : 'Quarantined Parts to Include *'}
                 </label>
                 {quarantinedReturns.length === 0 ? (
                   <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem', border: '1px dashed var(--border)', borderRadius: 8 }}>
-                    {isAr ? 'لا توجد قطع في الحجر الصحي حالياً.' : 'No quarantined parts available.'}
+                    {isAr ? 'لا توجد قطع في مخزن المرتجع حالياً.' : 'No quarantined parts available.'}
                   </div>
                 ) : (
                   <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
@@ -1088,7 +1092,7 @@ function RMAsTab({ isAr }: { isAr: boolean }) {
                   value={rmaForm.notes} onChange={(e) => setRF('notes', e.target.value)} />
               </div>
 
-              <ModalFooter onCancel={() => setShowNew(false)} saveLabel={isAr ? 'إنشاء RMA' : 'Create RMA'} saving={saving} isAr={isAr} />
+              <ModalFooter onCancel={() => setShowNew(false)} saveLabel={isAr ? 'إنشاء طلب الإرجاع' : 'Create RMA'} saving={saving} isAr={isAr} />
             </div>
           </form>
         </Modal>
@@ -1138,7 +1142,7 @@ function RMAsTab({ isAr }: { isAr: boolean }) {
       {/* Resolve RMA Modal */}
       {showResolve && (
         <Modal onClose={() => setShowResolve(null)}>
-          <ModalHeader title={isAr ? 'تسجيل حل RMA' : 'Record RMA Resolution'} subtitle={showResolve.rmaNumber} onClose={() => setShowResolve(null)} />
+          <ModalHeader title={isAr ? 'تسجيل نتيجة طلب الإرجاع' : 'Record RMA Resolution'} subtitle={showResolve.rmaNumber} onClose={() => setShowResolve(null)} />
           <form onSubmit={resolveRMA}>
             <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
@@ -1155,8 +1159,8 @@ function RMAsTab({ isAr }: { isAr: boolean }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label className="input-label">{isAr ? 'المبلغ (ج.م) *' : 'Amount (EGP) *'}</label>
-                  <input type="number" min="0" step="0.01" className="input" placeholder="0.00" required
-                    value={resolveForm.resolutionAmount} onChange={(e) => setResolveForm((p) => ({ ...p, resolutionAmount: e.target.value }))} />
+                  <NumericInput min="0" step="0.01" className="input" placeholder="0.00"
+                    value={resolveForm.resolutionAmount} onChange={(val) => setResolveForm((p) => ({ ...p, resolutionAmount: val }))} />
                 </div>
                 {resolveForm.resolutionType === 'CREDIT_NOTE' && (
                   <div>
@@ -1207,7 +1211,7 @@ function CreditsTab({ isAr }: { isAr: boolean }) {
     `/parts/supplier-credits?${qs}`, [supplierFilter, page],
   );
 
-  const { data: suppliersRaw } = useQuery<any[]>('/partners?type=SUPPLIER&limit=100');
+  const { data: suppliersRaw } = useQuery<any[]>('/partners?type=VENDOR&limit=100');
 
   const credits = data?.data ?? [];
   const total = data?.total ?? 0;
@@ -1276,7 +1280,7 @@ function CreditsTab({ isAr }: { isAr: boolean }) {
               <tr>
                 <th>{isAr ? 'رقم الإشعار' : 'Credit Note #'}</th>
                 <th>{isAr ? 'المورد' : 'Supplier'}</th>
-                <th>{isAr ? 'مرجع RMA' : 'RMA Ref'}</th>
+                <th>{isAr ? 'مرجع طلب الإرجاع' : 'RMA Ref'}</th>
                 <th style={{ textAlign: 'right' }}>{isAr ? 'إجمالي الإشعار' : 'Total'}</th>
                 <th style={{ textAlign: 'right' }}>{isAr ? 'المُستخدَم' : 'Used'}</th>
                 <th style={{ textAlign: 'right' }}>{isAr ? 'الرصيد المتاح' : 'Available'}</th>
@@ -1346,8 +1350,8 @@ function CreditsTab({ isAr }: { isAr: boolean }) {
               </div>
               <div>
                 <label className="input-label">{isAr ? 'المبلغ المُستخدَم (ج.م) *' : 'Amount to Apply (EGP) *'}</label>
-                <input type="number" min="0.01" step="0.01" className="input" placeholder="0.00" required
-                  value={applyForm.amountUsed} onChange={(e) => setApplyForm((p) => ({ ...p, amountUsed: e.target.value }))} />
+                <NumericInput min="0.01" step="0.01" className="input" placeholder="0.00"
+                  value={applyForm.amountUsed} onChange={(val) => setApplyForm((p) => ({ ...p, amountUsed: val }))} />
               </div>
               <div>
                 <label className="input-label">{isAr ? 'رقم أمر الشراء' : 'Purchase Order Ref'}</label>

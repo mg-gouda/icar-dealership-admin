@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../../lib/useApi';
 import SearchableCombobox from '../../../../../components/ui/SearchableCombobox';
+import NumericInput from '../../../../../components/ui/NumericInput';
 import { useLang } from '@/lib/lang-context';
 import { fmtDate } from '@/lib/fmt';
 import jsPDF from 'jspdf';
@@ -134,10 +135,10 @@ function RegisterPaymentDialog({ invoice, onClose, onSuccess }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="input-label">{isAr ? 'المبلغ (ج.م) *' : 'Amount (EGP) *'}</label>
-              <input
-                type="number" step="0.01" required className="input"
+              <NumericInput
+                step="0.01" className="input"
                 value={form.amount}
-                onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
+                onChange={(val) => setForm((p) => ({ ...p, amount: val }))}
               />
             </div>
             <div>
@@ -244,13 +245,13 @@ function AddLineRow({ invoiceId, onSuccess, onCancel }: {
             </div>
             <div>
               <label className="input-label">{isAr ? 'الكمية *' : 'Qty *'}</label>
-              <input required type="number" min="0.01" step="0.01" className="input" style={{ fontSize: '0.8rem' }}
-                value={form.quantity} onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))} />
+              <NumericInput min="0.01" step="0.01" className="input" style={{ fontSize: '0.8rem' }}
+                value={form.quantity} onChange={(val) => setForm((p) => ({ ...p, quantity: val }))} />
             </div>
             <div>
               <label className="input-label">{isAr ? 'سعر الوحدة *' : 'Unit Price *'}</label>
-              <input required type="number" min="0" step="0.01" className="input" style={{ fontSize: '0.8rem' }}
-                value={form.unitPrice} onChange={(e) => setForm((p) => ({ ...p, unitPrice: e.target.value }))} placeholder="0.00" />
+              <NumericInput min="0" step="0.01" className="input" style={{ fontSize: '0.8rem' }}
+                value={form.unitPrice} onChange={(val) => setForm((p) => ({ ...p, unitPrice: val }))} placeholder="0.00" />
             </div>
             <div>
               <label className="input-label">{isAr ? 'الحساب *' : 'Account *'}</label>

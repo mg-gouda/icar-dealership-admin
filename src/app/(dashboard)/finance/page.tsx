@@ -10,6 +10,9 @@ const authHeaders = () => ({
 });
 
 /* ─── Types ───────────────────────────────────────────────────────────────── */
+interface AgingAggregate { current: number; d30: number; d60: number; d60p: number; total: number; }
+interface AgedRow { current: string | number; b30: string | number; b60: string | number; b90: string | number; b90plus: string | number; total: string | number; }
+
 interface FinanceSummary {
   arOutstanding: number;
   arInvoiceCount: number;
@@ -163,11 +166,12 @@ function TodoBadge({ type }: { type: TodoItem['type'] }) {
 }
 
 /* ─── AR/AP Aging table ───────────────────────────────────────────────────── */
-function AgingTable() {
+function AgingTable({ ar, ap }: { ar: AgingAggregate | null; ap: AgingAggregate | null }) {
   const { isAr } = useLang();
+  const n = (v: number | undefined) => v ?? 0;
   const rows = [
-    { label: isAr ? 'المستحقات' : 'Receivables', current: 620_000, d30: 340_000, d60: 180_000, d60p: 100_000, total: 1_240_000 },
-    { label: isAr ? 'المطلوبات' : 'Payables',    current: 200_000, d30: 180_000, d60: 200_000, d60p: 100_000, total:   680_000 },
+    { label: isAr ? 'المستحقات' : 'Receivables', current: n(ar?.current), d30: n(ar?.d30), d60: n(ar?.d60), d60p: n(ar?.d60p), total: n(ar?.total) },
+    { label: isAr ? 'المطلوبات' : 'Payables',    current: n(ap?.current), d30: n(ap?.d30), d60: n(ap?.d60), d60p: n(ap?.d60p), total: n(ap?.total) },
   ];
   return (
     <table className="data-table">
@@ -209,6 +213,8 @@ export default function FinanceDashboardPage() {
   const { isAr } = useLang();
   const [summary, setSummary] = useState<FinanceSummary | null>(null);
   const [summaryError, setSummaryError] = useState(false);
+  const [arAging, setArAging] = useState<AgingAggregate | null>(null);
+  const [apAging, setApAging] = useState<AgingAggregate | null>(null);
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [monthly, setMonthly] = useState<MonthlyPoint[]>([]);
   const [branches, setBranches] = useState<BranchProfit[]>([]);
@@ -234,6 +240,26 @@ export default function FinanceDashboardPage() {
     fetch(`${API}/finance/reports/branch-profit`, { headers: authHeaders() })
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data?.branches) setBranches(data.branches); })
+      .catch(() => {});
+
+    // AR/AP aging — sum all per-partner rows into aggregate totals
+    const sumAging = (rows: AgedRow[]): AgingAggregate => rows.reduce(
+      (acc, r) => ({
+        current: acc.current + Number(r.current),
+        d30:     acc.d30     + Number(r.b30),
+        d60:     acc.d60     + Number(r.b60),
+        d60p:    acc.d60p    + Number(r.b90) + Number(r.b90plus),
+        total:   acc.total   + Number(r.total),
+      }),
+      { current: 0, d30: 0, d60: 0, d60p: 0, total: 0 },
+    );
+    fetch(`${API}/finance/reports/aged-receivables`, { headers: authHeaders() })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (Array.isArray(d)) setArAging(sumAging(d)); })
+      .catch(() => {});
+    fetch(`${API}/finance/reports/aged-payables`, { headers: authHeaders() })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (Array.isArray(d)) setApAging(sumAging(d)); })
       .catch(() => {});
   }, []);
 
@@ -291,7 +317,7 @@ export default function FinanceDashboardPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">{isAr ? 'لوحة تحكم المالية' : 'Finance Dashboard'}</h1>
-          <p className="page-subtitle">{isAr ? 'يونيو 2026 · جميع المواقع · نظرة عامة على الشركة' : 'June 2026 · All Locations · Company Overview'}</p>
+          <p className="page-subtitle">{new Date().toLocaleDateString(isAr ? 'ar-EG' : 'en-EG', { month: 'long', year: 'numeric' })} · {isAr ? 'جميع المواقع · نظرة عامة على الشركة' : 'All Locations · Company Overview'}</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <Link href="/finance/reports" className="btn btn-secondary btn-sm">{isAr ? 'عرض التقارير' : 'View Reports'}</Link>
@@ -374,9 +400,9 @@ export default function FinanceDashboardPage() {
           <div className="card" style={{ overflow: 'hidden' }}>
             <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>{isAr ? 'ملخص أعمار الذمم' : 'AR / AP Aging Summary'}</p>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{isAr ? 'حتى يونيو 2026' : 'As of Jun 2026'}</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>{isAr ? 'حتى ' : 'As of '}{new Date().toLocaleDateString(isAr ? 'ar-EG' : 'en-EG', { month: 'short', year: 'numeric' })}</span>
             </div>
-            <AgingTable />
+            <AgingTable ar={arAging} ap={apAging} />
           </div>
         </div>
 
@@ -388,7 +414,7 @@ export default function FinanceDashboardPage() {
                 <p style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>{isAr ? 'قائمة العمولات المستحقة' : 'Commissions Payable Queue'}</p>
                 <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 2 }}>
                   {payableComms.length} {isAr ? (payableComms.length !== 1 ? 'عمولات جاهزة للصرف' : 'عمولة جاهزة للصرف') : `commission${payableComms.length !== 1 ? 's' : ''} ready to pay out`} ·&nbsp;
-                  {fmtEGP(payableComms.reduce((s, c) => s + (c.calculatedAmount ?? 0), 0))} {isAr ? 'إجمالي' : 'total'}
+                  {fmtEGP(payableComms.reduce((s, c) => s + Number(c.calculatedAmount ?? 0), 0))} {isAr ? 'إجمالي' : 'total'}
                 </p>
               </div>
               <Link href="/finance/commissions?status=PAYABLE" className="btn btn-primary btn-sm">{isAr ? 'معالجة المدفوعات →' : 'Process Payouts →'}</Link>
@@ -408,7 +434,7 @@ export default function FinanceDashboardPage() {
                     <td style={{ fontSize: '0.8rem', color: 'var(--text-3)' }}>
                       {c.deal?.vehicle ? `${c.deal.vehicle.make} ${c.deal.vehicle.model}` : c.id.slice(-8).toUpperCase()}
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-1)', fontSize: '0.8125rem' }}>{fmtEGP(c.calculatedAmount)}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-1)', fontSize: '0.8125rem' }}>{fmtEGP(Number(c.calculatedAmount))}</td>
                   </tr>
                 ))}
               </tbody>

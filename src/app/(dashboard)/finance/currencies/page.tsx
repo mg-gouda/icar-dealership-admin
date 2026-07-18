@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, apiFetch } from '../../../../lib/useApi';
+import NumericInput from '../../../../components/ui/NumericInput';
 import { useLang } from '@/lib/lang-context';
 import { fmtDate } from '@/lib/fmt';
 import { ErrorBanner } from '@/components/ui/error-banner';
@@ -86,7 +87,7 @@ function AddCurrencyModal({ onClose, onSuccess, isAr }: { onClose: () => void; o
           </div>
           <div>
             <label className="input-label">{isAr ? 'المنازل العشرية' : 'Decimal Places'}</label>
-            <input type="number" min="0" max="6" className="input" value={form.decimalPlaces} onChange={(e) => set('decimalPlaces', e.target.value)} />
+            <NumericInput min="0" max="6" className="input" value={form.decimalPlaces} onChange={(val) => set('decimalPlaces', val)} />
           </div>
           {err && <p style={{ fontSize: '0.75rem', color: 'var(--danger-fg)' }}>{err}</p>}
           <div className="flex gap-3 pt-1">
@@ -311,15 +312,13 @@ export default function CurrenciesPage() {
                               <label className="input-label">
                                 {isAr ? `السعر (ج.م. مقابل 1 ${c.code})` : `Rate (EGP per 1 ${c.code})`}
                               </label>
-                              <input
-                                type="number"
+                              <NumericInput
                                 step="0.000001"
                                 className="input"
                                 style={{ width: 180 }}
                                 value={rateInput}
-                                onChange={(e) => setRateInput(e.target.value)}
+                                onChange={(val) => setRateInput(val)}
                                 placeholder="e.g. 49.500000"
-                                autoFocus
                               />
                             </div>
                             <div>

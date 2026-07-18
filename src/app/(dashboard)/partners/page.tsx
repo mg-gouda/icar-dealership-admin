@@ -16,7 +16,7 @@ export default function PartnersPage() {
   const { isAr } = useLang();
   const TYPES = [
     { value: 'CUSTOMER', label: isAr ? 'عميل'  : 'Customer' },
-    { value: 'SUPPLIER', label: isAr ? 'مورد'  : 'Supplier' },
+    { value: 'VENDOR', label: isAr ? 'مورد'  : 'Supplier' },
     { value: 'BANK',     label: isAr ? 'بنك'   : 'Bank'     },
     { value: 'EMPLOYEE', label: isAr ? 'موظف'  : 'Employee' },
     { value: 'OTHER',    label: isAr ? 'أخرى'  : 'Other'    },
