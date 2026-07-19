@@ -7,14 +7,9 @@ import { useLang } from '@/lib/lang-context';
 import { fmtDate } from '@/lib/fmt';
 import { translateSource } from '@/lib/source-labels';
 import { API_BASE as API } from '@/lib/config';
+import { apiFetch } from '@/lib/useApi';
 const token = () => (typeof window !== 'undefined' ? localStorage.getItem('accessToken') ?? '' : '');
 const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
-
-async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API}${path}`, { ...opts, headers: { ...authHeaders(), ...(opts.headers ?? {}) } });
-  if (!res.ok) { const e = await res.json().catch(() => ({ message: res.statusText })); throw new Error(e.message ?? res.statusText); }
-  return res.json();
-}
 
 interface Activity {
   id: string; type: string; note: string; outcome?: string; createdAt: string;
