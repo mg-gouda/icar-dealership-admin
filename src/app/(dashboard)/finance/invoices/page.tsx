@@ -210,8 +210,8 @@ export default function CustomerInvoicesPage() {
   );
 
   const { data: partnersRaw } = useQuery<any[]>('/partners?limit=200&type=CUSTOMER');
-  const { data: journalsRaw } = useQuery<any[]>('/finance/journals?type=SALES&limit=50');
-  const { data: dealsRaw } = useQuery<{ items: any[] }>('/deals?limit=100&status=ACTIVE');
+  const { data: journalsRaw } = useQuery<any[]>('/finance/journals?type=SALE&limit=50');
+  const { data: dealsRaw } = useQuery<{ items: any[] }>('/deals?limit=100');
 
   const invoices = data?.items ?? [];
   const partnerOpts = (Array.isArray(partnersRaw) ? partnersRaw : []).map((p) => ({ value: p.id, label: p.name }));

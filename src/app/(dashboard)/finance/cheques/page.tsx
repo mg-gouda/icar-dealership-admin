@@ -114,13 +114,13 @@ export default function ChequesPage() {
     search ? `q=${encodeURIComponent(search)}` : '',
     'limit=100',
   ].filter(Boolean).join('&');
-  const { data: raw, loading, reload } = useQuery<{ items: Cheque[]; total: number }>(`/v1/cheques?${qStr}`, [tab, statusFilter, search]);
+  const { data: raw, loading, reload } = useQuery<{ items: Cheque[]; total: number }>(`/cheques?${qStr}`, [tab, statusFilter, search]);
   const cheques = raw?.items ?? [];
 
   const { data: partners } = useQuery<Partner[]>('/partners?limit=200');
   const { data: bankAccounts } = useQuery<BankAccount[]>('/finance/bank-statements/bank-accounts');
   const { data: locations } = useQuery<Location[]>('/locations');
-  const { data: purchaseOrders } = useQuery<{ items: PurchaseOrder[] }>('/v1/purchase-orders?limit=200');
+  const { data: purchaseOrders } = useQuery<{ items: PurchaseOrder[] }>('/purchase-orders?limit=200');
 
   const partnerOpts = (partners ?? []).map(p => ({ value: p.id, label: p.name }));
   const bankOpts = (bankAccounts ?? []).map(b => ({ value: b.id, label: `${b.name}${b.bankName ? ` — ${b.bankName}` : ''}` }));
@@ -141,7 +141,7 @@ export default function ChequesPage() {
     setSaving(true); setErr('');
     try {
       const validAllocs = allocs.filter(a => a.amount && Number(a.amount) > 0);
-      await apiFetch('/v1/cheques', {
+      await apiFetch('/cheques', {
         method: 'POST',
         body: JSON.stringify({
           ...form,
@@ -175,7 +175,7 @@ export default function ChequesPage() {
     if (!selected) return;
     setSaving(true); setErr('');
     try {
-      const updated = await apiFetch(`/v1/cheques/${selected.id}/status`, {
+      const updated = await apiFetch(`/cheques/${selected.id}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ status: newStatus, clearedDate: clearedDate || undefined }),
       });
@@ -192,7 +192,7 @@ export default function ChequesPage() {
     if (!selected || !newAlloc.amount) return;
     setSaving(true); setErr('');
     try {
-      await apiFetch(`/v1/cheques/${selected.id}/allocations`, {
+      await apiFetch(`/cheques/${selected.id}/allocations`, {
         method: 'POST',
         body: JSON.stringify({
           amount: Number(newAlloc.amount),
@@ -204,7 +204,7 @@ export default function ChequesPage() {
       setShowAddAlloc(false);
       setNewAlloc({ amount: '', purchaseOrderId: '', invoiceId: '', memo: '' });
       // refresh selected
-      const refreshed = await apiFetch(`/v1/cheques/${selected.id}`) as Cheque;
+      const refreshed = await apiFetch(`/cheques/${selected.id}`) as Cheque;
       setSelected(refreshed);
       reload();
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Error'); }
@@ -213,8 +213,8 @@ export default function ChequesPage() {
 
   async function removeAlloc(allocId: string) {
     if (!selected) return;
-    await apiFetch(`/v1/cheques/allocations/${allocId}`, { method: 'DELETE' });
-    const refreshed = await apiFetch(`/v1/cheques/${selected.id}`) as Cheque;
+    await apiFetch(`/cheques/allocations/${allocId}`, { method: 'DELETE' });
+    const refreshed = await apiFetch(`/cheques/${selected.id}`) as Cheque;
     setSelected(refreshed);
     reload();
   }
