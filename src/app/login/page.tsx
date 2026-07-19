@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import { useRouter } from 'next/navigation';
 import { cacheFieldPermissions } from '../../lib/fieldPermissions';
 import { useLang } from '@/lib/lang-context';
@@ -34,6 +35,8 @@ export default function LoginPage() {
   const [setupSecret, setSetupSecret] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState('');
+  const [showManualKey, setShowManualKey] = useState(false);
   const [brandName, setBrandName] = useState('iCar Dealership');
   const [brandLogo, setBrandLogo] = useState('');
   const { isAr } = useLang();
@@ -56,6 +59,13 @@ export default function LoginPage() {
       }
     } catch { /* ignore */ }
   }, []);
+
+  useEffect(() => {
+    if (!setupUri) return;
+    QRCode.toDataURL(setupUri, { width: 200, margin: 1, color: { dark: '#000000', light: '#ffffff' } })
+      .then(setQrDataUrl)
+      .catch(() => {});
+  }, [setupUri]);
 
   async function post(path: string, body: object, token?: string) {
     const res = await fetch(`${API}${path}`, {
@@ -281,34 +291,56 @@ export default function LoginPage() {
           {stage === 'totp-setup' && (
             <>
               <div className="mb-4 text-center">
-                <span className="text-2xl block mb-2" aria-hidden>🔑</span>
                 <p className="text-[0.9375rem] font-semibold text-white">
-                  {isAr ? 'إعداد المصادقة الثنائية' : 'Set Up Authenticator'}
+                  {isAr ? 'إعداد المصادقة الثنائية' : 'Set Up Two-Factor Auth'}
                 </p>
                 <p className="text-[11px] mt-1" style={{ color: 'oklch(1 0 0 / 0.4)' }}>
                   {isAr
-                    ? 'دورك يتطلب المصادقة الثنائية. أضف هذا المفتاح إلى Google Authenticator أو Authy.'
-                    : 'Your role requires 2FA. Add this key to Google Authenticator or Authy.'}
+                    ? 'افتح Google Authenticator أو Authy وامسح الرمز.'
+                    : 'Open Google Authenticator or Authy and scan the code.'}
                 </p>
               </div>
-              <div className="mb-3 rounded-lg p-3 text-center"
-                style={{ background: 'oklch(1 0 0 / 0.07)', border: '1px solid oklch(1 0 0 / 0.12)' }}>
-                <p className="text-[10px] mb-1" style={{ color: 'oklch(1 0 0 / 0.4)' }}>
-                  {isAr ? 'المفتاح السري (إدخال يدوي)' : 'Secret key (manual entry)'}
-                </p>
-                <p className="text-sm font-mono text-white tracking-wider break-all select-all">{setupSecret}</p>
+
+              {/* QR code */}
+              <div className="flex justify-center mb-3">
+                {qrDataUrl ? (
+                  <div className="rounded-xl overflow-hidden p-2" style={{ background: '#fff', display: 'inline-block' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={qrDataUrl} alt="2FA QR code" width={180} height={180} />
+                  </div>
+                ) : (
+                  <div className="rounded-xl flex items-center justify-center"
+                    style={{ width: 196, height: 196, background: 'oklch(1 0 0 / 0.07)', border: '1px solid oklch(1 0 0 / 0.12)' }}>
+                    <span className="text-[11px]" style={{ color: 'oklch(1 0 0 / 0.3)' }}>Generating…</span>
+                  </div>
+                )}
               </div>
-              {setupUri && (
-                <a href={setupUri} title={setupUri}
-                  className="block text-center text-[11px] mb-3 truncate transition"
-                  style={{ color: 'oklch(0.72 0.18 265)' }}>
-                  {isAr ? '← فتح في تطبيق المصادقة' : 'Open in authenticator app →'}
-                </a>
-              )}
+
+              {/* Manual key toggle */}
+              <div className="mb-3 text-center">
+                <button type="button"
+                  onClick={() => setShowManualKey(v => !v)}
+                  className="text-[11px] transition"
+                  style={{ color: 'oklch(1 0 0 / 0.35)' }}>
+                  {showManualKey
+                    ? (isAr ? '▲ إخفاء المفتاح اليدوي' : '▲ Hide manual key')
+                    : (isAr ? '▼ لا يمكنك المسح؟ أدخل يدوياً' : "▼ Can't scan? Enter key manually")}
+                </button>
+                {showManualKey && (
+                  <div className="mt-2 rounded-lg p-3"
+                    style={{ background: 'oklch(1 0 0 / 0.07)', border: '1px solid oklch(1 0 0 / 0.12)' }}>
+                    <p className="text-[10px] mb-1" style={{ color: 'oklch(1 0 0 / 0.4)' }}>
+                      {isAr ? 'المفتاح السري' : 'Secret key'}
+                    </p>
+                    <p className="text-sm font-mono text-white tracking-wider break-all select-all">{setupSecret}</p>
+                  </div>
+                )}
+              </div>
+
               <button onClick={() => { setTotpCode(''); setStage('totp-confirm'); }}
                 className="w-full rounded-lg text-white text-xs font-semibold py-2.5 transition"
                 style={{ background: 'oklch(0.52 0.22 265)' }}>
-                {isAr ? 'لقد أضفت المفتاح ←' : "I've added the key →"}
+                {isAr ? 'لقد مسحت الرمز ←' : "I've scanned the code →"}
               </button>
               <button type="button" onClick={() => { setStage('credentials'); setError(''); setTotpCode(''); }}
                 className="w-full text-[11px] transition mt-2" style={{ color: 'oklch(1 0 0 / 0.3)' }}>

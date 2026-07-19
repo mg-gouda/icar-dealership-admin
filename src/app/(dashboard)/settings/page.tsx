@@ -441,9 +441,16 @@ function BrandingTab() {
     reader.readAsDataURL(file);
   }
 
-  function save(e: React.FormEvent) {
+  async function save(e: React.FormEvent) {
     e.preventDefault();
     saveBrand();
+    // persist logo to DB so B2C public endpoint can read it
+    try {
+      await apiFetch('/settings/company', {
+        method: 'PATCH',
+        body: JSON.stringify({ logoUrl: logoUrl || null }),
+      });
+    } catch {}
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   }

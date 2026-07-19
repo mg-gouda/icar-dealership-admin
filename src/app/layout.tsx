@@ -9,7 +9,7 @@ const cairo = Cairo({
 });
 
 export const metadata: Metadata = {
-  title: "iCar Dealership",
+  title: { template: '%s | iCar Management System', default: 'iCar Management System' },
   description: "منصة متكاملة لإدارة معارض السيارات متعددة الفروع",
 };
 

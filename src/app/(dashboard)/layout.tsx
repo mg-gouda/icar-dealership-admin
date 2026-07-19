@@ -346,19 +346,18 @@ function SidebarBrand() {
   const { logoUrl, displayName } = useBrand();
   const { t } = useLang();
   return (
-    <div className="flex items-center gap-2.5 px-4 py-4"
-      style={{ borderBottom: '1px solid var(--sidebar-border)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
       {logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={logoUrl} alt="logo" style={{ height: 32, maxWidth: 120, objectFit: 'contain' }} />
+        <img src={logoUrl} alt="logo" style={{ height: 28, maxWidth: 100, objectFit: 'contain' }} />
       ) : (
         <>
-          <span className="text-base" aria-hidden>🚗</span>
-          <div>
-            <p className="text-sm font-semibold leading-none" style={{ color: 'var(--sidebar-active-text)' }}>
+          <span style={{ fontSize: '1rem' }} aria-hidden>🚗</span>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: '0.8125rem', fontWeight: 600, lineHeight: 1, color: 'var(--sidebar-active-text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {displayName || t('app.name')}
             </p>
-            <p className="text-[10px] mt-0.5" style={{ color: 'var(--sidebar-text)' }}>
+            <p style={{ fontSize: '0.625rem', marginTop: 2, color: 'var(--sidebar-text)', margin: '2px 0 0' }}>
               {t('app.subtitle')}
             </p>
           </div>
@@ -368,12 +367,78 @@ function SidebarBrand() {
   );
 }
 
+/* ─── Pathname → page title map ──────────────────────────────────────────── */
+const SUFFIX = ' | iCar Management System';
+function resolveTitle(pathname: string): string {
+  if (pathname === '/')                             return 'Dashboard' + SUFFIX;
+  if (pathname.startsWith('/vehicles/new'))         return 'New Vehicle' + SUFFIX;
+  if (pathname.match(/^\/vehicles\/[^/]+$/))        return 'Vehicle Detail' + SUFFIX;
+  if (pathname.startsWith('/vehicles'))             return 'Inventory' + SUFFIX;
+  if (pathname.startsWith('/import'))               return 'Imports' + SUFFIX;
+  if (pathname.startsWith('/crm/new'))              return 'New Lead' + SUFFIX;
+  if (pathname.match(/^\/crm\/[^/]+$/))             return 'Lead Detail' + SUFFIX;
+  if (pathname.startsWith('/crm'))                  return 'CRM' + SUFFIX;
+  if (pathname.startsWith('/deals/new'))            return 'New Deal' + SUFFIX;
+  if (pathname.match(/^\/deals\/[^/]+$/))           return 'Deal Detail' + SUFFIX;
+  if (pathname.startsWith('/deals'))                return 'Deals' + SUFFIX;
+  if (pathname.startsWith('/appointments'))         return 'Appointments' + SUFFIX;
+  if (pathname.startsWith('/service/new'))          return 'New Service Order' + SUFFIX;
+  if (pathname.startsWith('/service/part-picks'))   return 'Part Picks' + SUFFIX;
+  if (pathname.match(/^\/service\/[^/]+$/))         return 'Service Order' + SUFFIX;
+  if (pathname.startsWith('/service'))              return 'Service Center' + SUFFIX;
+  if (pathname.startsWith('/parts'))                return 'Parts' + SUFFIX;
+  if (pathname.startsWith('/transfers'))            return 'Transfers' + SUFFIX;
+  if (pathname.startsWith('/floor-plan'))           return 'Floor Plan' + SUFFIX;
+  if (pathname.startsWith('/petty-cash'))           return 'Petty Cash' + SUFFIX;
+  if (pathname.startsWith('/purchase-orders'))      return 'Purchase Orders' + SUFFIX;
+  if (pathname.startsWith('/partners'))             return 'Partners' + SUFFIX;
+  if (pathname.startsWith('/finance/invoices'))     return 'Invoices' + SUFFIX;
+  if (pathname.startsWith('/finance/vendor-bills')) return 'Vendor Bills' + SUFFIX;
+  if (pathname.startsWith('/finance/payments'))     return 'Payments' + SUFFIX;
+  if (pathname.startsWith('/finance/gl/recurring')) return 'Recurring Entries' + SUFFIX;
+  if (pathname.startsWith('/finance/gl'))           return 'General Ledger' + SUFFIX;
+  if (pathname.startsWith('/finance/journals'))     return 'Journals' + SUFFIX;
+  if (pathname.startsWith('/finance/accounts'))     return 'Chart of Accounts' + SUFFIX;
+  if (pathname.startsWith('/finance/bank-statements')) return 'Bank Statements' + SUFFIX;
+  if (pathname.startsWith('/finance/reconciliation')) return 'Reconciliation' + SUFFIX;
+  if (pathname.startsWith('/finance/assets'))       return 'Fixed Assets' + SUFFIX;
+  if (pathname.startsWith('/finance/fiscal-years')) return 'Fiscal Years' + SUFFIX;
+  if (pathname.startsWith('/finance/currencies'))   return 'Currencies' + SUFFIX;
+  if (pathname.startsWith('/finance/taxes'))        return 'Taxes' + SUFFIX;
+  if (pathname.startsWith('/finance/cheques'))      return 'Cheques' + SUFFIX;
+  if (pathname.startsWith('/finance/commissions'))  return 'Commissions' + SUFFIX;
+  if (pathname.startsWith('/finance/vendors'))      return 'Vendors' + SUFFIX;
+  if (pathname.startsWith('/finance/reports'))      return 'Financial Reports' + SUFFIX;
+  if (pathname.startsWith('/finance'))              return 'Finance' + SUFFIX;
+  if (pathname.startsWith('/reports/my-commissions')) return 'My Commissions' + SUFFIX;
+  if (pathname.startsWith('/reports/targets'))      return 'Sales Targets' + SUFFIX;
+  if (pathname.startsWith('/reports/funnel'))       return 'Sales Funnel' + SUFFIX;
+  if (pathname.startsWith('/reports'))              return 'Reports' + SUFFIX;
+  if (pathname.startsWith('/executive'))            return 'Executive Dashboard' + SUFFIX;
+  if (pathname.startsWith('/whatsapp'))             return 'WhatsApp' + SUFFIX;
+  if (pathname.startsWith('/audit-log'))            return 'Audit Log' + SUFFIX;
+  if (pathname.startsWith('/settings/users'))       return 'Users' + SUFFIX;
+  if (pathname.startsWith('/settings'))             return 'Settings' + SUFFIX;
+  if (pathname.startsWith('/profile'))              return 'Profile' + SUFFIX;
+  return 'iCar Management System';
+}
+
 /* ─── Inner shell ────────────────────────────────────────────────────────── */
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useLang();
   const [user, setUser] = useState<{ name: string; role: string } | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('sidebar_open') !== 'false';
+  });
+
+  useEffect(() => { document.title = resolveTitle(pathname); }, [pathname]);
+
+  useEffect(() => {
+    localStorage.setItem('sidebar_open', String(sidebarOpen));
+  }, [sidebarOpen]);
 
   useEffect(() => {
     const tk = localStorage.getItem('accessToken');
@@ -408,28 +473,81 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
 
       {/* ── Sidebar ─────────────────────────────────────────────────── */}
-      <aside className="w-52 flex-shrink-0 flex flex-col"
-        style={{ background: 'var(--sidebar-bg)', borderInlineEnd: '1px solid var(--sidebar-border)' }}>
-
-        {/* Logo */}
-        <SidebarBrand />
+      <aside
+        style={{
+          width: sidebarOpen ? 208 : 52,
+          flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          background: 'var(--sidebar-bg)',
+          borderInlineEnd: '1px solid var(--sidebar-border)',
+          transition: 'width 200ms ease',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Logo + collapse toggle */}
+        <div style={{ borderBottom: '1px solid var(--sidebar-border)', flexShrink: 0 }}>
+          {sidebarOpen ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px 0 16px', height: 56 }}>
+              <SidebarBrand />
+              <button
+                onClick={() => setSidebarOpen(false)}
+                title={t('nav.collapse') || 'Collapse'}
+                style={{ padding: 6, borderRadius: 6, color: 'var(--sidebar-text)', background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0 }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--sidebar-active-bg)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M9 2L5 7l4 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 56 }}>
+              <button
+                onClick={() => setSidebarOpen(true)}
+                title={t('nav.expand') || 'Expand'}
+                style={{ padding: 6, borderRadius: 6, color: 'var(--sidebar-text)', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--sidebar-active-bg)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M5 2l4 5-4 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-2.5 py-3 space-y-0.5 overflow-y-auto">
+        <nav style={{ flex: 1, padding: '10px 6px', overflowY: 'auto', overflowX: 'hidden' }}>
           {NAV.filter(n => !n.roles || (user && n.roles.includes(user.role))).map(({ href, key, icon }) => {
             const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
             return (
               <Link key={href} href={href}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[0.8125rem] font-medium transition-all duration-150"
+                title={!sidebarOpen ? t(key) : undefined}
                 style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: sidebarOpen ? '8px 10px' : '8px',
+                  justifyContent: sidebarOpen ? 'flex-start' : 'center',
+                  borderRadius: 8,
+                  fontSize: '0.8125rem',
+                  fontWeight: 500,
                   background: active ? 'var(--sidebar-active-bg)' : 'transparent',
                   color: active ? 'var(--sidebar-active-text)' : 'var(--sidebar-text)',
-                }}>
-                <span className="shrink-0" style={{ opacity: active ? 1 : 0.7 }}>{icon}</span>
-                <span className="truncate">{t(key)}</span>
-                {active && (
-                  <span className="ms-auto w-1.5 h-1.5 rounded-full shrink-0"
-                    style={{ background: 'var(--sidebar-active-dot)' }} />
+                  textDecoration: 'none',
+                  marginBottom: 2,
+                  transition: 'background 120ms',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                }}
+              >
+                <span style={{ opacity: active ? 1 : 0.7, flexShrink: 0 }}>{icon}</span>
+                {sidebarOpen && <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{t(key)}</span>}
+                {sidebarOpen && active && (
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: 'var(--sidebar-active-dot)', marginInlineStart: 'auto' }} />
                 )}
               </Link>
             );
@@ -437,28 +555,51 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* User info */}
-        <div className="px-3 py-3" style={{ borderTop: '1px solid var(--sidebar-border)' }}>
-          <div className="flex items-center gap-2.5">
-            <span className="avatar w-7 h-7 text-[0.625rem]"
-              style={{ background: 'var(--primary)', color: '#fff' }}>
-              {initials}
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium truncate" style={{ color: 'var(--sidebar-active-text)' }}>
-                {user?.name ?? '—'}
-              </p>
-              <p className="text-[10px] truncate" style={{ color: 'var(--sidebar-text)' }}>
-                {user?.role ?? '—'}
-              </p>
+        <div style={{ padding: '10px 8px', borderTop: '1px solid var(--sidebar-border)', flexShrink: 0 }}>
+          {sidebarOpen ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span className="avatar w-7 h-7 text-[0.625rem]"
+                style={{ background: 'var(--primary)', color: '#fff', flexShrink: 0 }}>
+                {initials}
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p className="text-xs font-medium truncate" style={{ color: 'var(--sidebar-active-text)', margin: 0 }}>
+                  {user?.name ?? '—'}
+                </p>
+                <p className="text-[10px] truncate" style={{ color: 'var(--sidebar-text)', margin: 0 }}>
+                  {user?.role ?? '—'}
+                </p>
+              </div>
+              <button onClick={logout} title={t('btn.signout')}
+                style={{ padding: 4, borderRadius: 4, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--sidebar-text)', flexShrink: 0 }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M5 7h7M9 5l2 2-2 2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M9 3H3a1 1 0 00-1 1v6a1 1 0 001 1h6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                </svg>
+              </button>
             </div>
-            <button onClick={logout} title={t('btn.signout')}
-              className="p-1 rounded hover:bg-white/10 transition" style={{ color: 'var(--sidebar-text)' }}>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M5 7h7M9 5l2 2-2 2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M9 3H3a1 1 0 00-1 1v6a1 1 0 001 1h6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-              </svg>
-            </button>
-          </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <span className="avatar w-7 h-7 text-[0.625rem]"
+                title={user?.name ?? '—'}
+                style={{ background: 'var(--primary)', color: '#fff' }}>
+                {initials}
+              </span>
+              <button onClick={logout} title={t('btn.signout')}
+                style={{ padding: 4, borderRadius: 4, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--sidebar-text)' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M5 7h7M9 5l2 2-2 2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M9 3H3a1 1 0 00-1 1v6a1 1 0 001 1h6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
