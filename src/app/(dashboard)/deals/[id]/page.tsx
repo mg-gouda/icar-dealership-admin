@@ -369,7 +369,7 @@ export default function DealDetailPage() {
       const raw = await fetch(`${API}/upload/file`, { method: 'POST', headers: { Authorization: `Bearer ${tok ?? ''}` }, body: fd });
       if (!raw.ok) throw new Error((await raw.json().catch(() => ({}))).message ?? 'Upload failed');
       const res: { url: string } = await raw.json();
-      await updateDoc(pendingDocId, { fileUrl: res.url, status: 'UPLOADED' });
+      await updateDoc(pendingDocId, { fileUrl: res.url, status: 'SUBMITTED' });
     } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Upload failed'); }
     finally { setUploadingDocId(null); setPendingDocId(null); if (docFileRef.current) docFileRef.current.value = ''; }
   }
