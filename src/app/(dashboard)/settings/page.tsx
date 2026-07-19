@@ -444,11 +444,11 @@ function BrandingTab() {
   async function save(e: React.FormEvent) {
     e.preventDefault();
     saveBrand();
-    // persist logo to DB so B2C public endpoint can read it
+    // persist logo + favicon to DB so B2C public endpoint can read them
     try {
       await apiFetch('/settings/company', {
         method: 'PATCH',
-        body: JSON.stringify({ logoUrl: logoUrl || null }),
+        body: JSON.stringify({ logoUrl: logoUrl || null, faviconUrl: faviconUrl || null }),
       });
     } catch {}
     setSaved(true);

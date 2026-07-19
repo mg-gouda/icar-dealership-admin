@@ -36,13 +36,14 @@ function applyColor(color: string) {
 }
 
 function applyFavicon(url: string) {
-  let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
-  if (!link) {
-    link = document.createElement('link');
-    link.rel = 'icon';
-    document.head.appendChild(link);
-  }
-  link.href = url || '/favicon.ico';
+  if (!url) return;
+  // Remove all existing icon link tags so the browser picks up the new one
+  document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"], link[rel="shortcut icon"]')
+    .forEach(el => el.remove());
+  const link = document.createElement('link');
+  link.rel = 'icon';
+  link.href = url;
+  document.head.appendChild(link);
 }
 
 function applyTitle(displayName: string) {
