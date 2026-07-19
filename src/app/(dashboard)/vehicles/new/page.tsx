@@ -139,6 +139,8 @@ export default function NewVehiclePage() {
   const [usedForm, setUsedForm] = useState(initUsedForm());
   const [saving, setSaving] = useState(false);
   const [showVinScanner, setShowVinScanner] = useState(false);
+  const [vinDecoding, setVinDecoding] = useState(false);
+  const [vinMsg, setVinMsg] = useState('');
   const [err, setErr] = useState('');
   const [photoInput, setPhotoInput] = useState('');
   const [photos, setPhotos] = useState<Array<{ src: string; file?: File }>>([]);
@@ -220,6 +222,33 @@ export default function NewVehiclePage() {
 
   function set(k: string, v: string | string[] | boolean) {
     setForm((p) => ({ ...p, [k]: v }));
+  }
+
+  async function decodeVin() {
+    if (form.vin.length !== 17) return;
+    setVinDecoding(true); setVinMsg('');
+    try {
+      const data = await apiFetch<any>(`/vehicles/decode-vin?vin=${form.vin}`);
+      const d = data?.decoded;
+      if (!d) { setVinMsg(isAr ? 'لم يتم التعرف على هذا الـ VIN' : 'VIN not recognised'); return; }
+      setForm((p) => ({
+        ...p,
+        make:  d.make  || p.make,
+        model: d.model || p.model,
+        year:  d.year  ? String(d.year) : p.year,
+        trim:  d.trim  || p.trim,
+        bodyType:     d.bodyType     || p.bodyType,
+        engineSize:   d.engineSize   || p.engineSize,
+        fuelType:     d.fuelType     || p.fuelType,
+        transmission: d.transmission || p.transmission,
+        driveType:    d.driveType    || p.driveType,
+      }));
+      setVinMsg(isAr ? '✓ تم تعبئة البيانات من VIN' : '✓ Fields filled from VIN');
+    } catch {
+      setVinMsg(isAr ? 'خطأ في الاتصال بـ VIN API' : 'Error reaching VIN API');
+    } finally {
+      setVinDecoding(false);
+    }
   }
 
   function setU(k: string, v: string | boolean) {
@@ -610,8 +639,30 @@ export default function NewVehiclePage() {
                       >
                         <CameraIcon /> {isAr ? 'مسح VIN' : 'Scan VIN'}
                       </button>
+                      <button
+                        type="button"
+                        disabled={form.vin.length !== 17 || vinDecoding}
+                        onClick={decodeVin}
+                        style={{
+                          flexShrink: 0, padding: '0 0.875rem', height: 38,
+                          borderRadius: 8, border: '1px solid var(--brand, #2563eb)',
+                          background: form.vin.length === 17 ? 'var(--brand, #2563eb)' : 'var(--surface-2)',
+                          cursor: form.vin.length === 17 ? 'pointer' : 'not-allowed',
+                          display: 'flex', alignItems: 'center', gap: '0.375rem',
+                          fontSize: '0.8125rem', fontWeight: 600,
+                          color: form.vin.length === 17 ? '#fff' : 'var(--text-3)', whiteSpace: 'nowrap',
+                          opacity: form.vin.length === 17 ? 1 : 0.5,
+                        }}
+                      >
+                        {vinDecoding ? '…' : (isAr ? 'فك رموز VIN' : 'Decode VIN')}
+                      </button>
                     </div>
-                    <p style={{ fontSize: '0.6875rem', color: form.vin.length === 17 ? 'var(--success-fg)' : 'var(--text-3)', marginTop: '0.25rem' }}>
+                    {vinMsg && (
+                      <p style={{ fontSize: '0.6875rem', color: vinMsg.startsWith('✓') ? 'var(--success-fg)' : 'var(--danger)', marginTop: '0.25rem' }}>
+                        {vinMsg}
+                      </p>
+                    )}
+                    <p style={{ fontSize: '0.6875rem', color: form.vin.length === 17 ? 'var(--success-fg)' : 'var(--text-3)', marginTop: '0.125rem' }}>
                       {form.vin.length}/17 {isAr ? 'حرف' : 'characters'}{isUsed && form.vin.length === 0 ? (isAr ? ' — اتركه فارغاً إن لم يتوفر' : ' — leave blank if unavailable') : ''}
                     </p>
                   </div>
