@@ -233,15 +233,16 @@ export default function NewVehiclePage() {
       if (!d) { setVinMsg(isAr ? 'لم يتم التعرف على هذا الـ VIN' : 'VIN not recognised'); return; }
       setForm((p) => ({
         ...p,
-        make:  d.make  || p.make,
-        model: d.model || p.model,
-        year:  d.year  ? String(d.year) : p.year,
-        trim:  d.trim  || p.trim,
-        bodyType:     d.bodyType     || p.bodyType,
-        engineSize:   d.engineSize   || p.engineSize,
-        fuelType:     d.fuelType     || p.fuelType,
-        transmission: d.transmission || p.transmission,
-        driveType:    d.driveType    || p.driveType,
+        make:        d.make         || p.make,
+        model:       d.model        || p.model,
+        year:        d.year         ? String(d.year) : p.year,
+        trim:        d.trim         || p.trim,
+        bodyType:    d.bodyType     || p.bodyType,
+        engineType:  d.engineSize   || p.engineType,
+        fuelType:    d.fuelType     || p.fuelType,
+        transmission:d.transmission || p.transmission,
+        driveType:   d.driveType    || p.driveType,
+        doors:       d.doors        ? String(d.doors) : p.doors,
       }));
       setVinMsg(isAr ? '✓ تم تعبئة البيانات من VIN' : '✓ Fields filled from VIN');
     } catch {
