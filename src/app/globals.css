@@ -107,7 +107,7 @@
   --color-orange-bg:  var(--orange-bg);
   --color-orange-fg:  var(--orange-fg);
 
-  --font-sans: "Inter", "system-ui", sans-serif;
+  --font-sans: "Cairo", "system-ui", sans-serif;
 }
 
 /* ─── Base ──────────────────────────────────────────────────────────────── */
