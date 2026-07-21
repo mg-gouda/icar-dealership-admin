@@ -392,10 +392,11 @@ export default function DealDetailPage() {
       );
       load();
       const collected = result?.installmentPlan?.installments?.find((l) => l.id === lineId);
-      if (collected?.paymentId) {
-        if (confirm(isAr ? 'تم التسجيل. هل تريد طباعة الإيصال؟' : 'Collected. Print receipt?')) {
-          window.open(`/finance/payments/${collected.paymentId}/receipt`, '_blank');
-        }
+      const receiptUrl = collected?.paymentId
+        ? `/finance/payments/${collected.paymentId}/receipt`
+        : `/deals/${id}/lines/${lineId}/receipt`;
+      if (confirm(isAr ? 'تم التسجيل. هل تريد طباعة الإيصال؟' : 'Collected. Print receipt?')) {
+        window.open(receiptUrl, '_blank');
       }
     }
     catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
@@ -808,8 +809,12 @@ export default function DealDetailPage() {
                               {collectingLine === l.id ? '…' : (isAr ? 'تسجيل الدفع' : 'Record Payment')}
                             </button>
                           )}
-                          {l.status === 'PAID' && l.payment?.id && (
-                            <a href={`/finance/payments/${l.payment.id}/receipt`} target="_blank" rel="noreferrer"
+                          {l.status === 'PAID' && (
+                            <a
+                              href={l.payment?.id
+                                ? `/finance/payments/${l.payment.id}/receipt`
+                                : `/deals/${id}/lines/${l.id}/receipt`}
+                              target="_blank" rel="noreferrer"
                               className="btn btn-ghost btn-sm" style={{ color: 'var(--text-3)', fontSize: '0.7rem' }}>
                               {isAr ? '🖨 إيصال' : '🖨 Receipt'}
                             </a>
