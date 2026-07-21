@@ -28,13 +28,13 @@ function NewDealContent() {
   ];
 
   const { data: usersRaw } = useQuery<User[]>('/users');
-  const { data: vehiclesRes } = useQuery<{ data: Vehicle[] }>('/vehicles?status=AVAILABLE&limit=200');
+  const { data: vehiclesRes } = useQuery<{ items: Vehicle[] }>('/vehicles?status=AVAILABLE&limit=200');
   const { data: locationsRaw } = useQuery<Location[]>('/locations');
   const { data: lead } = useQuery<any>(leadId ? `/leads/${leadId}` : null);
 
   const customers = useMemo(() => (usersRaw ?? []).filter((u) => u.role === 'CUSTOMER'), [usersRaw]);
   const salesReps = useMemo(() => (usersRaw ?? []).filter((u) => ['SALES_REP', 'MANAGER'].includes(u.role)), [usersRaw]);
-  const vehicles = vehiclesRes?.data ?? [];
+  const vehicles = vehiclesRes?.items ?? [];
   const locations = Array.isArray(locationsRaw) ? locationsRaw : [];
 
   const [form, setForm] = useState({
