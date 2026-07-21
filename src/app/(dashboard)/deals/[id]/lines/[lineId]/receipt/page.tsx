@@ -212,12 +212,6 @@ export default function LineReceiptPage() {
               <BRow labelEn="Amount in Words" labelAr="المبلغ كتابةً" valueEn={toEn(rec.amount)} valueAr={toAr(rec.amount)}/>
               <BRow labelEn="Description" labelAr="البيان" valueEn={descEn} valueAr={descAr}/>
               <BRow labelEn="Installment No." labelAr="رقم القسط" valueEn={String(rec.installmentNumber)} valueAr={String(rec.installmentNumber)}/>
-              {rec.interestPortion>0&&(
-                <>
-                  <BRow labelEn="Principal" labelAr="أصل القسط" valueEn={`EGP ${egp(rec.principalPortion)}`} valueAr={`${egp(rec.principalPortion)} ج.م`}/>
-                  <BRow labelEn="Interest" labelAr="الفائدة" valueEn={`EGP ${egp(rec.interestPortion)}`} valueAr={`${egp(rec.interestPortion)} ج.م`}/>
-                </>
-              )}
               {rec.vehicle?.vin&&<BRow labelEn="VIN" labelAr="رقم الهيكل" valueEn={rec.vehicle.vin!} valueAr={rec.vehicle.vin!}/>}
             </tbody>
           </table>
