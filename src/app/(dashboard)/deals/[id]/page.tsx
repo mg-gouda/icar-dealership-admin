@@ -949,6 +949,34 @@ export default function DealDetailPage() {
         </div>
       </div>
 
+      {/* ── Final Inspection ───────────────────────────────────────────── */}
+      {deal.status === 'FINALIZED' && (
+        <div style={{ marginTop: '1.5rem' }}>
+          <p className="section-label" style={{ marginBottom: '1rem' }}>{isAr ? 'الفحص النهائي' : 'Final Inspection'}</p>
+          <div className="card" style={{ padding: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+            <div>
+              <p style={{ fontWeight: 600, fontSize: '0.9375rem', color: 'var(--text-1)', marginBottom: '0.25rem' }}>
+                {isAr ? 'استمارة الفحص النهائي للسيارة' : 'Vehicle Final Inspection Checklist'}
+              </p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
+                {isAr
+                  ? 'أكمل الفحص الشامل للسيارة واطبع الاستمارة للتوقيع قبل تسليم المفاتيح للعميل.'
+                  : 'Complete the full vehicle inspection checklist, print and sign before handing keys to the customer.'}
+              </p>
+            </div>
+            <a
+              href={`/deals/${id}/inspection`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-primary btn-sm"
+              style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+            >
+              {isAr ? '🔍 فتح استمارة الفحص' : '🔍 Open Inspection Sheet'}
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* ── Activity Timeline ───────────────────────────────────────────── */}
       <div style={{ marginTop: '1.5rem' }}>
         <p className="section-label" style={{ marginBottom: '1rem' }}>{isAr ? 'النشاط' : 'Activity'}</p>
