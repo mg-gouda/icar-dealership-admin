@@ -294,21 +294,28 @@ export default function DealDetailPage() {
   const principal = Math.max(0, salePrice - ipForm.downPayment);
   // ponytail: preview calc mirrors service logic exactly
   let monthly = 0;
+  let monthlyLast = 0; // only differs from monthly for AMORTIZING (decreasing)
   let totalPayable = 0;
   if (ipForm.durationMonths > 0) {
-    if (ipForm.calcMethod === 'AMORTIZING' && ipForm.interestRate > 0) {
-      const r = ipForm.interestRate / 100 / 12;
-      monthly = principal * r * Math.pow(1 + r, ipForm.durationMonths) / (Math.pow(1 + r, ipForm.durationMonths) - 1);
-      totalPayable = monthly * ipForm.durationMonths;
-    } else if (ipForm.calcMethod === 'COMPOUND' && ipForm.interestRate > 0) {
-      const r = Math.pow(1 + ipForm.interestRate / 100, 1 / 12) - 1;
-      monthly = principal * r * Math.pow(1 + r, ipForm.durationMonths) / (Math.pow(1 + r, ipForm.durationMonths) - 1);
-      totalPayable = monthly * ipForm.durationMonths;
+    const n = ipForm.durationMonths;
+    const annual = ipForm.interestRate / 100;
+    if (ipForm.calcMethod === 'AMORTIZING') {
+      // متناقصة: fixed principal + interest on remaining balance
+      const r = annual / 12;
+      const chunk = principal / n;
+      monthly = chunk + principal * r;               // first (highest)
+      monthlyLast = chunk + chunk * r;               // last (lowest)
+      totalPayable = principal * (1 + r * (n + 1) / 2);
+    } else if (ipForm.calcMethod === 'COMPOUND') {
+      // مركبة (A): compound total ÷ n
+      totalPayable = principal * Math.pow(1 + annual, n / 12);
+      monthly = totalPayable / n;
+      monthlyLast = monthly;
     } else {
-      // FLAT: simple interest spread evenly
-      const totalInterest = principal * (ipForm.interestRate / 100) * (ipForm.durationMonths / 12);
-      totalPayable = principal + totalInterest;
-      monthly = totalPayable / ipForm.durationMonths;
+      // ثابتة: simple interest spread evenly
+      totalPayable = principal + principal * annual * (n / 12);
+      monthly = totalPayable / n;
+      monthlyLast = monthly;
     }
   }
 
@@ -317,7 +324,7 @@ export default function DealDetailPage() {
     try {
       await apiFetch(`/deals/${id}/installment-plan`, {
         method: 'POST',
-        body: JSON.stringify({ principalAmount: principal, downPayment: ipForm.downPayment, interestRate: ipForm.interestRate, durationMonths: ipForm.durationMonths, calculationMethod: ipForm.calcMethod, totalPayable, monthlyInstallment: monthly, startDate: ipForm.startDate }),
+        body: JSON.stringify({ principalAmount: principal, downPayment: ipForm.downPayment, interestRate: ipForm.interestRate, durationMonths: ipForm.durationMonths, calculationMethod: ipForm.calcMethod, totalPayable, monthlyInstallment: ipForm.calcMethod === 'AMORTIZING' ? undefined : monthly, startDate: ipForm.startDate }),
       });
       load();
     } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
@@ -733,7 +740,10 @@ export default function DealDetailPage() {
                   </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', marginBottom: '1rem' }}>
-                  {(isAr ? [['أصل المبلغ', fmt(principal)], ['إجمالي المدفوع', fmt(totalPayable)], ['القسط الشهري', fmt(monthly)]] : [['Principal', fmt(principal)], ['Total Payable', fmt(totalPayable)], ['Monthly', fmt(monthly)]]).map(([l, v]) => (
+                  {(isAr
+                    ? [['أصل المبلغ', fmt(principal)], ['إجمالي المدفوع', fmt(totalPayable)], ['القسط الشهري', ipForm.calcMethod === 'AMORTIZING' ? `${fmt(monthly)} ← ${fmt(monthlyLast)}` : fmt(monthly)]]
+                    : [['Principal', fmt(principal)], ['Total Payable', fmt(totalPayable)], ['Monthly', ipForm.calcMethod === 'AMORTIZING' ? `${fmt(monthly)} → ${fmt(monthlyLast)}` : fmt(monthly)]]
+                  ).map(([l, v]) => (
                     <div key={l} style={{ background: 'var(--surface-2)', borderRadius: '0.375rem', padding: '0.625rem 0.875rem', border: '1px solid var(--border)' }}>
                       <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', marginBottom: '0.2rem' }}>{l}</p>
                       <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-1)' }}>{v}</p>
