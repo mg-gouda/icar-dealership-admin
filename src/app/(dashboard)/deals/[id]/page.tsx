@@ -22,7 +22,7 @@ interface BankApproval { approvalReferenceNumber: string; approvedAmount: number
 interface FinanceApp {
   id: string; status: string; bankFinancingStatus: string;
   bankName?: string; bankBranch?: string;
-  termMonths?: number; apr?: number;
+  termMonths?: number; apr?: number; interestType?: string;
   requiredDocuments: Document[]; bankApproval?: BankApproval;
 }
 interface DealCommission {
@@ -221,9 +221,9 @@ export default function DealDetailPage() {
     { value: 'REJECTED', label: 'Rejected' },
   ];
   const CALC_METHOD_OPTS = isAr ? [
-    { value: 'FLAT_RATE', label: 'سعر ثابت' }, { value: 'REDUCING_BALANCE', label: 'إطفاء' },
+    { value: 'FLAT', label: 'ثابتة' }, { value: 'COMPOUND', label: 'مركبة' }, { value: 'AMORTIZING', label: 'متناقصة' },
   ] : [
-    { value: 'FLAT_RATE', label: 'Flat Rate' }, { value: 'REDUCING_BALANCE', label: 'Amortizing' },
+    { value: 'FLAT', label: 'Fixed' }, { value: 'COMPOUND', label: 'Compound' }, { value: 'AMORTIZING', label: 'Declining Balance' },
   ];
   const [deal, setDeal] = useState<Deal | null>(null);
   const [loading, setLoading] = useState(true);
@@ -231,11 +231,11 @@ export default function DealDetailPage() {
 
   const [payTab, setPayTab] = useState<'CASH' | 'BANK_FINANCING' | 'DEALERSHIP_INSTALLMENT'>('CASH');
 
-  const [ipForm, setIpForm] = useState({ downPayment: 0, durationMonths: 24, interestRate: 0, calcMethod: 'FLAT_RATE', startDate: defaultStartDate() });
+  const [ipForm, setIpForm] = useState({ downPayment: 0, durationMonths: 24, interestRate: 0, calcMethod: 'FLAT', startDate: defaultStartDate() });
   const [generatingPlan, setGeneratingPlan] = useState(false);
 
   const [showFACreate, setShowFACreate] = useState(false);
-  const [faForm, setFaForm] = useState({ bankName: '', bankBranch: '', termMonths: '', apr: '' });
+  const [faForm, setFaForm] = useState({ bankName: '', bankBranch: '', termMonths: '', apr: '', interestType: 'FLAT' });
   const [savingFA, setSavingFA] = useState(false);
   const [showApproval, setShowApproval] = useState(false);
   const [approvalForm, setApprovalForm] = useState({ approvalReferenceNumber: '', approvedAmount: '', approvalDate: '', expiryDate: '', notes: '' });
@@ -292,17 +292,24 @@ export default function DealDetailPage() {
   const totalDue = salePrice - tradeInCredit + adminFee + insurance + vat;
 
   const principal = Math.max(0, salePrice - ipForm.downPayment);
-  // ponytail: PMT formula for reducing balance; flat simple-interest for flat rate
+  // ponytail: preview calc mirrors service logic exactly
   let monthly = 0;
   let totalPayable = 0;
-  if (ipForm.calcMethod === 'REDUCING_BALANCE' && ipForm.durationMonths > 0 && ipForm.interestRate > 0) {
-    const r = ipForm.interestRate / 100 / 12;
-    monthly = principal * r * Math.pow(1 + r, ipForm.durationMonths) / (Math.pow(1 + r, ipForm.durationMonths) - 1);
-    totalPayable = monthly * ipForm.durationMonths;
-  } else {
-    const totalInterest = principal * (ipForm.interestRate / 100) * (ipForm.durationMonths / 12);
-    totalPayable = principal + totalInterest;
-    monthly = ipForm.durationMonths > 0 ? totalPayable / ipForm.durationMonths : 0;
+  if (ipForm.durationMonths > 0) {
+    if (ipForm.calcMethod === 'AMORTIZING' && ipForm.interestRate > 0) {
+      const r = ipForm.interestRate / 100 / 12;
+      monthly = principal * r * Math.pow(1 + r, ipForm.durationMonths) / (Math.pow(1 + r, ipForm.durationMonths) - 1);
+      totalPayable = monthly * ipForm.durationMonths;
+    } else if (ipForm.calcMethod === 'COMPOUND' && ipForm.interestRate > 0) {
+      const r = Math.pow(1 + ipForm.interestRate / 100, 1 / 12) - 1;
+      monthly = principal * r * Math.pow(1 + r, ipForm.durationMonths) / (Math.pow(1 + r, ipForm.durationMonths) - 1);
+      totalPayable = monthly * ipForm.durationMonths;
+    } else {
+      // FLAT: simple interest spread evenly
+      const totalInterest = principal * (ipForm.interestRate / 100) * (ipForm.durationMonths / 12);
+      totalPayable = principal + totalInterest;
+      monthly = totalPayable / ipForm.durationMonths;
+    }
   }
 
   async function generatePlan(e: React.FormEvent) {
@@ -578,6 +585,19 @@ export default function DealDetailPage() {
                       </div>
                     ))}
                   </div>
+
+                  {/* Loan summary */}
+                  {(fa.termMonths || fa.apr || fa.interestType) && (
+                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.25rem', padding: '0.75rem', background: 'var(--surface-2)', borderRadius: '0.5rem' }}>
+                      {fa.termMonths && <div><p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', textTransform: 'uppercase', fontWeight: 600 }}>{isAr ? 'المدة' : 'Term'}</p><p style={{ fontSize: '0.875rem', fontWeight: 600 }}>{fa.termMonths} {isAr ? 'شهر' : 'mo'}</p></div>}
+                      {fa.apr && <div><p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', textTransform: 'uppercase', fontWeight: 600 }}>{isAr ? 'معدل الفائدة' : 'Rate'}</p><p style={{ fontSize: '0.875rem', fontWeight: 600 }}>{Number(fa.apr).toFixed(2)}%</p></div>}
+                      {fa.interestType && <div><p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', textTransform: 'uppercase', fontWeight: 600 }}>{isAr ? 'نوع الفائدة' : 'Interest Type'}</p><p style={{ fontSize: '0.875rem', fontWeight: 600 }}>
+                        {isAr
+                          ? ({ FLAT: 'ثابتة', COMPOUND: 'مركبة', AMORTIZING: 'متناقصة' } as Record<string,string>)[fa.interestType] ?? fa.interestType
+                          : ({ FLAT: 'Fixed', COMPOUND: 'Compound', AMORTIZING: 'Declining' } as Record<string,string>)[fa.interestType] ?? fa.interestType}
+                      </p></div>}
+                    </div>
+                  )}
 
                   {/* Documents */}
                   <p className="section-label" style={{ marginBottom: '0.75rem' }}>{isAr ? 'المستندات المطلوبة' : 'Required Documents'}</p>
@@ -953,7 +973,24 @@ export default function DealDetailPage() {
             <ModalField label={isAr ? 'اسم البنك *' : 'Bank Name *'} value={faForm.bankName} onChange={(v) => setFaForm((p) => ({ ...p, bankName: v }))} required />
             <ModalField label={isAr ? 'الفرع' : 'Branch'} value={faForm.bankBranch} onChange={(v) => setFaForm((p) => ({ ...p, bankBranch: v }))} />
             <ModalField label={isAr ? 'المدة (شهور)' : 'Term (months)'} type="number" value={faForm.termMonths} onChange={(v) => setFaForm((p) => ({ ...p, termMonths: v }))} />
-            <ModalField label={isAr ? 'معدل الفائدة (%)' : 'APR (%)'} type="number" value={faForm.apr} onChange={(v) => setFaForm((p) => ({ ...p, apr: v }))} />
+            <ModalField label={isAr ? 'معدل الفائدة (%)' : 'Interest Rate (%)'} type="number" value={faForm.apr} onChange={(v) => setFaForm((p) => ({ ...p, apr: v }))} />
+            <div>
+              <p className="input-label">{isAr ? 'نوع الفائدة' : 'Interest Type'}</p>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {(isAr
+                  ? [{ value: 'FLAT', label: 'ثابتة' }, { value: 'COMPOUND', label: 'مركبة' }, { value: 'AMORTIZING', label: 'متناقصة' }]
+                  : [{ value: 'FLAT', label: 'Fixed' }, { value: 'COMPOUND', label: 'Compound' }, { value: 'AMORTIZING', label: 'Declining' }]
+                ).map(o => (
+                  <button key={o.value} type="button" onClick={() => setFaForm(p => ({ ...p, interestType: o.value }))}
+                    style={{ flex: 1, padding: '0.4rem', fontSize: '0.75rem', borderRadius: '0.375rem', border: '1px solid', cursor: 'pointer',
+                      background: faForm.interestType === o.value ? 'var(--primary)' : 'var(--surface)',
+                      color: faForm.interestType === o.value ? '#fff' : 'var(--text-2)',
+                      borderColor: faForm.interestType === o.value ? 'var(--primary)' : 'var(--border)' }}>
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div style={{ display: 'flex', gap: '0.625rem', marginTop: '0.25rem' }}>
               <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowFACreate(false)}>{isAr ? 'إلغاء' : 'Cancel'}</button>
               <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={savingFA}>{savingFA ? '…' : (isAr ? 'إنشاء' : 'Create')}</button>
