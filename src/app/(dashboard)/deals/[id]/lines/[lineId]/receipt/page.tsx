@@ -21,7 +21,7 @@ interface LineReceipt {
   paymentId?: string | null;
 }
 
-interface BrandState { logoUrl: string; displayName: string }
+interface BrandState { logoUrl: string; displayName: string; displayNameAr: string; primaryColor: string }
 
 // ── Arabic words ─────────────────────────────────────────────────────────────
 
@@ -93,10 +93,10 @@ const egp = (n: number) => Number(n).toLocaleString('en-EG',{minimumFractionDigi
 export default function LineReceiptPage() {
   const { id: dealId, lineId } = useParams<{ id: string; lineId: string }>();
   const { data: rec, loading, error } = useQuery<LineReceipt>(`/deals/${dealId}/installment-plan/lines/${lineId}/receipt`,[dealId,lineId]);
-  const [brand, setBrand] = useState<BrandState>({logoUrl:'',displayName:''});
+  const [brand, setBrand] = useState<BrandState>({logoUrl:'',displayName:'',displayNameAr:'',primaryColor:'var(--rp)'});
 
   useEffect(() => {
-    try { const r=localStorage.getItem('dealerms_brand'); if(r) setBrand({...{logoUrl:'',displayName:''},...JSON.parse(r)}); } catch {}
+    try { const r=localStorage.getItem('dealerms_brand'); if(r) setBrand({...{logoUrl:'',displayName:'',displayNameAr:'',primaryColor:'var(--rp)'},...JSON.parse(r)}); } catch {}
   },[]);
 
   if (loading) return <div className="p-8 text-center text-gray-400 text-sm">جاري التحميل… / Loading…</div>;
@@ -153,24 +153,27 @@ export default function LineReceiptPage() {
 
       {/* Receipt */}
       <div className="receipt-page mx-auto my-8 max-w-[210mm] bg-white text-gray-900 shadow-2xl"
-        style={{padding:'12mm 14mm',fontFamily:'"Segoe UI",Tahoma,Arial,sans-serif'}}>
+        style={{padding:'12mm 14mm',fontFamily:'"Segoe UI",Tahoma,Arial,sans-serif','--rp':brand.primaryColor} as React.CSSProperties}>
 
         {/* Letterhead */}
-        <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'6mm',borderBottom:'2px solid #1a3a5c',paddingBottom:'4mm'}}>
-          <div style={{display:'flex',alignItems:'center',gap:'4mm'}}>
-            {brand.logoUrl
-              ? <img src={brand.logoUrl} alt="logo" style={{height:'14mm',width:'auto',objectFit:'contain'}}/>
-              : <div style={{width:'14mm',height:'14mm',borderRadius:'3mm',background:'#1a3a5c',display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{color:'#fff',fontWeight:700,fontSize:'5mm'}}>iC</span></div>
-            }
-            <div>
-              <div style={{fontWeight:700,fontSize:'5mm',color:'#1a3a5c',lineHeight:1.2}}>{companyName}</div>
-              {companyAddr&&<div style={{fontSize:'3mm',color:'#555',marginTop:'0.5mm'}}>{companyAddr}{companyCity?`, ${companyCity}`:''}</div>}
-              {companyPhone&&<div style={{fontSize:'3mm',color:'#555'}}>Tel: {companyPhone}</div>}
-              {companyTaxId&&<div style={{fontSize:'3mm',color:'#555'}}>Tax ID: {companyTaxId}</div>}
-            </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr',alignItems:'center',gap:'6mm',marginBottom:'6mm',borderBottom:'2px solid var(--rp)',paddingBottom:'4mm'}}>
+          {/* EN info — left */}
+          <div style={{direction:'ltr'}}>
+            <div style={{fontWeight:700,fontSize:'5mm',color:'var(--rp)',lineHeight:1.2}}>{companyName}</div>
+            {companyAddr&&<div style={{fontSize:'3mm',color:'#555',marginTop:'0.5mm'}}>{companyAddr}{companyCity?`, ${companyCity}`:''}</div>}
+            {companyPhone&&<div style={{fontSize:'3mm',color:'#555'}}>Tel: {companyPhone}</div>}
+            {companyTaxId&&<div style={{fontSize:'3mm',color:'#555'}}>Tax ID: {companyTaxId}</div>}
           </div>
+          {/* Logo — center */}
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
+            {brand.logoUrl
+              ? <img src={brand.logoUrl} alt="logo" style={{height:'16mm',width:'auto',objectFit:'contain'}}/>
+              : <div style={{width:'16mm',height:'16mm',borderRadius:'3mm',background:'var(--rp)',display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{color:'#fff',fontWeight:700,fontSize:'5mm'}}>iC</span></div>
+            }
+          </div>
+          {/* AR info — right */}
           <div style={{textAlign:'right',direction:'rtl'}}>
-            <div style={{fontWeight:700,fontSize:'5mm',color:'#1a3a5c',lineHeight:1.2}}>{companyName}</div>
+            <div style={{fontWeight:700,fontSize:'5mm',color:'var(--rp)',lineHeight:1.2}}>{brand.displayNameAr||companyName}</div>
             {companyAddr&&<div style={{fontSize:'3mm',color:'#555',marginTop:'0.5mm'}}>{companyAddr}{companyCity?`، ${companyCity}`:''}</div>}
             {companyPhone&&<div style={{fontSize:'3mm',color:'#555'}}>هاتف: {companyPhone}</div>}
             {companyTaxId&&<div style={{fontSize:'3mm',color:'#555'}}>الرقم الضريبي: {companyTaxId}</div>}
@@ -178,7 +181,7 @@ export default function LineReceiptPage() {
         </div>
 
         {/* Title */}
-        <div style={{background:'#1a3a5c',color:'#fff',textAlign:'center',padding:'3mm 0',borderRadius:'1.5mm',marginBottom:'5mm'}}>
+        <div style={{background:'var(--rp)',color:'#fff',textAlign:'center',padding:'3mm 0',borderRadius:'1.5mm',marginBottom:'5mm'}}>
           <div style={{fontSize:'6mm',fontWeight:700,letterSpacing:'0.5mm'}}>إيصال استلام قسط</div>
           <div style={{fontSize:'4mm',fontWeight:400,letterSpacing:'1mm',marginTop:'1mm',opacity:0.85}}>INSTALLMENT PAYMENT RECEIPT</div>
         </div>
@@ -200,10 +203,10 @@ export default function LineReceiptPage() {
         </div>
 
         {/* Divider */}
-        <div style={{borderTop:'1.5px solid #1a3a5c',margin:'3mm 0'}}/>
+        <div style={{borderTop:'1.5px solid var(--rp)',margin:'3mm 0'}}/>
 
         {/* Body table */}
-        <div style={{border:'1.5px solid #1a3a5c',borderRadius:'1.5mm',overflow:'hidden',marginBottom:'5mm'}}>
+        <div style={{border:'1.5px solid var(--rp)',borderRadius:'1.5mm',overflow:'hidden',marginBottom:'5mm'}}>
           <table style={{width:'100%',borderCollapse:'collapse'}}>
             <tbody>
               <BRow labelEn="Received From" labelAr="استُلم من" valueEn={rec.customer.name} valueAr={rec.customer.name} highlight/>
@@ -218,7 +221,7 @@ export default function LineReceiptPage() {
         </div>
 
         {/* Divider */}
-        <div style={{borderTop:'1.5px solid #1a3a5c',margin:'3mm 0 5mm'}}/>
+        <div style={{borderTop:'1.5px solid var(--rp)',margin:'3mm 0 5mm'}}/>
 
         {/* Signatures */}
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10mm',marginTop:'4mm'}}>
@@ -230,7 +233,7 @@ export default function LineReceiptPage() {
         <div style={{marginTop:'8mm',borderTop:'1px dashed #aab',paddingTop:'3mm',textAlign:'center'}}>
           <div style={{display:'flex',justifyContent:'space-between',fontSize:'2.5mm',color:'#666'}}>
             <span>هذا الإيصال مستند رسمي — يُرجى الاحتفاظ به</span>
-            <span style={{letterSpacing:'0.3mm',color:'#1a3a5c',fontWeight:600}}>{rec.receiptNumber}</span>
+            <span style={{letterSpacing:'0.3mm',color:'var(--rp)',fontWeight:600}}>{rec.receiptNumber}</span>
             <span>This receipt is an official document — please retain it</span>
           </div>
         </div>
@@ -256,8 +259,8 @@ function BRow({labelEn,labelAr,valueEn,valueAr,highlight,amountStyle}:{
   return (
     <tr style={{background:highlight?'#eef3f9':'transparent',borderBottom:'1px solid #d0d8e4'}}>
       <td style={{padding:'2.5mm 3mm',width:'22%',fontSize:'2.8mm',color:'#555',borderRight:'1px solid #d0d8e4'}}>{labelEn}</td>
-      <td style={{padding:'2.5mm 3mm',width:'28%',fontSize:amountStyle?'4mm':'3mm',fontWeight:amountStyle?700:500,color:amountStyle?'#1a3a5c':'#111',borderRight:'1.5px solid #8aa',fontVariantNumeric:'tabular-nums'}}>{valueEn}</td>
-      <td style={{padding:'2.5mm 3mm',width:'28%',direction:'rtl',textAlign:'right',fontSize:amountStyle?'4mm':'3mm',fontWeight:amountStyle?700:500,color:amountStyle?'#1a3a5c':'#111',borderRight:'1px solid #d0d8e4',fontVariantNumeric:'tabular-nums'}}>{valueAr}</td>
+      <td style={{padding:'2.5mm 3mm',width:'28%',fontSize:amountStyle?'4mm':'3mm',fontWeight:amountStyle?700:500,color:amountStyle?'var(--rp)':'#111',borderRight:'1.5px solid #8aa',fontVariantNumeric:'tabular-nums'}}>{valueEn}</td>
+      <td style={{padding:'2.5mm 3mm',width:'28%',direction:'rtl',textAlign:'right',fontSize:amountStyle?'4mm':'3mm',fontWeight:amountStyle?700:500,color:amountStyle?'var(--rp)':'#111',borderRight:'1px solid #d0d8e4',fontVariantNumeric:'tabular-nums'}}>{valueAr}</td>
       <td style={{padding:'2.5mm 3mm',width:'22%',direction:'rtl',textAlign:'right',fontSize:'2.8mm',color:'#555'}}>{labelAr}</td>
     </tr>
   );
@@ -269,7 +272,7 @@ function SigBlock({titleEn,titleAr,prefillName,dateEn,dateAr,dateValue,rtl}:{
   return (
     <div style={{border:'1px solid #c0cad6',borderRadius:'1.5mm',padding:'3mm 4mm',direction:rtl?'rtl':'ltr'}}>
       <div style={{textAlign:'center',marginBottom:'3mm'}}>
-        <div style={{fontSize:'3.2mm',fontWeight:700,color:'#1a3a5c'}}>{rtl?titleAr:titleEn}</div>
+        <div style={{fontSize:'3.2mm',fontWeight:700,color:'var(--rp)'}}>{rtl?titleAr:titleEn}</div>
         <div style={{fontSize:'2.5mm',color:'#666',marginTop:'0.5mm'}}>{rtl?titleEn:titleAr}</div>
       </div>
       <div style={{height:'14mm',borderBottom:'1px solid #333',marginBottom:'2mm',position:'relative'}}>

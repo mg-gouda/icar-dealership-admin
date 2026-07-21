@@ -4,27 +4,30 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 const APP_NAME = 'iCar Dealership';
 
 interface BrandState {
-  logoUrl:      string;
-  displayName:  string;
-  primaryColor: string;
-  faviconUrl:   string;
+  logoUrl:       string;
+  displayName:   string;
+  displayNameAr: string;
+  primaryColor:  string;
+  faviconUrl:    string;
 }
 
 interface BrandCtx extends BrandState {
-  setLogo:        (url: string) => void;
-  setDisplayName: (name: string) => void;
-  setPrimaryColor:(color: string) => void;
-  setFavicon:     (url: string) => void;
-  saveBrand:      () => void;
+  setLogo:           (url: string) => void;
+  setDisplayName:    (name: string) => void;
+  setDisplayNameAr:  (name: string) => void;
+  setPrimaryColor:   (color: string) => void;
+  setFavicon:        (url: string) => void;
+  saveBrand:         () => void;
 }
 
 const STORAGE_KEY = 'dealerms_brand';
-const DEFAULTS: BrandState = { logoUrl: '', displayName: '', primaryColor: '#3B82F6', faviconUrl: '' };
+const DEFAULTS: BrandState = { logoUrl: '', displayName: '', displayNameAr: '', primaryColor: '#3B82F6', faviconUrl: '' };
 
 const BrandContext = createContext<BrandCtx>({
   ...DEFAULTS,
   setLogo: () => {},
   setDisplayName: () => {},
+  setDisplayNameAr: () => {},
   setPrimaryColor: () => {},
   setFavicon: () => {},
   saveBrand: () => {},
@@ -76,6 +79,7 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
 
   function setLogo(url: string) { setState(p => ({ ...p, logoUrl: url })); }
   function setDisplayName(name: string) { setState(p => ({ ...p, displayName: name })); }
+  function setDisplayNameAr(name: string) { setState(p => ({ ...p, displayNameAr: name })); }
   function setPrimaryColor(color: string) {
     setState(p => ({ ...p, primaryColor: color }));
     applyColor(color);
@@ -91,7 +95,7 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <BrandContext.Provider value={{ ...state, setLogo, setDisplayName, setPrimaryColor, setFavicon, saveBrand }}>
+    <BrandContext.Provider value={{ ...state, setLogo, setDisplayName, setDisplayNameAr, setPrimaryColor, setFavicon, saveBrand }}>
       {children}
     </BrandContext.Provider>
   );

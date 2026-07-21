@@ -421,7 +421,7 @@ function LocationsTab() {
 
 // ── Branding Tab ──────────────────────────────────────────────────────────────
 function BrandingTab() {
-  const { logoUrl, displayName, primaryColor, faviconUrl, setLogo, setDisplayName, setPrimaryColor, setFavicon, saveBrand } = useBrand();
+  const { logoUrl, displayName, displayNameAr, primaryColor, faviconUrl, setLogo, setDisplayName, setDisplayNameAr, setPrimaryColor, setFavicon, saveBrand } = useBrand();
   const [saved, setSaved] = useState(false);
   const { isAr } = useLang();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -541,9 +541,14 @@ function BrandingTab() {
             </div>
           </div>
           <div>
-            <label className="input-label">{isAr ? 'اسم العرض' : 'Display Name'}</label>
+            <label className="input-label">{isAr ? 'الاسم بالإنجليزية' : 'Name (English)'}</label>
             <input className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)}
-              placeholder={isAr ? 'اسم الشركة أو المعرض' : 'Company or dealership name'} />
+              placeholder="Company or dealership name" dir="ltr" />
+          </div>
+          <div>
+            <label className="input-label">{isAr ? 'الاسم بالعربية' : 'Name (Arabic)'}</label>
+            <input className="input" value={displayNameAr} onChange={(e) => setDisplayNameAr(e.target.value)}
+              placeholder="اسم الشركة أو المعرض" dir="rtl" />
           </div>
         </div>
         <div>
