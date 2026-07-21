@@ -410,9 +410,9 @@ export default function PaymentReceiptPage() {
 
 function Row({ label, value, bold, rtl }: { label: string; value: string; bold?: boolean; rtl?: boolean }) {
   return (
-    <div style={{ display: 'flex', justifyContent: rtl ? 'flex-end' : 'space-between', gap: '2mm', marginBottom: '1.5mm', fontSize: '3mm', fontFamily: rtl ? FONT_AR_BODY : undefined }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', direction: rtl ? 'rtl' : 'ltr', gap: '2mm', marginBottom: '1.5mm', fontSize: '3mm', fontFamily: rtl ? FONT_AR_BODY : undefined }}>
       <span style={{ color: '#555', flexShrink: 0 }}>{label}:</span>
-      <span style={{ fontWeight: bold ? 700 : 500, color: '#111', textAlign: rtl ? 'left' : 'right' }}>{value}</span>
+      <span style={{ fontWeight: bold ? 700 : 500, color: '#111' }}>{value}</span>
     </div>
   );
 }
