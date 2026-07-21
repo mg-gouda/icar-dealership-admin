@@ -16,7 +16,7 @@ const fmt = (n: number) => 'EGP ' + Number(n).toLocaleString('en-EG', { maximumF
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 interface Note { id: string; type: 'NOTE' | 'CALL' | 'EMAIL'; body: string; author?: { name: string }; createdAt: string; }
-interface InstallmentLine { id: string; dueDate: string; amount: number; principalPart?: number; interestPart?: number; status: string; sequence: number; }
+interface InstallmentLine { id: string; dueDate: string; totalDue: number; principalPortion?: number; interestPortion?: number; status: string; installmentNumber: number; paidAmount?: number; }
 interface Document { id: string; documentType: string; status: string; fileUrl?: string; }
 interface BankApproval { approvalReferenceNumber: string; approvedAmount: number; approvalDate: string; expiryDate?: string; notes?: string; }
 interface FinanceApp {
@@ -231,7 +231,7 @@ export default function DealDetailPage() {
 
   const [payTab, setPayTab] = useState<'CASH' | 'BANK_FINANCING' | 'DEALERSHIP_INSTALLMENT'>('CASH');
 
-  const [ipForm, setIpForm] = useState({ downPayment: 0, durationMonths: 24, interestRate: 0, calcMethod: 'FLAT', startDate: defaultStartDate() });
+  const [ipForm, setIpForm] = useState({ downPayment: 0, durationMonths: 24, interestRate: 0, calcMethod: 'FLAT', firstInstallmentDate: defaultStartDate() });
   const [generatingPlan, setGeneratingPlan] = useState(false);
 
   const [showFACreate, setShowFACreate] = useState(false);
@@ -324,7 +324,7 @@ export default function DealDetailPage() {
     try {
       await apiFetch(`/deals/${id}/installment-plan`, {
         method: 'POST',
-        body: JSON.stringify({ principalAmount: principal, downPayment: ipForm.downPayment, interestRate: ipForm.interestRate, durationMonths: ipForm.durationMonths, calculationMethod: ipForm.calcMethod, totalPayable, monthlyInstallment: ipForm.calcMethod === 'AMORTIZING' ? undefined : monthly, startDate: ipForm.startDate }),
+        body: JSON.stringify({ principalAmount: principal, downPayment: ipForm.downPayment, interestRate: ipForm.interestRate, durationMonths: ipForm.durationMonths, calculationMethod: ipForm.calcMethod, totalPayable, monthlyInstallment: ipForm.calcMethod === 'AMORTIZING' ? undefined : monthly, firstInstallmentDate: ipForm.firstInstallmentDate }),
       });
       load();
     } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
@@ -750,6 +750,14 @@ export default function DealDetailPage() {
                     </div>
                   ))}
                 </div>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label className="input-label">{isAr ? 'تاريخ القسط الأول' : 'First Installment Date'}</label>
+                  <input type="date" className="input" value={ipForm.firstInstallmentDate}
+                    onChange={(e) => setIpForm((p) => ({ ...p, firstInstallmentDate: e.target.value }))} />
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginTop: '0.25rem' }}>
+                    {isAr ? 'يمكن تأجيل القسط الأول (عرض ترحيب، فترة سماح)' : 'Defer the first installment for grace-period or welcome offers'}
+                  </p>
+                </div>
                 <button type="submit" disabled={generatingPlan} className="btn btn-primary">
                   {generatingPlan ? '…' : (isAr ? 'إنشاء الجدول' : 'Generate Schedule')}
                 </button>
@@ -774,13 +782,13 @@ export default function DealDetailPage() {
                   <tbody>
                     {installments.map((l) => (
                       <tr key={l.id} style={{ background: l.status === 'OVERDUE' ? 'var(--danger-bg)' : undefined }}>
-                        <td>{l.sequence}</td>
+                        <td>{l.installmentNumber}</td>
                         <td style={{ color: l.status === 'OVERDUE' ? 'var(--danger-fg)' : undefined, fontWeight: l.status === 'OVERDUE' ? 600 : undefined }}>
                           {fmtDate(l.dueDate, isAr, { day: 'numeric', month: 'short', year: 'numeric' })}
                         </td>
-                        <td style={{ textAlign: 'right' }}>{l.principalPart !== undefined ? fmt(l.principalPart) : '—'}</td>
-                        <td style={{ textAlign: 'right' }}>{l.interestPart !== undefined ? fmt(l.interestPart) : '—'}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(Number(l.amount))}</td>
+                        <td style={{ textAlign: 'right' }}>{l.principalPortion !== undefined ? fmt(Number(l.principalPortion)) : '—'}</td>
+                        <td style={{ textAlign: 'right' }}>{l.interestPortion !== undefined ? fmt(Number(l.interestPortion)) : '—'}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(Number(l.totalDue))}</td>
                         <td><span className={`badge ${installmentStatusClass(l.status)}`}>{isAr ? ({ PAID: 'مدفوع', PARTIAL: 'جزئي', PENDING: 'قيد الانتظار', OVERDUE: 'متأخر' } as Record<string,string>)[l.status] ?? l.status : l.status}</span></td>
                         <td>
                           {['PENDING', 'OVERDUE', 'UPCOMING'].includes(l.status) && deal.status === 'FINALIZED' && (
