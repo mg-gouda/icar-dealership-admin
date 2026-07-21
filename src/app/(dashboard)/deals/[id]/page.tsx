@@ -16,7 +16,7 @@ const fmt = (n: number) => 'EGP ' + Number(n).toLocaleString('en-EG', { maximumF
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 interface Note { id: string; type: 'NOTE' | 'CALL' | 'EMAIL'; body: string; author?: { name: string }; createdAt: string; }
-interface InstallmentLine { id: string; dueDate: string; totalDue: number; principalPortion?: number; interestPortion?: number; status: string; installmentNumber: number; paidAmount?: number; }
+interface InstallmentLine { id: string; dueDate: string; totalDue: number; principalPortion?: number; interestPortion?: number; status: string; installmentNumber: number; paidAmount?: number; payment?: { id: string } | null; }
 interface Document { id: string; documentType: string; status: string; fileUrl?: string; }
 interface BankApproval { approvalReferenceNumber: string; approvedAmount: number; approvalDate: string; expiryDate?: string; notes?: string; }
 interface FinanceApp {
@@ -386,7 +386,18 @@ export default function DealDetailPage() {
   async function collectInstallment(lineId: string) {
     if (!confirm(isAr ? 'تسجيل القسط كمحصّل وترحيل القيد المحاسبي؟' : 'Mark as collected and post GL entry?')) return;
     setCollectingLine(lineId);
-    try { await apiFetch(`/deals/${id}/installment-plan/lines/${lineId}/collect`, { method: 'POST' }); load(); }
+    try {
+      const result = await apiFetch<{ installmentPlan?: { installments?: { id: string; paymentId?: string }[] } }>(
+        `/deals/${id}/installment-plan/lines/${lineId}/collect`, { method: 'POST' }
+      );
+      load();
+      const collected = result?.installmentPlan?.installments?.find((l) => l.id === lineId);
+      if (collected?.paymentId) {
+        if (confirm(isAr ? 'تم التسجيل. هل تريد طباعة الإيصال؟' : 'Collected. Print receipt?')) {
+          window.open(`/finance/payments/${collected.paymentId}/receipt`, '_blank');
+        }
+      }
+    }
     catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
     finally { setCollectingLine(null); }
   }
@@ -790,12 +801,18 @@ export default function DealDetailPage() {
                         <td style={{ textAlign: 'right' }}>{l.interestPortion !== undefined ? fmt(Number(l.interestPortion)) : '—'}</td>
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(Number(l.totalDue))}</td>
                         <td><span className={`badge ${installmentStatusClass(l.status)}`}>{isAr ? ({ PAID: 'مدفوع', PARTIAL: 'جزئي', PENDING: 'قيد الانتظار', OVERDUE: 'متأخر' } as Record<string,string>)[l.status] ?? l.status : l.status}</span></td>
-                        <td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
                           {['PENDING', 'OVERDUE', 'UPCOMING'].includes(l.status) && deal.status === 'FINALIZED' && (
                             <button className="btn btn-ghost btn-sm" style={{ color: 'var(--success-fg)', fontSize: '0.75rem' }}
                               disabled={collectingLine === l.id} onClick={() => collectInstallment(l.id)}>
                               {collectingLine === l.id ? '…' : (isAr ? 'تسجيل الدفع' : 'Record Payment')}
                             </button>
+                          )}
+                          {l.status === 'PAID' && l.payment?.id && (
+                            <a href={`/finance/payments/${l.payment.id}/receipt`} target="_blank" rel="noreferrer"
+                              className="btn btn-ghost btn-sm" style={{ color: 'var(--text-3)', fontSize: '0.7rem' }}>
+                              {isAr ? '🖨 إيصال' : '🖨 Receipt'}
+                            </a>
                           )}
                         </td>
                       </tr>

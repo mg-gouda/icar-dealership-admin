@@ -191,6 +191,13 @@ export default function PaymentDetailPage() {
         </div>
 
         <div className="flex gap-2">
+          {(isPosted || payment.status === 'RECONCILED') && (
+            <Link href={`/finance/payments/${id}/receipt`}
+              className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white text-sm rounded-lg transition flex items-center gap-2">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+              {isAr ? 'طباعة إيصال' : 'Print Receipt'}
+            </Link>
+          )}
           {isPosted && remaining > 0 && (
             <button onClick={openAllocate}
               className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-medium rounded-lg transition">
