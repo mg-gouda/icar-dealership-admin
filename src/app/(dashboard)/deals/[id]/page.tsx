@@ -909,7 +909,7 @@ export default function DealDetailPage() {
                 <div style={{ marginTop: '0.875rem', padding: '0.75rem', background: 'var(--surface-2)', borderRadius: '0.375rem', border: '1px solid var(--border)' }}>
                   <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>{isAr ? 'الاستحقاق القادم' : 'Next Due'}</p>
                   <p style={{ fontSize: '0.875rem', fontWeight: 600, color: nextDue.status === 'OVERDUE' ? 'var(--danger-fg)' : 'var(--text-1)' }}>
-                    {fmt(Number(nextDue.amount))}
+                    {fmt(Number(nextDue.totalDue))}
                   </p>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-2)', marginTop: '0.1rem' }}>
                     {fmtDate(nextDue.dueDate, isAr, { weekday: 'short', day: 'numeric', month: 'short' })}
