@@ -23,6 +23,9 @@ interface LineReceipt {
 
 interface BrandState { logoUrl: string; displayName: string; displayNameAr: string; primaryColor: string }
 
+const FONT_AR_HEADING = '"Cairo", sans-serif';
+const FONT_AR_BODY = '"Times New Roman", Times, serif';
+
 // ── Arabic words ─────────────────────────────────────────────────────────────
 
 const AR_ONES = ['','واحد','اثنان','ثلاثة','أربعة','خمسة','ستة','سبعة','ثمانية','تسعة','عشرة','أحد عشر','اثنا عشر','ثلاثة عشر','أربعة عشر','خمسة عشر','ستة عشر','سبعة عشر','ثمانية عشر','تسعة عشر'];
@@ -172,8 +175,8 @@ export default function LineReceiptPage() {
             }
           </div>
           {/* AR info — right */}
-          <div style={{textAlign:'right',direction:'rtl'}}>
-            <div style={{fontWeight:700,fontSize:'5mm',color:'var(--rp)',lineHeight:1.2}}>{brand.displayNameAr||companyName}</div>
+          <div style={{textAlign:'right',direction:'rtl',fontFamily:FONT_AR_BODY}}>
+            <div style={{fontWeight:700,fontSize:'5mm',color:'var(--rp)',lineHeight:1.2,fontFamily:FONT_AR_HEADING}}>{brand.displayNameAr||companyName}</div>
             {companyAddr&&<div style={{fontSize:'3mm',color:'#555',marginTop:'0.5mm'}}>{companyAddr}{companyCity?`، ${companyCity}`:''}</div>}
             {companyPhone&&<div style={{fontSize:'3mm',color:'#555'}}>هاتف: {companyPhone}</div>}
             {companyTaxId&&<div style={{fontSize:'3mm',color:'#555'}}>الرقم الضريبي: {companyTaxId}</div>}
@@ -194,7 +197,7 @@ export default function LineReceiptPage() {
             <MRow label="Date" value={dateBi.en}/>
             <MRow label="Payment Method" value={method.en}/>
           </div>
-          <div style={{border:'1px solid #d0d8e4',borderRadius:'1.5mm',padding:'3mm 4mm',direction:'rtl',textAlign:'right'}}>
+          <div style={{border:'1px solid #d0d8e4',borderRadius:'1.5mm',padding:'3mm 4mm',direction:'rtl',textAlign:'right',fontFamily:FONT_AR_BODY}}>
             <MRow label="رقم الإيصال" value={rec.receiptNumber} bold rtl/>
             <MRow label="المرجع المحاسبي" value={rec.jeRef} rtl/>
             <MRow label="التاريخ" value={dateBi.ar} rtl/>
@@ -246,7 +249,7 @@ export default function LineReceiptPage() {
 
 function MRow({label,value,bold,rtl}:{label:string;value:string;bold?:boolean;rtl?:boolean}) {
   return (
-    <div style={{display:'flex',justifyContent:rtl?'flex-end':'space-between',gap:'2mm',marginBottom:'1.5mm',fontSize:'3mm'}}>
+    <div style={{display:'flex',justifyContent:rtl?'flex-end':'space-between',gap:'2mm',marginBottom:'1.5mm',fontSize:'3mm',fontFamily:rtl?FONT_AR_BODY:undefined}}>
       <span style={{color:'#555',flexShrink:0}}>{label}:</span>
       <span style={{fontWeight:bold?700:500,color:'#111',textAlign:rtl?'left':'right'}}>{value}</span>
     </div>
@@ -260,8 +263,8 @@ function BRow({labelEn,labelAr,valueEn,valueAr,highlight,amountStyle}:{
     <tr style={{background:highlight?'#eef3f9':'transparent',borderBottom:'1px solid #d0d8e4'}}>
       <td style={{padding:'2.5mm 3mm',width:'22%',fontSize:'2.8mm',color:'#555',borderRight:'1px solid #d0d8e4'}}>{labelEn}</td>
       <td style={{padding:'2.5mm 3mm',width:'28%',fontSize:amountStyle?'4mm':'3mm',fontWeight:amountStyle?700:500,color:amountStyle?'var(--rp)':'#111',borderRight:'1.5px solid #8aa',fontVariantNumeric:'tabular-nums'}}>{valueEn}</td>
-      <td style={{padding:'2.5mm 3mm',width:'28%',direction:'rtl',textAlign:'right',fontSize:amountStyle?'4mm':'3mm',fontWeight:amountStyle?700:500,color:amountStyle?'var(--rp)':'#111',borderRight:'1px solid #d0d8e4',fontVariantNumeric:'tabular-nums'}}>{valueAr}</td>
-      <td style={{padding:'2.5mm 3mm',width:'22%',direction:'rtl',textAlign:'right',fontSize:'2.8mm',color:'#555'}}>{labelAr}</td>
+      <td style={{padding:'2.5mm 3mm',width:'28%',direction:'rtl',textAlign:'right',fontSize:amountStyle?'4mm':'3mm',fontWeight:amountStyle?700:500,color:amountStyle?'var(--rp)':'#111',borderRight:'1px solid #d0d8e4',fontVariantNumeric:'tabular-nums',fontFamily:FONT_AR_BODY}}>{valueAr}</td>
+      <td style={{padding:'2.5mm 3mm',width:'22%',direction:'rtl',textAlign:'right',fontSize:'2.8mm',color:'#555',fontFamily:FONT_AR_BODY}}>{labelAr}</td>
     </tr>
   );
 }
@@ -270,7 +273,7 @@ function SigBlock({titleEn,titleAr,prefillName,dateEn,dateAr,dateValue,rtl}:{
   titleEn:string;titleAr:string;prefillName?:string;dateEn:string;dateAr:string;dateValue:string;rtl?:boolean;
 }) {
   return (
-    <div style={{border:'1px solid #c0cad6',borderRadius:'1.5mm',padding:'3mm 4mm',direction:rtl?'rtl':'ltr'}}>
+    <div style={{border:'1px solid #c0cad6',borderRadius:'1.5mm',padding:'3mm 4mm',direction:rtl?'rtl':'ltr',fontFamily:rtl?FONT_AR_BODY:undefined}}>
       <div style={{textAlign:'center',marginBottom:'3mm'}}>
         <div style={{fontSize:'3.2mm',fontWeight:700,color:'var(--rp)'}}>{rtl?titleAr:titleEn}</div>
         <div style={{fontSize:'2.5mm',color:'#666',marginTop:'0.5mm'}}>{rtl?titleEn:titleAr}</div>

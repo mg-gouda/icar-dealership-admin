@@ -69,6 +69,9 @@ interface BrandState {
   primaryColor: string;
 }
 
+const FONT_AR_HEADING = '"Cairo", sans-serif';
+const FONT_AR_BODY = '"Times New Roman", Times, serif';
+
 // ── Arabic number-to-words ───────────────────────────────────────────────────
 
 const AR_ONES = [
@@ -267,8 +270,8 @@ export default function PaymentReceiptPage() {
           </div>
 
           {/* AR info — right */}
-          <div style={{ textAlign: 'right', direction: 'rtl' }}>
-            <div style={{ fontWeight: 700, fontSize: '5mm', color: 'var(--rp)', lineHeight: 1.2 }}>{brand.displayNameAr || companyName}</div>
+          <div style={{ textAlign: 'right', direction: 'rtl', fontFamily: FONT_AR_BODY }}>
+            <div style={{ fontWeight: 700, fontSize: '5mm', color: 'var(--rp)', lineHeight: 1.2, fontFamily: FONT_AR_HEADING }}>{brand.displayNameAr || companyName}</div>
             {companyAddress && <div style={{ fontSize: '3mm', color: '#555', marginTop: '0.5mm' }}>{companyAddress}</div>}
             {companyPhone && <div style={{ fontSize: '3mm', color: '#555' }}>هاتف: {companyPhone}</div>}
             {companyTaxId && <div style={{ fontSize: '3mm', color: '#555' }}>الرقم الضريبي: {companyTaxId}</div>}
@@ -291,7 +294,7 @@ export default function PaymentReceiptPage() {
             <Row label="Journal" value={payment.journal ? `${payment.journal.code} — ${payment.journal.name}` : '—'} />
           </div>
           {/* Right AR */}
-          <div style={{ border: '1px solid #d0d8e4', borderRadius: '1.5mm', padding: '3mm 4mm', direction: 'rtl', textAlign: 'right' }}>
+          <div style={{ border: '1px solid #d0d8e4', borderRadius: '1.5mm', padding: '3mm 4mm', direction: 'rtl', textAlign: 'right', fontFamily: FONT_AR_BODY }}>
             <Row label="رقم الإيصال" value={recNo} bold rtl />
             <Row label="التاريخ" value={dateBi.ar} rtl />
             <Row label="طريقة الدفع" value={method.ar} rtl />
@@ -407,7 +410,7 @@ export default function PaymentReceiptPage() {
 
 function Row({ label, value, bold, rtl }: { label: string; value: string; bold?: boolean; rtl?: boolean }) {
   return (
-    <div style={{ display: 'flex', justifyContent: rtl ? 'flex-end' : 'space-between', gap: '2mm', marginBottom: '1.5mm', fontSize: '3mm' }}>
+    <div style={{ display: 'flex', justifyContent: rtl ? 'flex-end' : 'space-between', gap: '2mm', marginBottom: '1.5mm', fontSize: '3mm', fontFamily: rtl ? FONT_AR_BODY : undefined }}>
       <span style={{ color: '#555', flexShrink: 0 }}>{label}:</span>
       <span style={{ fontWeight: bold ? 700 : 500, color: '#111', textAlign: rtl ? 'left' : 'right' }}>{value}</span>
     </div>
@@ -426,8 +429,8 @@ function BodyRow({ labelAr, labelEn, valueAr, valueEn, highlight, amountStyle }:
       <td style={{ padding: '2.5mm 3mm', width: '22%', fontSize: '2.8mm', color: '#555', borderRight: '1px solid #d0d8e4' }}>{labelEn}</td>
       <td style={{ padding: '2.5mm 3mm', width: '28%', fontSize: amountStyle ? '4mm' : '3mm', fontWeight: amountStyle ? 700 : 500, color: amountStyle ? 'var(--rp)' : '#111', borderRight: '1.5px solid #8aa', fontVariantNumeric: 'tabular-nums' }}>{valueEn}</td>
       {/* AR side */}
-      <td style={{ padding: '2.5mm 3mm', width: '28%', direction: 'rtl', textAlign: 'right', fontSize: amountStyle ? '4mm' : '3mm', fontWeight: amountStyle ? 700 : 500, color: amountStyle ? 'var(--rp)' : '#111', borderRight: '1px solid #d0d8e4', fontVariantNumeric: 'tabular-nums' }}>{valueAr}</td>
-      <td style={{ padding: '2.5mm 3mm', width: '22%', direction: 'rtl', textAlign: 'right', fontSize: '2.8mm', color: '#555' }}>{labelAr}</td>
+      <td style={{ padding: '2.5mm 3mm', width: '28%', direction: 'rtl', textAlign: 'right', fontSize: amountStyle ? '4mm' : '3mm', fontWeight: amountStyle ? 700 : 500, color: amountStyle ? 'var(--rp)' : '#111', borderRight: '1px solid #d0d8e4', fontVariantNumeric: 'tabular-nums', fontFamily: FONT_AR_BODY }}>{valueAr}</td>
+      <td style={{ padding: '2.5mm 3mm', width: '22%', direction: 'rtl', textAlign: 'right', fontSize: '2.8mm', color: '#555', fontFamily: FONT_AR_BODY }}>{labelAr}</td>
     </tr>
   );
 }
@@ -441,7 +444,7 @@ function SigBlock({ titleAr, titleEn, nameAr, nameEn, prefillName, dateAr, dateE
   rtl?: boolean;
 }) {
   return (
-    <div style={{ border: '1px solid #c0cad6', borderRadius: '1.5mm', padding: '3mm 4mm', direction: rtl ? 'rtl' : 'ltr' }}>
+    <div style={{ border: '1px solid #c0cad6', borderRadius: '1.5mm', padding: '3mm 4mm', direction: rtl ? 'rtl' : 'ltr', fontFamily: rtl ? FONT_AR_BODY : undefined }}>
       {/* Title */}
       <div style={{ textAlign: 'center', marginBottom: '3mm' }}>
         <div style={{ fontSize: '3.2mm', fontWeight: 700, color: 'var(--rp)' }}>{rtl ? titleAr : titleEn}</div>
