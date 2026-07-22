@@ -1134,9 +1134,10 @@ export default function NewVehiclePage() {
                 <div className="card" style={{ padding: '1.5rem' }}>
                   <p className="section-label">{isAr ? 'المميزات والإضافات' : 'Features & Options'}</p>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
-                    {(DYNAMIC_FEATURES.length > 0 ? DYNAMIC_FEATURES : FEATURES_LIST.map(f => ({ value: f, label: f }))).map((f) => {
+                    {(DYNAMIC_FEATURES.length > 0 ? DYNAMIC_FEATURES : FEATURES_LIST.map(f => ({ value: f, label: f, labelAr: undefined as string | undefined }))).map((f) => {
                       const fVal = typeof f === 'string' ? f : f.value;
                       const fLabel = typeof f === 'string' ? f : f.label;
+                      const fLabelAr = (f as { labelAr?: string }).labelAr;
                       const checked = form.features.includes(fVal);
                       return (
                         <label key={fVal} style={{
@@ -1151,7 +1152,7 @@ export default function NewVehiclePage() {
                             type="checkbox" checked={checked} onChange={() => toggleFeature(fVal)}
                             style={{ accentColor: 'var(--primary)', width: '14px', height: '14px' }}
                           />
-                          {isAr ? (FEATURES_AR[fLabel] ?? fLabel) : fLabel}
+                          {isAr ? (fLabelAr || FEATURES_AR[fLabel] || fLabel) : fLabel}
                         </label>
                       );
                     })}

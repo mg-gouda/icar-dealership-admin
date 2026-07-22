@@ -1199,15 +1199,18 @@ function SecurityTab() {
 }
 
 // ── Parameters Tab ────────────────────────────────────────────────────────
-interface LookupItem { id: string; category: string; value: string; label: string; sortOrder: number; active: boolean; }
+interface LookupItem { id: string; category: string; value: string; label: string; labelAr?: string; sortOrder: number; active: boolean; }
+type BilingualDraft = { en: string; ar: string };
 
 function DropdownListsTab() {
   const { data: raw, reload } = useQuery<LookupItem[]>('/lookup-items');
   const items: LookupItem[] = Array.isArray(raw) ? raw : [];
   const { isAr } = useLang();
 
-  const [adding, setAdding] = useState<Record<string, string>>({}); // category → new label input
-  const [editing, setEditing] = useState<Record<string, string>>({}); // id → label input
+  // adding[cat] = { en, ar } draft for the add row
+  const [adding, setAdding] = useState<Record<string, BilingualDraft>>({});
+  // editing[id] = { en, ar } draft for inline edit
+  const [editing, setEditing] = useState<Record<string, BilingualDraft>>({});
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
@@ -1217,23 +1220,23 @@ function DropdownListsTab() {
   }, {});
 
   async function addItem(cat: string) {
-    const label = (adding[cat] ?? '').trim();
-    if (!label) return;
+    const { en = '', ar = '' } = adding[cat] ?? {};
+    if (!en.trim()) return;
     setBusy(true); setErr('');
     try {
-      await apiFetch('/lookup-items', { method: 'POST', body: JSON.stringify({ category: cat, value: label, label }) });
-      setAdding((p) => ({ ...p, [cat]: '' }));
+      await apiFetch('/lookup-items', { method: 'POST', body: JSON.stringify({ category: cat, value: en.trim(), label: en.trim(), labelAr: ar.trim() || undefined }) });
+      setAdding((p) => ({ ...p, [cat]: { en: '', ar: '' } }));
       reload();
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Error'); }
     finally { setBusy(false); }
   }
 
   async function saveEdit(id: string) {
-    const label = (editing[id] ?? '').trim();
-    if (!label) return;
+    const { en = '', ar = '' } = editing[id] ?? {};
+    if (!en.trim()) return;
     setBusy(true); setErr('');
     try {
-      await apiFetch(`/lookup-items/${id}`, { method: 'PATCH', body: JSON.stringify({ label }) });
+      await apiFetch(`/lookup-items/${id}`, { method: 'PATCH', body: JSON.stringify({ label: en.trim(), labelAr: ar.trim() || null }) });
       setEditing((p) => { const n = { ...p }; delete n[id]; return n; });
       reload();
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Error'); }
@@ -1250,6 +1253,8 @@ function DropdownListsTab() {
     finally { setBusy(false); }
   }
 
+  const inputSm = { padding: '0.3rem 0.5rem', fontSize: '0.8125rem' };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       <div>
@@ -1263,64 +1268,78 @@ function DropdownListsTab() {
 
       {Object.entries(CATEGORY_LABELS).map(([cat, title]) => {
         const titleDisplay = isAr ? (CATEGORY_LABELS_AR[cat] ?? title) : title;
+        const draft = adding[cat] ?? { en: '', ar: '' };
         return (
           <div key={cat} className="card" style={{ padding: '1rem 1.25rem' }}>
-            <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-1)', marginBottom: '0.75rem' }}>{titleDisplay}</p>
+            {/* Category header + column labels */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto auto', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-1)', gridColumn: '1 / -1', marginBottom: '0.25rem' }}>{titleDisplay}</p>
+              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>English</span>
+              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'right', direction: 'rtl' }}>عربي</span>
+              <span />
+              <span />
+            </div>
 
             {/* Item rows */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', marginBottom: '0.75rem' }}>
               {byCategory[cat]?.length === 0 && (
                 <p style={{ fontSize: '0.8125rem', color: 'var(--text-3)', fontStyle: 'italic' }}>{isAr ? 'لا توجد عناصر.' : 'No items yet.'}</p>
               )}
-              {byCategory[cat]?.map((item) => (
-                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  {editing[item.id] !== undefined ? (
-                    <>
-                      <input
-                        className="input"
-                        style={{ flex: 1, padding: '0.3rem 0.5rem', fontSize: '0.8125rem' }}
-                        value={editing[item.id]}
-                        onChange={(e) => setEditing((p) => ({ ...p, [item.id]: e.target.value }))}
-                        onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(item.id); if (e.key === 'Escape') setEditing((p) => { const n={...p}; delete n[item.id]; return n; }); }}
-                        autoFocus
-                      />
-                      <button className="btn btn-primary" style={{ padding: '0.3rem 0.625rem', fontSize: '0.75rem' }} disabled={busy} onClick={() => saveEdit(item.id)}>
-                        {isAr ? 'حفظ' : 'Save'}
-                      </button>
-                      <button className="btn btn-secondary" style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem' }} onClick={() => setEditing((p) => { const n={...p}; delete n[item.id]; return n; })}>
-                        {isAr ? 'إلغاء' : 'Cancel'}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <span style={{ flex: 1, fontSize: '0.8125rem', color: 'var(--text-1)', padding: '0.3rem 0' }}>{item.label}</span>
-                      <button
-                        className="btn btn-secondary"
-                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                        onClick={() => setEditing((p) => ({ ...p, [item.id]: item.label }))}
-                      >{isAr ? 'تعديل' : 'Edit'}</button>
-                      <button
-                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: 'none', border: '1px solid var(--border)', borderRadius: '0.375rem', cursor: 'pointer', color: 'var(--danger-fg)' }}
-                        disabled={busy}
-                        onClick={() => removeItem(item.id)}
-                      >✕</button>
-                    </>
-                  )}
-                </div>
-              ))}
+              {byCategory[cat]?.map((item) => {
+                const ed = editing[item.id];
+                return (
+                  <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto auto', gap: '0.5rem', alignItems: 'center' }}>
+                    {ed !== undefined ? (
+                      <>
+                        <input className="input" style={inputSm} placeholder="English" value={ed.en}
+                          onChange={(e) => setEditing((p) => ({ ...p, [item.id]: { ...ed, en: e.target.value } }))}
+                          onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(item.id); if (e.key === 'Escape') setEditing((p) => { const n={...p}; delete n[item.id]; return n; }); }}
+                          autoFocus />
+                        <input className="input" style={{ ...inputSm, direction: 'rtl', textAlign: 'right' }} placeholder="عربي" value={ed.ar}
+                          onChange={(e) => setEditing((p) => ({ ...p, [item.id]: { ...ed, ar: e.target.value } }))}
+                          onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(item.id); }} />
+                        <button className="btn btn-primary" style={{ padding: '0.3rem 0.625rem', fontSize: '0.75rem' }} disabled={busy} onClick={() => saveEdit(item.id)}>
+                          {isAr ? 'حفظ' : 'Save'}
+                        </button>
+                        <button className="btn btn-secondary" style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem' }} onClick={() => setEditing((p) => { const n={...p}; delete n[item.id]; return n; })}>
+                          {isAr ? 'إلغاء' : '✕'}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: '0.8125rem', color: 'var(--text-1)', padding: '0.3rem 0' }}>{item.label}</span>
+                        <span style={{ fontSize: '0.8125rem', color: item.labelAr ? 'var(--text-1)' : 'var(--text-3)', padding: '0.3rem 0', direction: 'rtl', textAlign: 'right' }}>
+                          {item.labelAr || '—'}
+                        </span>
+                        <button className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                          onClick={() => setEditing((p) => ({ ...p, [item.id]: { en: item.label, ar: item.labelAr ?? '' } }))}>
+                          {isAr ? 'تعديل' : 'Edit'}
+                        </button>
+                        <button style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: 'none', border: '1px solid var(--border)', borderRadius: '0.375rem', cursor: 'pointer', color: 'var(--danger-fg)' }}
+                          disabled={busy} onClick={() => removeItem(item.id)}>✕</button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Add row */}
-            <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '0.625rem', borderTop: '1px solid var(--border)' }}>
-              <input
-                className="input"
-                style={{ flex: 1, padding: '0.3rem 0.5rem', fontSize: '0.8125rem' }}
-                placeholder={isAr ? 'عنصر جديد…' : `Add ${title.slice(0, -1).toLowerCase()}…`}
-                value={adding[cat] ?? ''}
-                onChange={(e) => setAdding((p) => ({ ...p, [cat]: e.target.value }))}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '0.5rem', paddingTop: '0.625rem', borderTop: '1px solid var(--border)', alignItems: 'center' }}>
+              <input className="input" style={inputSm}
+                placeholder={`Add ${title.replace(/s$/, '').toLowerCase()}…`}
+                value={draft.en}
+                onChange={(e) => setAdding((p) => ({ ...p, [cat]: { ...draft, en: e.target.value } }))}
                 onKeyDown={(e) => { if (e.key === 'Enter') addItem(cat); }}
               />
-              <button className="btn btn-primary" style={{ padding: '0.3rem 0.75rem', fontSize: '0.8125rem' }} disabled={busy || !(adding[cat] ?? '').trim()} onClick={() => addItem(cat)}>
+              <input className="input" style={{ ...inputSm, direction: 'rtl', textAlign: 'right' }}
+                placeholder="أضف بالعربي…"
+                value={draft.ar}
+                onChange={(e) => setAdding((p) => ({ ...p, [cat]: { ...draft, ar: e.target.value } }))}
+                onKeyDown={(e) => { if (e.key === 'Enter') addItem(cat); }}
+              />
+              <button className="btn btn-primary" style={{ padding: '0.3rem 0.75rem', fontSize: '0.8125rem' }}
+                disabled={busy || !draft.en.trim()} onClick={() => addItem(cat)}>
                 {isAr ? '+ إضافة' : '+ Add'}
               </button>
             </div>
