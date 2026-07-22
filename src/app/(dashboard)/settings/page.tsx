@@ -60,19 +60,21 @@ const LANG_OPTS = [
 
 // ── Parameters Tab ────────────────────────────────────────────────────────
 const CATEGORY_LABELS: Record<string, string> = {
-  car_color:    'Colors',
-  body_type:    'Body Types',
-  fuel_type:    'Fuel Types',
-  transmission: 'Transmissions',
-  gear_type:    'Gear Types',
+  car_color:       'Colors',
+  body_type:       'Body Types',
+  fuel_type:       'Fuel Types',
+  transmission:    'Transmissions',
+  gear_type:       'Gear Types',
+  vehicle_feature: 'Vehicle Features',
 };
 
 const CATEGORY_LABELS_AR: Record<string, string> = {
-  car_color:    'الألوان',
-  body_type:    'أنواع الهيكل',
-  fuel_type:    'أنواع الوقود',
-  transmission: 'أنواع ناقل الحركة',
-  gear_type:    'أنواع العتلة',
+  car_color:       'الألوان',
+  body_type:       'أنواع الهيكل',
+  fuel_type:       'أنواع الوقود',
+  transmission:    'أنواع ناقل الحركة',
+  gear_type:       'أنواع العتلة',
+  vehicle_feature: 'مميزات السيارات',
 };
 
 const NAV_AR: Record<string, string> = {
