@@ -260,7 +260,12 @@ export default function LoginPage() {
                     </div>
                   ))}
                   <input type="text" inputMode="numeric" pattern="\d{6}" maxLength={6}
-                    value={totpCode} onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
+                    value={totpCode}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setTotpCode(val);
+                      if (val.length === 6) handleTotpVerify(new Event('submit') as unknown as React.FormEvent);
+                    }}
                     required autoFocus aria-label="6-digit code"
                     style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'text', width: '100%', height: '100%' }} />
                 </div>
@@ -374,7 +379,12 @@ export default function LoginPage() {
                     </div>
                   ))}
                   <input type="text" inputMode="numeric" pattern="\d{6}" maxLength={6}
-                    value={totpCode} onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
+                    value={totpCode}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setTotpCode(val);
+                      if (val.length === 6) handleTotpConfirm(new Event('submit') as unknown as React.FormEvent);
+                    }}
                     required autoFocus aria-label="6-digit code"
                     style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'text', width: '100%', height: '100%' }} />
                 </div>

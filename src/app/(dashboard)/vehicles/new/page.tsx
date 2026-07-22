@@ -270,6 +270,8 @@ export default function NewVehiclePage() {
   const [graceModal, setGraceModal] = useState<{name:string;days:number} | null>(null);
   const [rcptBrand, setRcptBrand] = useState<{ nameEn?: string; nameAr?: string; logoUrl?: string }>({});
   const [rcptChecked, setRcptChecked] = useState<Record<string, boolean>>({});
+  const [newFeature, setNewFeature] = useState('');
+  const [addingFeature, setAddingFeature] = useState(false);
 
   useEffect(() => {
     apiFetch<{id:string;name:string;gracePeriodDays:number}[]>('/accredited-dealers').then(setDealers).catch(() => {});
@@ -305,12 +307,20 @@ export default function NewVehiclePage() {
   const { data: rawFuelTypes }     = useQuery<LI[]>('/lookup-items?category=fuel_type');
   const { data: rawTransmissions } = useQuery<LI[]>('/lookup-items?category=transmission');
   const { data: rawGearTypes }     = useQuery<LI[]>('/lookup-items?category=gear_type');
+  const { data: rawVehicleFeatures, reload: reloadFeatures } = useQuery<LI[]>('/lookup-items?category=vehicle_feature');
   const toOpts = (r: LI[] | null | undefined) => (Array.isArray(r) ? r : []).map((i) => ({ value: i.value, label: i.label }));
   const COLORS        = toOpts(rawColors);
   const BODY_TYPES    = toOpts(rawBodyTypes);
   const FUEL_TYPES    = toOpts(rawFuelTypes);
   const TRANSMISSIONS = toOpts(rawTransmissions);
   const GEAR_TYPES    = toOpts(rawGearTypes);
+  const DYNAMIC_FEATURES = Array.isArray(rawVehicleFeatures) ? rawVehicleFeatures : [];
+
+  // Role from cookie — used for SUPER_ADMIN feature management
+  const userRole = typeof document !== 'undefined'
+    ? (document.cookie.split('; ').find(c => c.startsWith('admin_role='))?.split('=')[1] ?? '')
+    : '';
+  const isSuperAdmin = userRole === 'SUPER_ADMIN';
 
   // Cascaded Make → Model
   interface CMake { id: string; name: string; slug: string; logoUrl?: string; }
@@ -1129,12 +1139,65 @@ export default function NewVehiclePage() {
                 </div>
 
                 <div className="card" style={{ padding: '1.5rem' }}>
-                  <p className="section-label">{isAr ? 'المميزات والإضافات' : 'Features & Options'}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                    <p className="section-label" style={{ margin: 0 }}>{isAr ? 'المميزات والإضافات' : 'Features & Options'}</p>
+                    {isSuperAdmin && (
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <input
+                          className="input"
+                          style={{ width: 200, fontSize: '0.8125rem', padding: '0.35rem 0.65rem' }}
+                          placeholder={isAr ? 'ميزة جديدة…' : 'New feature…'}
+                          value={newFeature}
+                          onChange={(e) => setNewFeature(e.target.value)}
+                          onKeyDown={async (e) => {
+                            if (e.key !== 'Enter' || !newFeature.trim()) return;
+                            e.preventDefault();
+                            const val = newFeature.trim();
+                            if (DYNAMIC_FEATURES.some(f => f.value.toLowerCase() === val.toLowerCase())) {
+                              setNewFeature(''); return;
+                            }
+                            setAddingFeature(true);
+                            try {
+                              await apiFetch('/lookup-items', { method: 'POST', body: JSON.stringify({ category: 'vehicle_feature', value: val, label: val }) });
+                              await reloadFeatures();
+                              toggleFeature(val);
+                              setNewFeature('');
+                            } catch { /* ignore duplicate */ }
+                            finally { setAddingFeature(false); }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          disabled={!newFeature.trim() || addingFeature}
+                          style={{ fontSize: '0.8125rem', padding: '0.35rem 0.75rem', flexShrink: 0 }}
+                          onClick={async () => {
+                            const val = newFeature.trim();
+                            if (!val || DYNAMIC_FEATURES.some(f => f.value.toLowerCase() === val.toLowerCase())) {
+                              setNewFeature(''); return;
+                            }
+                            setAddingFeature(true);
+                            try {
+                              await apiFetch('/lookup-items', { method: 'POST', body: JSON.stringify({ category: 'vehicle_feature', value: val, label: val }) });
+                              await reloadFeatures();
+                              toggleFeature(val);
+                              setNewFeature('');
+                            } catch { /* ignore duplicate */ }
+                            finally { setAddingFeature(false); }
+                          }}
+                        >
+                          {addingFeature ? '…' : (isAr ? '+ إضافة' : '+ Add')}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
-                    {FEATURES_LIST.map((f) => {
-                      const checked = form.features.includes(f);
+                    {(DYNAMIC_FEATURES.length > 0 ? DYNAMIC_FEATURES : FEATURES_LIST.map(f => ({ value: f, label: f }))).map((f) => {
+                      const fVal = typeof f === 'string' ? f : f.value;
+                      const fLabel = typeof f === 'string' ? f : f.label;
+                      const checked = form.features.includes(fVal);
                       return (
-                        <label key={f} style={{
+                        <label key={fVal} style={{
                           display: 'flex', alignItems: 'center', gap: '0.5rem',
                           cursor: 'pointer', fontSize: '0.8125rem', color: 'var(--text-1)',
                           padding: '0.5rem 0.75rem', borderRadius: '0.4rem',
@@ -1143,10 +1206,10 @@ export default function NewVehiclePage() {
                           transition: 'all 150ms',
                         }}>
                           <input
-                            type="checkbox" checked={checked} onChange={() => toggleFeature(f)}
+                            type="checkbox" checked={checked} onChange={() => toggleFeature(fVal)}
                             style={{ accentColor: 'var(--primary)', width: '14px', height: '14px' }}
                           />
-                          {isAr ? (FEATURES_AR[f] ?? f) : f}
+                          {isAr ? (FEATURES_AR[fLabel] ?? fLabel) : fLabel}
                         </label>
                       );
                     })}
