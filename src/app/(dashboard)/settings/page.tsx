@@ -74,7 +74,7 @@ const CATEGORY_LABELS_AR: Record<string, string> = {
   fuel_type:       'أنواع الوقود',
   transmission:    'أنواع ناقل الحركة',
   gear_type:       'أنواع العتلة',
-  vehicle_feature: 'مميزات السيارات',
+  vehicle_feature: 'كماليات السيارات',
 };
 
 const NAV_AR: Record<string, string> = {
