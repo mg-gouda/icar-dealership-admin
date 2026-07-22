@@ -29,13 +29,131 @@ const FEATURES_LIST = [
   'Keyless Entry', 'Push Start', 'Navigation', 'Parking Sensors',
 ];
 
+// ── Car Receiving Checklist constants ─────────────────────────────────────────
+const CRV_FONT_HEADING = '"Cairo", sans-serif';
+const CRV_FONT_BODY    = '"Times New Roman", Times, serif';
+
+function crvDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+function crvDateAr(iso: string) {
+  return new Date(iso).toLocaleDateString('ar-EG', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+const CRV_CHECKLIST: { en: string; ar: string; items: { en: string; ar: string }[] }[] = [
+  {
+    en: 'Exterior', ar: 'المظهر الخارجي',
+    items: [
+      { en: 'Front bumper — no damage',              ar: 'المصد الأمامي — لا أضرار' },
+      { en: 'Rear bumper — no damage',               ar: 'المصد الخلفي — لا أضرار' },
+      { en: 'Hood / Bonnet',                         ar: 'الغطاء الأمامي (البونيه)' },
+      { en: 'Boot / Trunk lid',                      ar: 'غطاء الصندوق الخلفي' },
+      { en: 'Left front door',                       ar: 'الباب الأمامي الأيسر' },
+      { en: 'Right front door',                      ar: 'الباب الأمامي الأيمن' },
+      { en: 'Left rear door',                        ar: 'الباب الخلفي الأيسر' },
+      { en: 'Right rear door',                       ar: 'الباب الخلفي الأيمن' },
+      { en: 'Roof — no damage',                      ar: 'السقف — لا أضرار' },
+      { en: 'Paint finish & color uniformity',       ar: 'جودة الدهان وتوحد اللون' },
+      { en: 'Side mirrors — intact',                 ar: 'المرايا الجانبية — سليمة' },
+      { en: 'Windshield — no chips or cracks',       ar: 'الزجاج الأمامي — خالٍ من الشقوق' },
+      { en: 'Rear windshield',                       ar: 'الزجاج الخلفي' },
+      { en: 'Side windows',                          ar: 'النوافذ الجانبية' },
+      { en: 'Door seals & weather strips',           ar: 'عوازل الأبواب والحشوات' },
+      { en: 'Grille & headlight surrounds',          ar: 'الشبكة الأمامية وإطارات المصابيح' },
+    ],
+  },
+  {
+    en: 'Interior', ar: 'المظهر الداخلي',
+    items: [
+      { en: 'Dashboard — no cracks or damage',       ar: 'لوحة التحكم — لا تشققات أو أضرار' },
+      { en: 'Driver seat — condition OK',            ar: 'مقعد السائق — حالة جيدة' },
+      { en: 'Front passenger seat',                  ar: 'مقعد الراكب الأمامي' },
+      { en: 'Rear seats — all positions',            ar: 'المقاعد الخلفية — جميع المواضع' },
+      { en: 'All seat belts — latch & retract',      ar: 'جميع أحزمة الأمان — تعمل' },
+      { en: 'Interior trim & door panels',           ar: 'الإكساءات الداخلية وألواح الأبواب' },
+      { en: 'Headliner / roof lining',               ar: 'بطانة السقف الداخلية' },
+      { en: 'Floor mats — present & clean',          ar: 'سجادات الأرضية — موجودة ونظيفة' },
+      { en: 'Steering wheel — no damage',            ar: 'عجلة القيادة — لا أضرار' },
+      { en: 'Gear shift & center console',           ar: 'ذراع ناقل الحركة والكونسول الأوسط' },
+      { en: 'Glove compartment',                     ar: 'حاوية المستندات (الدرج)' },
+      { en: 'Sun visors',                            ar: 'واقيات الشمس' },
+      { en: 'Interior cleanliness',                  ar: 'نظافة الداخلية العامة' },
+    ],
+  },
+  {
+    en: 'Mechanical', ar: 'الميكانيكا',
+    items: [
+      { en: 'Engine compartment — clean & dry',      ar: 'غرفة المحرك — نظيفة وجافة' },
+      { en: 'Engine oil — level & condition',        ar: 'زيت المحرك — مستوى وجودة' },
+      { en: 'Coolant level',                         ar: 'مستوى سائل التبريد' },
+      { en: 'Brake fluid level',                     ar: 'مستوى سائل الفرامل' },
+      { en: 'Power steering fluid',                  ar: 'سائل توجيه القوة' },
+      { en: 'Windshield washer fluid',               ar: 'سائل غسيل الزجاج' },
+      { en: 'All four tyres — tread depth OK',       ar: 'إطارات الأربع — عمق الفراغ مقبول' },
+      { en: 'All four tyres — pressure correct',     ar: 'ضغط الإطارات الأربع — صحيح' },
+      { en: 'Spare tyre — present & inflated',       ar: 'الإطار الاحتياطي — موجود ومضخوخ' },
+      { en: 'Jack, wheel wrench & reflective kit',   ar: 'كريك وعدة الإطار والملحقات' },
+      { en: 'Front brake pads — acceptable wear',    ar: 'تيل الفرامل الأمامية — بلى مقبول' },
+      { en: 'Rear brakes',                           ar: 'الفرامل الخلفية' },
+      { en: 'Exhaust — no leaks or unusual noise',   ar: 'العادم — لا تسريبات أو ضوضاء' },
+    ],
+  },
+  {
+    en: 'Electrical', ar: 'الكهرباء',
+    items: [
+      { en: 'Battery — condition & charge OK',       ar: 'البطارية — حالة وشحن جيد' },
+      { en: 'Headlights — high & low beam',          ar: 'المصابيح الأمامية — عالية ومنخفضة' },
+      { en: 'Tail lights & brake lights',            ar: 'مصابيح الخلف والفرامل' },
+      { en: 'Reverse lights',                        ar: 'مصابيح الرجوع للخلف' },
+      { en: 'Turn indicators — all four',            ar: 'إشارات الانعطاف — الأربع' },
+      { en: 'Hazard lights',                         ar: 'أضواء الخطر' },
+      { en: 'Interior & dome lights',                ar: 'الأضواء الداخلية' },
+      { en: 'Horn',                                  ar: 'البوق' },
+      { en: 'Wipers — front & rear',                 ar: 'المساحات الأمامية والخلفية' },
+      { en: 'Washer jets — front & rear',            ar: 'فوهات غسيل الزجاج' },
+      { en: 'Air conditioning — cooling',            ar: 'التكييف — تبريد جيد' },
+      { en: 'Heater / climate control',              ar: 'التدفئة / التحكم المناخي' },
+      { en: 'Audio / infotainment system',           ar: 'نظام الصوت والترفيه' },
+      { en: 'GPS / navigation system',               ar: 'نظام الملاحة' },
+      { en: 'Electric windows — all',                ar: 'النوافذ الكهربائية — جميعها' },
+      { en: 'Central locking system',                ar: 'نظام القفل المركزي' },
+      { en: 'Electric mirrors — adjust & fold',      ar: 'المرايا الكهربائية — تعديل وطي' },
+      { en: 'Parking sensors / camera',              ar: 'حساسات الركن / كاميرا الخلفية' },
+    ],
+  },
+  {
+    en: 'Documents & Accessories', ar: 'المستندات والملحقات',
+    items: [
+      { en: 'Vehicle registration card',             ar: 'بطاقة تسجيل السيارة' },
+      { en: "Owner's / user manual",                 ar: 'كتيب المالك / دليل المستخدم' },
+      { en: 'Service / maintenance booklet',         ar: 'دفتر الصيانة' },
+      { en: 'Main key(s)',                            ar: 'المفتاح الرئيسي' },
+      { en: 'Spare key(s)',                           ar: 'المفتاح الاحتياطي' },
+      { en: 'Smart key / remote fob',                ar: 'وحدة التحكم عن بُعد' },
+      { en: 'Radio / head unit unlock code',         ar: 'كود فتح الراديو' },
+      { en: 'Warranty card & terms',                 ar: 'بطاقة الضمان والشروط' },
+      { en: 'Number plates — front & rear',          ar: 'لوحات الترقيم — أمام وخلف' },
+    ],
+  },
+  {
+    en: 'Safety Equipment', ar: 'معدات السلامة',
+    items: [
+      { en: 'Fire extinguisher — present & valid',   ar: 'طفاية الحريق — موجودة وصالحة' },
+      { en: 'Warning triangles (×2)',                ar: 'مثلثات التحذير (×٢)' },
+      { en: 'First aid kit',                         ar: 'حقيبة الإسعاف الأولي' },
+      { en: 'Reflective safety vest',                ar: 'السترة العاكسة' },
+    ],
+  },
+];
+
 const STEPS_NEW = [
   { n: 1, label: 'Basic Info' },
   { n: 2, label: 'Specs & Features' },
   { n: 3, label: 'Pricing & Location' },
   { n: 4, label: 'Upload Photos' },
   { n: 5, label: 'Documents' },
-  { n: 6, label: 'Review & Publish' },
+  { n: 6, label: 'Receiving Checklist' },
+  { n: 7, label: 'Review & Publish' },
 ];
 
 const STEPS_USED = [
@@ -45,7 +163,8 @@ const STEPS_USED = [
   { n: 4, label: 'Pricing & Location' },
   { n: 5, label: 'Upload Photos' },
   { n: 6, label: 'Documents' },
-  { n: 7, label: 'Review & Publish' },
+  { n: 7, label: 'Receiving Checklist' },
+  { n: 8, label: 'Review & Publish' },
 ];
 
 const DOC_SLOTS_BASE: { key: string; label: string; required: boolean }[] = [
@@ -149,9 +268,15 @@ export default function NewVehiclePage() {
   const [docs, setDocs] = useState<Record<string, File>>({});
   const [dealers, setDealers] = useState<{id:string;name:string;gracePeriodDays:number}[]>([]);
   const [graceModal, setGraceModal] = useState<{name:string;days:number} | null>(null);
+  const [rcptBrand, setRcptBrand] = useState<{ nameEn?: string; nameAr?: string; logoUrl?: string }>({});
+  const [rcptChecked, setRcptChecked] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     apiFetch<{id:string;name:string;gracePeriodDays:number}[]>('/accredited-dealers').then(setDealers).catch(() => {});
+    try {
+      const b = JSON.parse(localStorage.getItem('dealerms_brand') || '{}');
+      if (b && typeof b === 'object') setRcptBrand(b);
+    } catch { /* no brand */ }
   }, []);
 
   const STEP_LABELS_AR: Record<string, string> = {
@@ -161,6 +286,7 @@ export default function NewVehiclePage() {
     'Pricing & Location': 'التسعير',
     'Upload Photos': 'الصور',
     'Documents': 'المستندات',
+    'Receiving Checklist': 'استلام السيارة',
     'Review & Publish': 'مراجعة ونشر',
   };
   const sl = (label: string) => isAr ? (STEP_LABELS_AR[label] ?? label) : label;
@@ -210,8 +336,9 @@ export default function NewVehiclePage() {
   const isSpecsFeatures = (isUsed && step === 3) || (!isUsed && step === 2);
   const isPricing       = (isUsed && step === 4) || (!isUsed && step === 3);
   const isPhotos        = (isUsed && step === 5) || (!isUsed && step === 4);
-  const isDocs          = (isUsed && step === 6) || (!isUsed && step === 5);
-  const isReview        = (isUsed && step === 7) || (!isUsed && step === 6);
+  const isDocs            = (isUsed && step === 6) || (!isUsed && step === 5);
+  const isCarReceiving    = (isUsed && step === 7) || (!isUsed && step === 6);
+  const isReview          = (isUsed && step === 8) || (!isUsed && step === 7);
 
   const cost      = Number(form.acquisitionCost) || 0;
   const price     = Number(form.salePrice) || 0;
@@ -485,6 +612,27 @@ export default function NewVehiclePage() {
 
   return (
     <>
+    <style>{`
+      @media print {
+        body * { visibility: hidden !important; }
+        .car-recv-print, .car-recv-print * { visibility: visible !important; }
+        .car-recv-print {
+          position: fixed !important;
+          inset: 0 !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          margin: 0 !important;
+          padding: 10mm 12mm !important;
+          box-shadow: none !important;
+          border: none !important;
+          border-radius: 0 !important;
+          background: #fff !important;
+          color: #111 !important;
+        }
+        input[type="checkbox"] { -webkit-appearance: checkbox !important; appearance: checkbox !important; }
+        @page { size: A4; margin: 10mm 12mm; }
+      }
+    `}</style>
     <div style={{ background: 'var(--bg)', minHeight: '100%' }}>
       <div className="page-header">
         <div>
@@ -1336,6 +1484,142 @@ export default function NewVehiclePage() {
               </div>
             )}
 
+            {/* STEP: Car Receiving Checklist */}
+            {isCarReceiving && (() => {
+              const today = new Date().toISOString();
+              const vehicleDesc = [form.year, form.make, form.model, form.trim].filter(Boolean).join(' ');
+              const categoryDone = (cat: typeof CRV_CHECKLIST[0]) =>
+                cat.items.every((_, i) => rcptChecked[`${cat.en}-${i}`]);
+              const totalItems = CRV_CHECKLIST.reduce((s, c) => s + c.items.length, 0);
+              const checkedItems = CRV_CHECKLIST.reduce((s, c) =>
+                s + c.items.filter((_, i) => rcptChecked[`${c.en}-${i}`]).length, 0);
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div className="card" style={{ padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+                    <div>
+                      <p style={{ fontWeight: 600, marginBottom: '0.25rem' }}>
+                        {isAr ? 'استمارة استلام السيارة' : 'Car Receiving Checklist'}
+                      </p>
+                      <p style={{ fontSize: '0.8125rem', color: 'var(--text-3)' }}>
+                        {isAr
+                          ? `تفحّص ${checkedItems} من ${totalItems} بند`
+                          : `${checkedItems} of ${totalItems} items checked`}
+                      </p>
+                    </div>
+                    <button type="button" className="btn btn-secondary" onClick={() => window.print()} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                      {isAr ? 'طباعة' : 'Print'}
+                    </button>
+                  </div>
+
+                  <div className="car-recv-print card" style={{ padding: '2rem', fontFamily: 'Arial, sans-serif', fontSize: '0.875rem', color: '#111' }}>
+                    {/* Letterhead */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '1rem', borderBottom: '2px solid #1a1a2e', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
+                      <div>
+                        {rcptBrand.nameEn && <p style={{ fontWeight: 700, fontSize: '1rem' }}>{rcptBrand.nameEn}</p>}
+                        <p style={{ fontSize: '0.8rem', color: '#555' }}>Car Receiving Checklist</p>
+                        <p style={{ fontSize: '0.75rem', color: '#888' }}>Date / التاريخ: {crvDate(today)}</p>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        {rcptBrand.logoUrl
+                          ? <img src={rcptBrand.logoUrl} alt="logo" style={{ maxHeight: 60, maxWidth: 120, objectFit: 'contain' }} />
+                          : <div style={{ width: 80, height: 48, border: '1px dashed #ccc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', color: '#aaa' }}>LOGO</div>
+                        }
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        {rcptBrand.nameAr && <p style={{ fontWeight: 700, fontSize: '1rem', fontFamily: CRV_FONT_HEADING, direction: 'rtl' }}>{rcptBrand.nameAr}</p>}
+                        <p style={{ fontSize: '0.8rem', color: '#555', fontFamily: CRV_FONT_BODY, direction: 'rtl' }}>استمارة استلام السيارة</p>
+                        <p style={{ fontSize: '0.75rem', color: '#888', fontFamily: CRV_FONT_BODY, direction: 'rtl' }}>{crvDateAr(today)}</p>
+                      </div>
+                    </div>
+
+                    {/* Vehicle info band */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem 1.5rem', background: '#f8f8f8', borderRadius: 6, padding: '0.75rem 1rem', marginBottom: '1.25rem', border: '1px solid #e5e7eb' }}>
+                      <RcptInfoRow label="Vehicle" labelAr="السيارة" value={vehicleDesc || '—'} />
+                      <RcptInfoRow label="VIN" labelAr="رقم الشاسيه" value={form.vin || '—'} />
+                      <RcptInfoRow label="Color" labelAr="اللون" value={form.color || '—'} />
+                      <RcptInfoRow label="Year" labelAr="سنة الصنع" value={form.year ? String(form.year) : '—'} />
+                      <RcptInfoRow label="Condition" labelAr="الحالة" value={form.condition || '—'} />
+                      <RcptInfoRow label="Location" labelAr="الموقع" value={selectedLocation?.name || '—'} />
+                    </div>
+
+                    {/* Checklist categories */}
+                    {CRV_CHECKLIST.map((cat) => (
+                      <div key={cat.en} style={{ marginBottom: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', background: '#1a1a2e', color: '#fff', padding: '0.35rem 0.75rem', borderRadius: '4px 4px 0 0', marginBottom: 0 }}>
+                          <span style={{ fontWeight: 700, fontSize: '0.8125rem' }}>{cat.en}</span>
+                          <span style={{ fontFamily: CRV_FONT_HEADING, fontSize: '0.8125rem', direction: 'rtl' }}>{cat.ar}</span>
+                        </div>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                          <tbody>
+                            {cat.items.map((item, i) => {
+                              const key = `${cat.en}-${i}`;
+                              const checked = !!rcptChecked[key];
+                              const bg = i % 2 === 0 ? '#fff' : '#fafafa';
+                              return (
+                                <tr key={key} style={{ background: bg, borderBottom: '1px solid #e5e7eb' }}>
+                                  <td style={{ width: 32, textAlign: 'center', padding: '0.3rem 0.5rem' }}>
+                                    <input type="checkbox" checked={checked} onChange={(e) => setRcptChecked(p => ({ ...p, [key]: e.target.checked }))} style={{ width: 14, height: 14, cursor: 'pointer' }} />
+                                  </td>
+                                  <td style={{ padding: '0.3rem 0.5rem', color: checked ? '#16a34a' : '#111' }}>{item.en}</td>
+                                  <td style={{ padding: '0.3rem 0.5rem', textAlign: 'right', fontFamily: CRV_FONT_BODY, direction: 'rtl', color: checked ? '#16a34a' : '#111' }}>{item.ar}</td>
+                                  <td style={{ width: 22, textAlign: 'center', fontSize: '0.9rem' }}>{checked ? '✓' : ''}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+
+                    {/* Notes */}
+                    <div style={{ marginTop: '1rem', marginBottom: '1.5rem' }}>
+                      <p style={{ fontWeight: 600, marginBottom: '0.4rem', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Notes / Remarks</span>
+                        <span style={{ fontFamily: CRV_FONT_BODY, direction: 'rtl', fontWeight: 600 }}>ملاحظات</span>
+                      </p>
+                      <div style={{ border: '1px solid #d1d5db', borderRadius: 4, height: 56 }} />
+                    </div>
+
+                    {/* Signature blocks */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginTop: '0.5rem' }}>
+                      <RcptSigBlock
+                        title="Receiving Officer"
+                        titleAr="ضابط الاستلام / موظف الصالة"
+                        fields={['Name / الاسم', 'Signature / التوقيع', 'Date / التاريخ']}
+                      />
+                      <RcptSigBlock
+                        title="Supplier Representative"
+                        titleAr="مندوب المورد / جهة التسليم"
+                        fields={['Name / الاسم', 'Signature / التوقيع', 'Date / التاريخ']}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Check-all helper */}
+                  <div className="card" style={{ padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '0.8125rem', color: 'var(--text-2)' }}>
+                      {isAr ? 'تحديد / إلغاء الكل' : 'Select / deselect all'}
+                    </span>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.75rem' }}
+                        onClick={() => {
+                          const all: Record<string, boolean> = {};
+                          CRV_CHECKLIST.forEach(c => c.items.forEach((_, i) => { all[`${c.en}-${i}`] = true; }));
+                          setRcptChecked(all);
+                        }}>
+                        {isAr ? 'تحديد الكل' : 'Check all'}
+                      </button>
+                      <button type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.75rem' }}
+                        onClick={() => setRcptChecked({})}>
+                        {isAr ? 'إلغاء الكل' : 'Uncheck all'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* STEP: Review & Publish */}
             {isReview && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -1629,6 +1913,10 @@ export default function NewVehiclePage() {
                   ? <><li>الصيغ المقبولة: PDF، JPG، PNG.</li><li>يمكن تحديث الوثائق لاحقاً.</li></>
                   : <><li>Accepted formats: PDF, JPG, PNG.</li><li>Documents can be updated later.</li></>
                 )}
+                {isCarReceiving && (isAr
+                  ? <><li>تحقق من كل بند قبل استلام السيارة رسمياً.</li><li>اطبع الاستمارة للحصول على توقيعات الطرفين.</li><li>يمكن تخطي هذه الخطوة والعودة إليها لاحقاً.</li></>
+                  : <><li>Check each item before formally accepting delivery.</li><li>Print the form to obtain both parties&apos; signatures.</li><li>You can skip this step and return to it later.</li></>
+                )}
                 {isReview && (isAr
                   ? <><li>راجع جميع التفاصيل قبل النشر.</li><li>يمكن تغيير الحالة بعد النشر.</li></>
                   : <><li>Review all details before publishing.</li><li>Status can be changed after publishing.</li></>
@@ -1816,5 +2104,34 @@ function CarUsedIcon() {
       <circle cx="14" cy="17" r="1.5" fill="#fff"/>
       <path d="M10 3v3M8.5 4.5h3" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
     </svg>
+  );
+}
+
+function RcptInfoRow({ label, labelAr, value }: { label: string; labelAr: string; value: string }) {
+  return (
+    <div>
+      <p style={{ fontSize: '0.68rem', color: '#888', marginBottom: 1, display: 'flex', justifyContent: 'space-between' }}>
+        <span>{label}</span>
+        <span style={{ fontFamily: '"Cairo", sans-serif', direction: 'rtl' }}>{labelAr}</span>
+      </p>
+      <p style={{ fontWeight: 600, fontSize: '0.8rem', color: '#111' }}>{value}</p>
+    </div>
+  );
+}
+
+function RcptSigBlock({ title, titleAr, fields }: { title: string; titleAr: string; fields: string[] }) {
+  return (
+    <div style={{ border: '1px solid #d1d5db', borderRadius: 4, padding: '0.75rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.75rem' }}>
+        <span style={{ fontWeight: 700, fontSize: '0.8rem' }}>{title}</span>
+        <span style={{ fontFamily: '"Cairo", sans-serif', fontSize: '0.8rem', direction: 'rtl', fontWeight: 700 }}>{titleAr}</span>
+      </div>
+      {fields.map((f) => (
+        <div key={f} style={{ marginBottom: '0.75rem' }}>
+          <p style={{ fontSize: '0.7rem', color: '#888', marginBottom: 2 }}>{f}</p>
+          <div style={{ borderBottom: '1px solid #9ca3af', height: 24 }} />
+        </div>
+      ))}
+    </div>
   );
 }
