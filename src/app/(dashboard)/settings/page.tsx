@@ -1623,9 +1623,11 @@ function AccreditedDealersTab() {
   const dealers: AccDealer[] = Array.isArray(rawDealers) ? rawDealers : [];
   const { isAr } = useLang();
 
-  type LI = { id: string; value: string; label: string };
-  const { data: rawMakes } = useQuery<LI[]>('/lookup-items?category=car_make');
-  const makeOptions = (Array.isArray(rawMakes) ? rawMakes : []).map((m) => ({ value: m.value, label: m.label }));
+  type CMake = { id: string; name: string; isActive: boolean };
+  const { data: rawMakes } = useQuery<CMake[]>('/settings/car-makes');
+  const makeOptions = (Array.isArray(rawMakes) ? rawMakes : [])
+    .filter((m) => m.isActive)
+    .map((m) => ({ value: m.name, label: m.name }));
 
   const [selected, setSelected] = useState<string | null>(null);
   const [form, setForm] = useState<typeof BLANK_DEALER>({ ...BLANK_DEALER });
