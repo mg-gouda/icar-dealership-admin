@@ -131,11 +131,11 @@ export default function VehicleDetailPage() {
     : (auditRaw as any)?.items ?? [];
 
   // Dynamic lookup lists
-  type LI = { id: string; value: string; label: string };
+  type LI = { id: string; value: string; label: string; labelAr?: string };
   const { data: rawFuelTypes }     = useQuery<LI[]>('/lookup-items?category=fuel_type');
   const { data: rawTransmissions } = useQuery<LI[]>('/lookup-items?category=transmission');
   const { data: rawBodyTypes }     = useQuery<LI[]>('/lookup-items?category=body_type');
-  const toOpts = (r: LI[] | null | undefined) => (Array.isArray(r) ? r : []).map((i) => ({ value: i.value, label: i.label }));
+  const toOpts = (r: LI[] | null | undefined) => (Array.isArray(r) ? r : []).map((i) => ({ value: i.value, label: isAr ? (i.labelAr || i.label) : i.label }));
   const FUEL_TYPES    = toOpts(rawFuelTypes);
   const TRANSMISSIONS = toOpts(rawTransmissions);
   const BODY_TYPES    = toOpts(rawBodyTypes);

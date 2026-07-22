@@ -141,11 +141,11 @@ export default function VehiclesPage() {
   const { data: rawDealers } = useQuery<{id:string;name:string}[]>('/accredited-dealers');
   const dealers = Array.isArray(rawDealers) ? rawDealers : [];
 
-  type LI = { id: string; value: string; label: string };
+  type LI = { id: string; value: string; label: string; labelAr?: string };
   const { data: rawMakeOpts }     = useQuery<LI[]>('/lookup-items?category=car_make');
   const { data: rawBodyOpts }     = useQuery<LI[]>('/lookup-items?category=body_type');
   const { data: rawFuelOpts }     = useQuery<LI[]>('/lookup-items?category=fuel_type');
-  const toLookupOpts = (r: LI[] | null | undefined) => (Array.isArray(r) ? r : []).map((i) => ({ value: i.value, label: i.label }));
+  const toLookupOpts = (r: LI[] | null | undefined) => (Array.isArray(r) ? r : []).map((i) => ({ value: i.value, label: isAr ? (i.labelAr || i.label) : i.label }));
   const MAKE_OPTIONS      = toLookupOpts(rawMakeOpts);
   const BODY_TYPE_OPTIONS = toLookupOpts(rawBodyOpts);
   const FUEL_TYPE_OPTIONS = toLookupOpts(rawFuelOpts);

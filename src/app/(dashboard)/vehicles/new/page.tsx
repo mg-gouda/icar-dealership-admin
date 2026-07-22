@@ -299,14 +299,14 @@ export default function NewVehiclePage() {
   }));
   const selectedLocation = locations.find((l) => l.id === form.locationId);
 
-  type LI = { id: string; value: string; label: string };
+  type LI = { id: string; value: string; label: string; labelAr?: string };
   const { data: rawColors }        = useQuery<LI[]>('/lookup-items?category=car_color');
   const { data: rawBodyTypes }     = useQuery<LI[]>('/lookup-items?category=body_type');
   const { data: rawFuelTypes }     = useQuery<LI[]>('/lookup-items?category=fuel_type');
   const { data: rawTransmissions } = useQuery<LI[]>('/lookup-items?category=transmission');
   const { data: rawGearTypes }     = useQuery<LI[]>('/lookup-items?category=gear_type');
   const { data: rawVehicleFeatures } = useQuery<LI[]>('/lookup-items?category=vehicle_feature');
-  const toOpts = (r: LI[] | null | undefined) => (Array.isArray(r) ? r : []).map((i) => ({ value: i.value, label: i.label }));
+  const toOpts = (r: LI[] | null | undefined) => (Array.isArray(r) ? r : []).map((i) => ({ value: i.value, label: isAr ? (i.labelAr || i.label) : i.label }));
   const COLORS        = toOpts(rawColors);
   const BODY_TYPES    = toOpts(rawBodyTypes);
   const FUEL_TYPES    = toOpts(rawFuelTypes);
