@@ -18,10 +18,29 @@ interface Location {
   defaultInsuranceFee?: number;
 }
 
-const YEARS = Array.from({ length: 17 }, (_, i) => {
+const YEARS = Array.from({ length: 40 }, (_, i) => {
   const y = 2026 - i;
   return { value: String(y), label: String(y) };
 });
+
+// NHTSA field value → our stored lookup value
+const NHTSA_BODY: Record<string, string> = {
+  'sedan/saloon': 'Sedan', 'sedan': 'Sedan',
+  'sport utility vehicle (suv)/multi-purpose vehicle (mpv)': 'SUV', 'suv': 'SUV',
+  'hatchback/liftback/notchback': 'Hatchback', 'hatchback': 'Hatchback',
+  'pickup': 'Pickup', 'truck': 'Pickup',
+  'van': 'Van', 'minivan': 'Van',
+  'coupe': 'Coupe',
+  'convertible/cabriolet': 'Convertible', 'convertible': 'Convertible',
+  'wagon': 'Wagon', 'station wagon/estate': 'Wagon',
+};
+const NHTSA_FUEL: Record<string, string> = {
+  'gasoline': 'Petrol', 'petrol': 'Petrol',
+  'diesel': 'Diesel',
+  'electric': 'Electric',
+  'hybrid - unspecified': 'Hybrid', 'hybrid': 'Hybrid',
+  'compressed natural gas (cng)': 'LPG', 'liquefied petroleum gas (lpg)': 'LPG',
+};
 
 const FEATURES_LIST = [
   'Cruise Control', 'Apple CarPlay', 'Android Auto', 'Reverse Camera',
@@ -361,20 +380,27 @@ export default function NewVehiclePage() {
       const data = await apiFetch<any>(`/vehicles/decode-vin?vin=${form.vin}`);
       const d = data?.decoded;
       if (!d) { setVinMsg(isAr ? 'لم يتم التعرف على هذا الـ VIN' : 'VIN not recognised'); return; }
+      // case-insensitive match against CarMake names in DB
+      const matchedMake = carMakes.find((m) => m.name.toLowerCase() === (d.make || '').toLowerCase());
+      const mappedBody = NHTSA_BODY[(d.bodyType || '').toLowerCase()];
+      const mappedFuel = NHTSA_FUEL[(d.fuelType || '').toLowerCase()];
       setForm((p) => ({
         ...p,
-        make:        d.make         || p.make,
-        model:       d.model        || p.model,
-        year:        d.year         ? String(d.year) : p.year,
-        trim:        d.trim         || p.trim,
-        bodyType:    d.bodyType     || p.bodyType,
-        engineType:  d.engineSize   || p.engineType,
-        fuelType:    d.fuelType     || p.fuelType,
-        transmission:d.transmission || p.transmission,
-        driveType:   d.driveType    || p.driveType,
-        doors:       d.doors        ? String(d.doors) : p.doors,
+        make:         matchedMake?.name || d.make || p.make,
+        model:        d.model        || p.model,
+        year:         d.year         ? String(d.year) : p.year,
+        trim:         d.trim         || p.trim,
+        bodyType:     mappedBody     || d.bodyType || p.bodyType,
+        engineType:   d.engineSize   || p.engineType,
+        fuelType:     mappedFuel     || d.fuelType || p.fuelType,
+        transmission: d.transmission || p.transmission,
+        driveType:    d.driveType    || p.driveType,
+        doors:        d.doors        ? String(d.doors) : p.doors,
       }));
-      setVinMsg(isAr ? '✓ تم تعبئة البيانات من VIN' : '✓ Fields filled from VIN');
+      const filled = [d.make, d.model, d.year, d.bodyType].filter(Boolean).length;
+      setVinMsg(filled === 0
+        ? (isAr ? 'VIN غير موجود في قاعدة بيانات NHTSA' : 'VIN not found in NHTSA database')
+        : (isAr ? '✓ تم تعبئة البيانات من VIN' : '✓ Fields filled from VIN'));
     } catch {
       setVinMsg(isAr ? 'خطأ في الاتصال بـ VIN API' : 'Error reaching VIN API');
     } finally {
