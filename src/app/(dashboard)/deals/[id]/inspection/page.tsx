@@ -279,7 +279,7 @@ export default function FinalInspectionPage() {
             <InfoRow label="رقم الصفقة"    value={dealNo}       rtl />
             <InfoRow label="التاريخ"        value={dealDateAr}   rtl />
             <InfoRow label="السيارة"        value={vehicleStrAr} rtl />
-            <InfoRow label="رقم الهيكل"    value={vinStr}       rtl />
+            <InfoRow label="رقم الشاسيه"    value={vinStr}       rtl />
             <InfoRow label="العميل"         value={custName}     rtl />
             {custPhone    && <InfoRow label="الهاتف"        value={custPhone}    rtl />}
             {salesRepName && <InfoRow label="مندوب المبيعات" value={salesRepName} rtl />}

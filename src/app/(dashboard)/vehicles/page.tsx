@@ -367,7 +367,7 @@ export default function VehiclesPage() {
               options={BODY_TYPE_OPTIONS}
               value={bodyTypeFilter}
               onChange={(v) => { setBodyTypeFilter(v); setPage(1); }}
-              placeholder={isAr ? 'نوع الهيكل' : 'Body Type'}
+              placeholder={isAr ? 'نوع الشاسيه' : 'Body Type'}
               clearable
               clearLabel={isAr ? 'كل الأنواع' : 'All Types'}
             />

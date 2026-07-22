@@ -426,7 +426,7 @@ export default function NewVehiclePage() {
       if (!form.make) return isAr ? 'الماركة مطلوبة.' : 'Make is required.';
       if (!form.model) return isAr ? 'الموديل مطلوب.' : 'Model is required.';
       if (!form.color) return isAr ? 'اللون مطلوب.' : 'Color is required.';
-      if (!form.bodyType) return isAr ? 'نوع الهيكل مطلوب.' : 'Body Type is required.';
+      if (!form.bodyType) return isAr ? 'نوع الشاسيه مطلوب.' : 'Body Type is required.';
     }
     if (isUsed && s === 2) {
       if (!usedForm.regLicenseNumber) return isAr ? 'رقم رخصة التسجيل مطلوب.' : 'Registration license number is required.';
@@ -872,8 +872,8 @@ export default function NewVehiclePage() {
                   </div>
 
                   <div>
-                    <label className="input-label">{isAr ? 'نوع الهيكل' : 'Body Type'} <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <SearchableCombobox options={BODY_TYPES} value={form.bodyType} onChange={(v) => set('bodyType', v)} placeholder={isAr ? 'اختر نوع الهيكل…' : 'Select body type…'} />
+                    <label className="input-label">{isAr ? 'نوع الشاسيه' : 'Body Type'} <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <SearchableCombobox options={BODY_TYPES} value={form.bodyType} onChange={(v) => set('bodyType', v)} placeholder={isAr ? 'اختر نوع الشاسيه…' : 'Select body type…'} />
                   </div>
                 </div>
               </div>
@@ -1639,7 +1639,7 @@ export default function NewVehiclePage() {
                       [isAr ? 'سنة الصنع' : 'Year', form.year],
                       [isAr ? 'الفئة' : 'Trim', form.trim || '—'],
                       [isAr ? 'اللون' : 'Color', form.color || '—'],
-                      [isAr ? 'نوع الهيكل' : 'Body Type', form.bodyType || '—'],
+                      [isAr ? 'نوع الشاسيه' : 'Body Type', form.bodyType || '—'],
                       [isAr ? 'عداد الكيلومترات' : 'Mileage', form.mileage ? `${Number(form.mileage).toLocaleString()} km` : '0 km'],
                     ] as [string, string][]).map(([label, val]) => (
                       <div key={label}>

@@ -114,7 +114,7 @@ export const ar: Record<string, string> = {
   'vehicle.condition': 'الحالة',
   'vehicle.price': 'السعر',
   'vehicle.mileage': 'عداد الكيلومترات',
-  'vehicle.bodyType': 'نوع الهيكل',
+  'vehicle.bodyType': 'نوع الشاسيه',
   'vehicle.fuelType': 'نوع الوقود',
   'vehicle.transmission': 'ناقل الحركة',
   'vehicle.engineSize': 'سعة المحرك',

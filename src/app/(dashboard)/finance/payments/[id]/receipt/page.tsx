@@ -362,7 +362,7 @@ export default function PaymentReceiptPage() {
               )}
               {vehicle?.vin && (
                 <BodyRow
-                  labelAr="رقم الهيكل"
+                  labelAr="رقم الشاسيه"
                   labelEn="VIN"
                   valueAr={vehicle.vin}
                   valueEn={vehicle.vin}

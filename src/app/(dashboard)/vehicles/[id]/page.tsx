@@ -754,7 +754,7 @@ export default function VehicleDetailPage() {
                     />
                   </div>
                   <div>
-                    <label className="input-label">{isAr ? 'نوع الهيكل' : 'Body Type'}</label>
+                    <label className="input-label">{isAr ? 'نوع الشاسيه' : 'Body Type'}</label>
                     <SearchableCombobox
                       options={BODY_TYPES}
                       value={form.bodyType ?? ''}
@@ -847,7 +847,7 @@ export default function VehicleDetailPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
                   {([
                     [isAr ? 'الحالة' : 'Condition', v.condition],
-                    [isAr ? 'نوع الهيكل' : 'Body Type', v.bodyType],
+                    [isAr ? 'نوع الشاسيه' : 'Body Type', v.bodyType],
                     [isAr ? 'اللون' : 'Color', v.color],
                     [isAr ? 'نوع الوقود' : 'Fuel Type', v.fuelType],
                     [isAr ? 'ناقل الحركة' : 'Transmission', v.transmission],
@@ -996,7 +996,7 @@ export default function VehicleDetailPage() {
                     <SearchableCombobox options={CONDITIONS} value={sf.condition as string ?? ''} onChange={val => setSf(p => ({ ...p, condition: val }))} placeholder={isAr ? 'اختر…' : 'Select…'} />
                   </div>
                   <div>
-                    <label className="input-label">{isAr ? 'نوع الهيكل' : 'Body Type'}</label>
+                    <label className="input-label">{isAr ? 'نوع الشاسيه' : 'Body Type'}</label>
                     <SearchableCombobox options={BODY_TYPES} value={sf.bodyType as string ?? ''} onChange={val => setSf(p => ({ ...p, bodyType: val }))} placeholder={isAr ? 'اختر…' : 'Select…'} clearable clearLabel={isAr ? 'غير محدد' : 'Not specified'} />
                   </div>
                 </div>

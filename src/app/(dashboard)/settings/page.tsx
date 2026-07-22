@@ -70,7 +70,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const CATEGORY_LABELS_AR: Record<string, string> = {
   car_color:       'الألوان',
-  body_type:       'أنواع الهيكل',
+  body_type:       'أنواع الشاسيه',
   fuel_type:       'أنواع الوقود',
   transmission:    'أنواع ناقل الحركة',
   gear_type:       'أنواع العتلة',
