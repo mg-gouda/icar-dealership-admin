@@ -74,7 +74,10 @@ export default function LoginPage() {
       body: JSON.stringify(body),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message ?? 'Request failed');
+    if (!res.ok) {
+      const msg = data.message;
+      throw new Error(typeof msg === 'string' ? msg : (msg?.message ?? msg?.error ?? data.error ?? 'Request failed'));
+    }
     return data;
   }
 
