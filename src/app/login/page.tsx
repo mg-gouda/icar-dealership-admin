@@ -183,6 +183,7 @@ export default function LoginPage() {
                   </label>
                   <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                     required autoComplete="email" placeholder="your-name@dealership.com"
+                    data-testid="login-email"
                     className="w-full rounded-lg px-3 py-2 text-xs text-white focus:outline-none transition"
                     style={{ background: 'oklch(1 0 0 / 0.07)', border: '1px solid oklch(1 0 0 / 0.12)', color: 'white' }}
                     onFocus={e => (e.target.style.borderColor = 'oklch(1 0 0 / 0.3)')}
@@ -195,6 +196,7 @@ export default function LoginPage() {
                   </label>
                   <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                     required autoComplete="current-password" placeholder="••••••••"
+                    data-testid="login-password"
                     className="w-full rounded-lg px-3 py-2 text-xs text-white focus:outline-none transition"
                     style={{ background: 'oklch(1 0 0 / 0.07)', border: '1px solid oklch(1 0 0 / 0.12)' }}
                     onFocus={e => (e.target.style.borderColor = 'oklch(1 0 0 / 0.3)')}
@@ -223,7 +225,7 @@ export default function LoginPage() {
                   </button>
                 </div>
                 {error && <p className="text-[11px] text-red-400 text-center">{error}</p>}
-                <button type="submit" disabled={loading}
+                <button type="submit" disabled={loading} data-testid="login-submit"
                   className="w-full rounded-lg text-white text-xs font-semibold py-2.5 transition disabled:opacity-50 flex items-center justify-center gap-1.5"
                   style={{ background: 'oklch(0.52 0.22 265)' }}
                   onMouseOver={e => !loading && (e.currentTarget.style.background = 'oklch(0.46 0.21 265)')}
@@ -287,7 +289,7 @@ export default function LoginPage() {
                   style={{ background: 'oklch(0.68 0.16 72 / 0.12)', color: 'oklch(0.85 0.1 72)' }}>
                   {isAr ? '⚠️ مطلوب لأدوار المالية والإدارة والمديرين' : '⚠️ Required for Finance, Admin & Manager roles'}
                 </p>
-                <button type="button" onClick={() => { setStage('credentials'); setError(''); setTotpCode(''); }}
+                <button type="button" data-testid="login-back" onClick={() => { setStage('credentials'); setError(''); setTotpCode(''); }}
                   className="w-full text-[11px] transition" style={{ color: 'oklch(1 0 0 / 0.3)' }}>
                   {isAr ? '→ العودة لتسجيل الدخول' : '← Back to login'}
                 </button>
@@ -350,7 +352,7 @@ export default function LoginPage() {
                 style={{ background: 'oklch(0.52 0.22 265)' }}>
                 {isAr ? 'لقد مسحت الرمز ←' : "I've scanned the code →"}
               </button>
-              <button type="button" onClick={() => { setStage('credentials'); setError(''); setTotpCode(''); }}
+              <button type="button" data-testid="login-back" onClick={() => { setStage('credentials'); setError(''); setTotpCode(''); }}
                 className="w-full text-[11px] transition mt-2" style={{ color: 'oklch(1 0 0 / 0.3)' }}>
                 {isAr ? '→ إلغاء' : '← Cancel'}
               </button>

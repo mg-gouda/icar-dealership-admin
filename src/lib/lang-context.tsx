@@ -472,12 +472,13 @@ const LangContext = createContext<LangCtx>({
 });
 
 export function LangProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Lang>('ar');
-
-  useEffect(() => {
+  // ponytail: lazy init reads localStorage synchronously on client so language
+  // is correct on first render — avoids Arabic flash that breaks E2E selectors
+  const [lang, setLangState] = useState<Lang>(() => {
+    if (typeof window === 'undefined') return 'ar';
     const saved = localStorage.getItem('dealerms_lang') as Lang | null;
-    if (saved === 'en' || saved === 'ar') setLangState(saved);
-  }, []);
+    return (saved === 'en' || saved === 'ar') ? saved : 'ar';
+  });
 
   function setLang(l: Lang) {
     setLangState(l);

@@ -155,7 +155,7 @@ const NAV: { href: string; key: string; icon: React.ReactNode; roles?: string[] 
   },
   {
     href: '/finance', key: 'nav.finance',
-    roles: ['FINANCE', 'ADMIN', 'SUPER_ADMIN'],
+    roles: ['MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.2"/>
