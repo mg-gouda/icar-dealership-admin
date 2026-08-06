@@ -15,9 +15,13 @@ interface PartResult {
   salePrice: number; onHand: number; unitOfMeasure: string;
 }
 
-function PartPicker({ onSelect, isAr }: {
+function PartPicker({ onSelect, isAr, vehicleMakeId, vehicleModelId, vehicleYear, noFitmentWarning }: {
   onSelect: (part: PartResult) => void;
   isAr: boolean;
+  vehicleMakeId?: string;
+  vehicleModelId?: string;
+  vehicleYear?: number;
+  noFitmentWarning?: string;
 }) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState<PartResult[]>([]);
@@ -42,8 +46,12 @@ function PartPicker({ onSelect, isAr }: {
     timerRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await apiFetch<{ data: PartResult[] }>(`/parts?q=${encodeURIComponent(val)}&limit=20`);
-        setResults(res?.data ?? []);
+        const params = new URLSearchParams({ q: val, limit: '20' });
+        if (vehicleMakeId)  params.set('vehicleMakeId', vehicleMakeId);
+        if (vehicleModelId) params.set('vehicleModelId', vehicleModelId);
+        if (vehicleYear)    params.set('vehicleYear', String(vehicleYear));
+        const res = await apiFetch<{ items: PartResult[] }>(`/parts?${params}`);
+        setResults(res?.items ?? []);
         setOpen(true);
       } catch { setResults([]); }
       finally { setLoading(false); }
@@ -73,6 +81,11 @@ function PartPicker({ onSelect, isAr }: {
 
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
+      {noFitmentWarning && (
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-2)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--warning) 30%, transparent)', borderRadius: 6, padding: '0.35rem 0.6rem', marginBottom: '0.4rem' }}>
+          ⚠ {noFitmentWarning}
+        </p>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '0.4rem', padding: '0.4rem 0.625rem' }}>
         <svg style={{ width: '0.875rem', height: '0.875rem', color: 'var(--text-3)', flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -189,6 +202,32 @@ export default function ServiceOrderDetailPage() {
   ];
 
   const { data: order, loading, error, reload } = useQuery<ServiceOrder>(`/service-orders/${id}`, [id]);
+
+  // Resolve vehicle make/model names → PartMake/PartModel IDs for fitment filtering
+  const [fitmentMakeId, setFitmentMakeId] = useState<string | undefined>();
+  const [fitmentModelId, setFitmentModelId] = useState<string | undefined>();
+  const [fitmentNoMatch, setFitmentNoMatch] = useState(false);
+  const vehicleMakeName  = order?.vehicle?.make  ?? order?.externalVehicle?.make;
+  const vehicleModelName = order?.vehicle?.model ?? order?.externalVehicle?.model;
+  const vehicleYear      = order?.vehicle?.year  ?? order?.externalVehicle?.year;
+
+  useEffect(() => {
+    if (!vehicleMakeName) return;
+    apiFetch<{ id: string; name: string }[]>('/part-catalog/makes').then((makes) => {
+      const m = (makes ?? []).find((x) => x.name.toLowerCase() === vehicleMakeName.toLowerCase());
+      if (!m) { setFitmentNoMatch(true); return; }
+      setFitmentMakeId(m.id);
+      if (!vehicleModelName) return;
+      apiFetch<{ id: string; name: string }[]>(`/part-catalog/makes/${m.id}/models`).then((models) => {
+        const mo = (models ?? []).find((x) => x.name.toLowerCase() === vehicleModelName.toLowerCase());
+        if (mo) setFitmentModelId(mo.id); else setFitmentNoMatch(true);
+      });
+    });
+  }, [vehicleMakeName, vehicleModelName]);
+
+  const noFitmentWarning = fitmentNoMatch && vehicleMakeName
+    ? `No fitment data for ${vehicleMakeName}${vehicleModelName ? ' ' + vehicleModelName : ''}${vehicleYear ? ' ' + vehicleYear : ''} — showing all parts`
+    : undefined;
 
   const [showAddLine, setShowAddLine] = useState(false);
   const [lineForm, setLineForm] = useState({ type: 'LABOR', description: '', quantity: '1', unitPrice: '', partId: '' });
@@ -452,7 +491,12 @@ export default function ServiceOrderDetailPage() {
                     {lineForm.type === 'PART' ? (
                       <>
                         <label className="input-label">{isAr ? 'القطعة *' : 'Part *'}</label>
-                        <PartPicker key={lineFormKey} isAr={isAr} onSelect={(part) => {
+                        <PartPicker key={lineFormKey} isAr={isAr}
+                          vehicleMakeId={fitmentMakeId}
+                          vehicleModelId={fitmentModelId}
+                          vehicleYear={vehicleYear}
+                          noFitmentWarning={noFitmentWarning}
+                          onSelect={(part) => {
                           setLineForm(f => ({
                             ...f,
                             partId: part.id,

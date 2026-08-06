@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRef, useState, useEffect } from 'react';
 import { useQuery, apiFetch } from '../../../lib/useApi';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
@@ -1882,6 +1883,20 @@ export default function SettingsPage() {
                   {isAr ? (NAV_AR[item] ?? item) : item}
                 </button>
               ))}
+              <Link
+                href="/settings/car-catalog"
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '0.65rem 1rem', fontSize: '0.8125rem',
+                  fontWeight: 400, background: 'transparent',
+                  color: 'var(--text-2)',
+                  borderInlineStart: '3px solid transparent',
+                  borderBottom: '1px solid var(--border)',
+                  textDecoration: 'none', transition: 'background 150ms, color 150ms',
+                }}
+              >
+                {isAr ? 'كتالوج السيارات (القطع)' : 'Car Catalog'}
+              </Link>
             </nav>
           </aside>
 
