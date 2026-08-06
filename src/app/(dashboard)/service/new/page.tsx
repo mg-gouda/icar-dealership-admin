@@ -37,7 +37,7 @@ export default function NewServiceOrderPage() {
   const { data: locationsRaw } = useQuery<any[]>('/locations');
   const { data: usersRaw } = useQuery<any>('/users?limit=100');
 
-  const vehicleOpts = (Array.isArray(vehiclesRaw) ? vehiclesRaw : (vehiclesRaw?.data ?? []))
+  const vehicleOpts = (Array.isArray(vehiclesRaw) ? vehiclesRaw : (vehiclesRaw?.items ?? vehiclesRaw?.data ?? []))
     .map((v: any) => ({ value: v.id, label: `${v.year ?? ''} ${v.make} ${v.model}${v.regLicenseNumber ? ` — ${v.regLicenseNumber}` : ''}`.trim() }));
   const customerOpts = (Array.isArray(customersRaw) ? customersRaw : [])
     .map((c: any) => ({ value: c.id, label: `${c.name}${c.phone ? ` · ${c.phone}` : ''}` }));
