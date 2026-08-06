@@ -347,7 +347,7 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
                   <th>{isAr ? 'رقم OEM' : 'OEM #'}</th>
                   <th>{isAr ? 'الاسم' : 'Name'}</th>
                   <th>{isAr ? 'الفئة' : 'Category'}</th>
-                  <th style={{ textAlign: 'right' }}>{isAr ? 'المخزن' : 'On Hand'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'المخزن' : 'In Stock'}</th>
                   <th style={{ textAlign: 'right' }}>{isAr ? 'مستوى إعادة الطلب' : 'Reorder'}</th>
                   <th style={{ textAlign: 'right' }}>{isAr ? 'تكلفة الوحدة' : 'Cost'}</th>
                   <th style={{ textAlign: 'right' }}>{isAr ? 'سعر البيع' : 'Sale Price'}</th>
