@@ -324,7 +324,7 @@ export default function DealDetailPage() {
     try {
       await apiFetch(`/deals/${id}/installment-plan`, {
         method: 'POST',
-        body: JSON.stringify({ principalAmount: principal, downPayment: ipForm.downPayment, interestRate: ipForm.interestRate, durationMonths: ipForm.durationMonths, calculationMethod: ipForm.calcMethod, totalPayable, monthlyInstallment: ipForm.calcMethod === 'AMORTIZING' ? undefined : monthly, firstInstallmentDate: ipForm.firstInstallmentDate }),
+        body: JSON.stringify({ principalAmount: principal, downPayment: ipForm.downPayment, interestRate: ipForm.interestRate, durationMonths: ipForm.durationMonths, calculationMethod: ipForm.calcMethod, totalPayable, monthlyInstallment: ipForm.calcMethod === 'AMORTIZING' ? undefined : monthly, startDate: ipForm.firstInstallmentDate }),
       });
       load();
     } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
