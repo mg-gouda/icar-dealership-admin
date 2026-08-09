@@ -477,11 +477,25 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const { t, isAr } = useLang();
   const [user, setUser] = useState<{ name: string; role: string } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true); // ponytail: SSR-safe; localStorage applied after mount
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set());
+
+  function toggleGroup(gi: number) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(gi)) next.delete(gi); else next.add(gi);
+      localStorage.setItem('sidebar_groups', JSON.stringify([...next]));
+      return next;
+    });
+  }
 
   useEffect(() => { document.title = resolveTitle(pathname); }, [pathname]);
 
   useEffect(() => {
     if (localStorage.getItem('sidebar_open') === 'false') setSidebarOpen(false);
+    try {
+      const saved = JSON.parse(localStorage.getItem('sidebar_groups') ?? '[]');
+      if (Array.isArray(saved)) setCollapsedGroups(new Set(saved));
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -572,58 +586,91 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           {NAV_GROUPS.map((group, gi) => {
             const visibleItems = group.items.filter(n => !n.roles || (user && n.roles.includes(user.role)));
             if (!visibleItems.length) return null;
+            const collapsed = sidebarOpen && !!group.label && collapsedGroups.has(gi);
             return (
               <div key={gi} style={{ marginBottom: 2 }}>
-                {/* Group header */}
+                {/* Group header — clickable when sidebar is open and group has a label */}
                 {group.label && sidebarOpen && (
-                  <div style={{
-                    padding: '0.55rem 10px 0.2rem',
-                    fontSize: '0.6rem',
-                    fontWeight: 700,
-                    letterSpacing: '0.09em',
-                    textTransform: 'uppercase',
-                    color: 'var(--sidebar-text)',
-                    opacity: 0.45,
-                    userSelect: 'none',
-                    marginTop: gi > 0 ? 4 : 0,
-                  }}>
-                    {isAr ? group.label.ar : group.label.en}
-                  </div>
+                  <button
+                    onClick={() => toggleGroup(gi)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                      padding: '0.55rem 10px 0.2rem',
+                      marginTop: gi > 0 ? 6 : 0,
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                    }}
+                  >
+                    <span style={{
+                      fontSize: '0.6rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.09em',
+                      textTransform: 'uppercase',
+                      color: 'var(--sidebar-text)',
+                      opacity: 0.45,
+                    }}>
+                      {isAr ? group.label.ar : group.label.en}
+                    </span>
+                    <svg
+                      width="10" height="10" viewBox="0 0 10 10" fill="none"
+                      style={{
+                        color: 'var(--sidebar-text)',
+                        opacity: 0.35,
+                        transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                        transition: 'transform 150ms ease',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <path d="M2 4l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
                 )}
                 {group.label && !sidebarOpen && gi > 0 && (
                   <div style={{ height: 1, background: 'var(--sidebar-border)', margin: '6px 8px', opacity: 0.5 }} />
                 )}
-                {visibleItems.map(({ href, key, icon }) => {
-                  const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
-                  return (
-                    <Link key={href} href={href}
-                      title={!sidebarOpen ? t(key) : undefined}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        padding: sidebarOpen ? '8px 10px' : '8px',
-                        justifyContent: sidebarOpen ? 'flex-start' : 'center',
-                        borderRadius: 8,
-                        fontSize: '0.8125rem',
-                        fontWeight: 500,
-                        background: active ? 'var(--sidebar-active-bg)' : 'transparent',
-                        color: active ? 'var(--sidebar-active-text)' : 'var(--sidebar-text)',
-                        textDecoration: 'none',
-                        marginBottom: 2,
-                        transition: 'background 120ms',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <span style={{ opacity: active ? 1 : 0.7, flexShrink: 0 }}>{icon}</span>
-                      {sidebarOpen && <span suppressHydrationWarning style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{t(key)}</span>}
-                      {sidebarOpen && active && (
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: 'var(--sidebar-active-dot)', marginInlineStart: 'auto' }} />
-                      )}
-                    </Link>
-                  );
-                })}
+                {/* Items — hidden when collapsed */}
+                <div style={{
+                  overflow: 'hidden',
+                  maxHeight: collapsed ? 0 : '500px',
+                  transition: 'max-height 200ms ease',
+                }}>
+                  {visibleItems.map(({ href, key, icon }) => {
+                    const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
+                    return (
+                      <Link key={href} href={href}
+                        title={!sidebarOpen ? t(key) : undefined}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          padding: sidebarOpen ? '8px 10px' : '8px',
+                          justifyContent: sidebarOpen ? 'flex-start' : 'center',
+                          borderRadius: 8,
+                          fontSize: '0.8125rem',
+                          fontWeight: 500,
+                          background: active ? 'var(--sidebar-active-bg)' : 'transparent',
+                          color: active ? 'var(--sidebar-active-text)' : 'var(--sidebar-text)',
+                          textDecoration: 'none',
+                          marginBottom: 2,
+                          transition: 'background 120ms',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <span style={{ opacity: active ? 1 : 0.7, flexShrink: 0 }}>{icon}</span>
+                        {sidebarOpen && <span suppressHydrationWarning style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{t(key)}</span>}
+                        {sidebarOpen && active && (
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: 'var(--sidebar-active-dot)', marginInlineStart: 'auto' }} />
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
             );
           })}
