@@ -144,12 +144,23 @@ export default function DashboardHome() {
   const { data: appointRes }     = useQuery<unknown>('/appointments?limit=200');
   const { data: pendingFinRes }  = useQuery<unknown>('/deals?status=PENDING_FINANCE&limit=1');
   const { data: revenueMonthRes } = useQuery<{ months?: Array<{ month: string; revenue: number }> }>('/finance/reports/revenue-by-month');
+  // Service Center
+  const { data: svcIntakeRes }   = useQuery<unknown>('/service-orders?status=INTAKE&limit=1');
+  const { data: svcInProgRes }   = useQuery<unknown>('/service-orders?status=IN_PROGRESS&limit=1');
+  const { data: partPicksRes }   = useQuery<{ pending: number }>('/service-orders/part-picks/count');
+  // Parts Inventory
+  const { data: partsAllRes }    = useQuery<unknown>('/parts?limit=1');
+  const { data: partsLowRes }    = useQuery<unknown>('/parts?lowStock=true&limit=1');
 
   const available = toTotal(vehiclesAvail);
   const reserved  = toTotal(vehiclesReserv);
   const sold      = toTotal(vehiclesSold);
   const inTransit = toTotal(vehiclesTransit);
   const invTotal  = available + reserved + sold + inTransit;
+  const openOrders   = toTotal(svcIntakeRes) + toTotal(svcInProgRes);
+  const pendingPicks = partPicksRes?.pending ?? 0;
+  const totalSkus    = toTotal(partsAllRes);
+  const lowStockCnt  = toTotal(partsLowRes);
 
   const leads       = toArr(leadsRes);
   const deals       = toArr(dealsRes);
@@ -248,6 +259,40 @@ export default function DashboardHome() {
             sub={isAr ? `${pendingFin} بانتظار التمويل` : `${pendingFin} pending finance`}
             color="var(--warning)" href="/appointments"
             icon={<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.2"/><path d="M2 7h12" stroke="currentColor" strokeWidth="1.2"/><path d="M5 1v3M11 1v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>}
+          />
+        </div>
+
+        {/* ── Service Center & Parts KPI row ───────────────────────── */}
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+          <KpiCard
+            label={isAr ? 'أوامر مفتوحة' : 'Open Service Orders'}
+            value={openOrders}
+            sub={isAr
+              ? `${toTotal(svcIntakeRes)} مفتوح · ${toTotal(svcInProgRes)} جاري`
+              : `${toTotal(svcIntakeRes)} intake · ${toTotal(svcInProgRes)} in progress`}
+            color="var(--info)" href="/service"
+            icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>}
+          />
+          <KpiCard
+            label={isAr ? 'قطع تحتاج للسحب' : 'Parts to Fetch'}
+            value={pendingPicks}
+            sub={isAr ? 'قطع غيار معلقة من المستودع' : 'Pending warehouse picks'}
+            color={pendingPicks > 0 ? 'var(--warning)' : 'var(--text-3)'} href="/service/part-picks"
+            icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>}
+          />
+          <KpiCard
+            label={isAr ? 'إجمالي قطع الغيار' : 'Parts SKUs in Stock'}
+            value={totalSkus}
+            sub={isAr ? 'أصناف مخزنة' : 'Unique part numbers'}
+            color="var(--purple)" href="/parts"
+            icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="17"/><line x1="9.5" y1="14.5" x2="14.5" y2="14.5"/></svg>}
+          />
+          <KpiCard
+            label={isAr ? 'تنبيهات نفاد المخزون' : 'Low Stock Alerts'}
+            value={lowStockCnt}
+            sub={isAr ? 'أصناف وصلت أو قاربت الحد الأدنى' : 'At or below reorder level'}
+            color={lowStockCnt > 0 ? 'var(--danger)' : 'var(--success)'} href="/parts?lowStock=true"
+            icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>}
           />
         </div>
 
