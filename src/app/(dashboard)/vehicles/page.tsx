@@ -79,6 +79,15 @@ function agingBadge(days: number | null, isAr: boolean): React.ReactNode {
 
 const PAGE_SIZE = 25;
 
+const DELETE_ROLES = ['MANAGER', 'ADMIN', 'SUPER_ADMIN'];
+
+function useUserRole(): string {
+  const cookie = typeof document !== 'undefined'
+    ? document.cookie.split('; ').find((c) => c.startsWith('admin_role='))
+    : undefined;
+  return cookie ? cookie.split('=')[1] : '';
+}
+
 export default function VehiclesPage() {
   const router = useRouter();
   const { isAr } = useLang();
@@ -165,6 +174,24 @@ export default function VehiclesPage() {
     : rawVehicles;
 
   const canSeeCost = canViewField('Vehicle', 'cost');
+
+  const userRole = useUserRole();
+  const canDelete = DELETE_ROLES.includes(userRole);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  async function deleteVehicle(vid: string) {
+    const confirmed = window.confirm(isAr ? 'هل أنت متأكد من حذف هذه المركبة؟ لا يمكن التراجع.' : 'Delete this vehicle? This cannot be undone.');
+    if (!confirmed) return;
+    setDeleting(vid);
+    try {
+      await apiFetch(`/vehicles/${vid}`, { method: 'DELETE' });
+      reload();
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Delete failed');
+    } finally {
+      setDeleting(null);
+    }
+  }
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
@@ -477,11 +504,7 @@ export default function VehiclesPage() {
                     const cost = v.acquisitionCost ?? v.cost;
                     const days = computeDaysInStock(v);
                     return (
-                      <tr
-                        key={v.id}
-                        onClick={() => router.push(`/vehicles/${v.id}`)}
-                        style={{ cursor: 'pointer' }}
-                      >
+                      <tr key={v.id}>
                         <td style={{ padding: '0.375rem 0.75rem' }}>
                           {v.images?.[0]?.url ? (
                             <img
@@ -537,14 +560,25 @@ export default function VehiclesPage() {
                           </span>
                         </td>
                         <td style={{ textAlign: 'right' }}>
-                          <Link
-                            href={`/vehicles/${v.id}`}
-                            className="btn btn-ghost btn-sm"
-                            onClick={(e) => e.stopPropagation()}
-                            style={{ color: 'var(--primary)' }}
-                          >
-                            {isAr ? 'تعديل' : 'Edit'}
-                          </Link>
+                          <div style={{ display: 'flex', gap: '0.375rem', justifyContent: 'flex-end' }}>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--primary)' }}
+                              onClick={() => router.push(`/vehicles/${v.id}`)}
+                            >
+                              <VEditIcon />{isAr ? 'تعديل' : 'Edit'}
+                            </button>
+                            {canDelete && (
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--danger)' }}
+                                disabled={deleting === v.id}
+                                onClick={() => deleteVehicle(v.id)}
+                              >
+                                <VTrashIcon />{deleting === v.id ? '…' : (isAr ? 'حذف' : 'Delete')}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -681,6 +715,14 @@ export default function VehiclesPage() {
       `}</style>
     </div>
   );
+}
+
+/* ── Action icons ───────────────────────────────────────────────────────── */
+function VEditIcon() {
+  return <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M11 2l3 3-9 9H2v-3L11 2z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg>;
+}
+function VTrashIcon() {
+  return <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg>;
 }
 
 /* ── Vehicle grid card ──────────────────────────────────────────────────── */
