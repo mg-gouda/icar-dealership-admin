@@ -50,7 +50,8 @@ export default function ByVehiclePage() {
   const vehicles = Array.isArray(data) ? data : [];
 
   const SERVICE_TABS = [
-    { href: '/service',            labelEn: 'Service Orders', labelAr: 'أوامر الصيانة', exact: true  },
+    { href: '/service',            labelEn: 'Dashboard',      labelAr: 'لوحة التحكم',   exact: true  },
+    { href: '/service/orders',     labelEn: 'Orders',         labelAr: 'أوامر الصيانة', exact: false },
     { href: '/service/by-vehicle', labelEn: 'By Vehicle',     labelAr: 'حسب السيارة',   exact: false },
     { href: '/service/part-picks', labelEn: 'Part Picks',     labelAr: 'سحب القطع',      exact: false },
   ];
