@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../lib/useApi';
-import { canViewField } from '../../../lib/fieldPermissions';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 import { useLang } from '../../../lib/lang-context';
 
@@ -174,8 +173,6 @@ export default function VehiclesPage() {
         return days != null && days > Number(agingFilter);
       })
     : rawVehicles;
-
-  const canSeeCost = canViewField('Vehicle', 'cost');
 
   const userRole = useUserRole();
   const canDelete = DELETE_ROLES.includes(userRole);
@@ -481,9 +478,7 @@ export default function VehiclesPage() {
                   <th>{isAr ? 'السنة' : 'Year'}</th>
                   <th>{isAr ? 'اللون' : 'Color'}</th>
                   <th style={{ textAlign: 'right' }}>{isAr ? 'سعر البيع (ج.م)' : 'Sale Price (EGP)'}</th>
-                  <th style={{ textAlign: 'right' }}>
-                    {canSeeCost ? (isAr ? 'السعر الرسمي للوكيل (ج.م)' : 'Official Price (EGP)') : (isAr ? 'السعر الرسمي' : 'Official Price')}
-                  </th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'السعر الرسمي للوكيل (ج.م)' : 'Official Price (EGP)'}</th>
                   <th style={{ textAlign: 'right' }}>{isAr ? 'أوفر برايس (ج.م)' : 'Overprice (EGP)'}</th>
                   <th style={{ textAlign: 'right' }}>{isAr ? 'أيام في المخزن' : 'Days In Stock'}</th>
                   <th>{isAr ? 'الفرع' : 'Location'}</th>
@@ -541,9 +536,7 @@ export default function VehiclesPage() {
                           {v.salePrice != null || v.price != null ? fmt(v.salePrice ?? v.price) : '—'}
                         </td>
                         <td style={{ textAlign: 'right', fontWeight: 500, color: 'var(--text-1)' }}>
-                          {canSeeCost
-                            ? (cost != null ? fmt(cost) : '—')
-                            : <span style={{ letterSpacing: '0.15em', color: 'var(--text-3)' }}>···</span>}
+                          {cost != null ? fmt(cost) : '—'}
                         </td>
                         <td style={{ textAlign: 'right', color: v.overprice ? 'var(--success-fg)' : 'var(--text-3)' }}>
                           {v.overprice ? fmt(Number(v.overprice)) : '—'}
