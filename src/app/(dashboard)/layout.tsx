@@ -274,7 +274,7 @@ function DateRangePicker() {
           <path d="M1 5h12" stroke="currentColor" strokeWidth="1.2"/>
           <path d="M5 1v4M9 1v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
         </svg>
-        {label}
+        <span suppressHydrationWarning>{label}</span>
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ opacity: 0.5 }}>
           <path d="M2.5 4l2.5 2.5L7.5 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
         </svg>
