@@ -176,7 +176,7 @@ const CAR_SECTIONS = [
 const EMPTY_PART_FORM = {
   partNumber: '', oemNumber: '', name: '', description: '',
   isUniversal: false, unitOfMeasure: 'EA', costPrice: '', salePrice: '',
-  reorderLevel: '5', locationId: '', supplierId: '',
+  reorderLevel: '5', locationId: '', supplierId: '', categoryId: '',
 };
 
 // ── Main Component ─────────────────────────────────────────────────────────
@@ -279,10 +279,11 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
     [locationFilter, makeFilter, modelFilter, yearFilter, sectionFilter, lowStockOnly, search, page],
   );
 
-  const { data: locationsRaw } = useQuery<any[]>('/locations');
-  const { data: suppliersRaw } = useQuery<any[]>('/partners?type=VENDOR&limit=100');
-  const { data: makesRaw } = useQuery<any[]>('/part-catalog/makes');
-  const { data: modelsRaw } = useQuery<any[]>(makeFilter ? `/part-catalog/makes/${makeFilter}/models` : null, [makeFilter]);
+  const { data: locationsRaw }    = useQuery<any[]>('/locations');
+  const { data: suppliersRaw }    = useQuery<any[]>('/partners?type=VENDOR&limit=100');
+  const { data: makesRaw }        = useQuery<any[]>('/part-catalog/makes');
+  const { data: categoriesRaw }   = useQuery<any[]>('/part-catalog/categories');
+  const { data: modelsRaw }       = useQuery<any[]>(makeFilter ? `/part-catalog/makes/${makeFilter}/models` : null, [makeFilter]);
   const { data: fitmentModelsRaw } = useQuery<any[]>(fitmentMakeId ? `/part-catalog/makes/${fitmentMakeId}/models` : null, [fitmentMakeId]);
 
   const parts = data?.items ?? [];
@@ -297,6 +298,10 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
   const supplierOpts = [
     { value: '', label: isAr ? 'بدون مورد' : 'No supplier' },
     ...((Array.isArray(suppliersRaw) ? suppliersRaw : []).map((s: any) => ({ value: s.id, label: s.name }))),
+  ];
+  const categoryOpts = [
+    { value: '', label: isAr ? 'بدون فئة' : 'No category' },
+    ...((Array.isArray(categoriesRaw) ? categoriesRaw : []).map((c: any) => ({ value: c.id, label: c.name }))),
   ];
   const makeOpts = [
     { value: '', label: isAr ? 'كل الماركات' : 'All makes' },
@@ -348,7 +353,8 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
           salePrice: Number(partForm.salePrice) || 0,
           reorderLevel: Number(partForm.reorderLevel) || 5,
           locationId: partForm.locationId,
-          ...(partForm.supplierId && { supplierId: partForm.supplierId }),
+          ...(partForm.supplierId  && { supplierId:  partForm.supplierId }),
+          ...(partForm.categoryId  && { categoryId:  partForm.categoryId }),
         }),
       });
       setShowAddPart(false); setPartForm({ ...EMPTY_PART_FORM }); reload();
@@ -417,6 +423,7 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
                   <th>{isAr ? 'رقم القطعة' : 'Part #'}</th>
                   <th>{isAr ? 'رقم OEM' : 'OEM #'}</th>
                   <th>{isAr ? 'الاسم' : 'Name'}</th>
+                  <th>{isAr ? 'الفئة' : 'Category'}</th>
                   <th>{isAr ? 'الملاءمة' : 'Fitment'}</th>
                   <th style={{ textAlign: 'right' }}>{isAr ? 'المخزن' : 'In Stock'}</th>
                   <th style={{ textAlign: 'right' }}>{isAr ? 'مستوى إعادة الطلب' : 'Reorder'}</th>
@@ -440,6 +447,13 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
                       <td><span style={{ color: 'var(--primary)', fontWeight: 500, fontFamily: 'monospace', fontSize: '0.8rem' }}>{p.partNumber}</span></td>
                       <td style={{ color: 'var(--text-3)', fontSize: '0.8rem', fontFamily: 'monospace' }}>{p.oemNumber ?? '—'}</td>
                       <td style={{ fontWeight: 500 }}>{p.name}</td>
+                      <td style={{ fontSize: '0.75rem', color: 'var(--text-2)' }}>
+                        {(p as any).category?.name
+                          ? <span style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '0.3rem', padding: '0.1rem 0.4rem', whiteSpace: 'nowrap' }}>
+                              {(p as any).category.name}
+                            </span>
+                          : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                      </td>
                       <td style={{ fontSize: '0.8rem' }}>
                         {p.isUniversal
                           ? <span className="badge badge-info">{isAr ? 'شامل' : 'Universal'}</span>
@@ -459,7 +473,7 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
                   );
                 })}
                 {parts.length === 0 && (
-                  <tr><td colSpan={9} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-3)' }}>
+                  <tr><td colSpan={10} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-3)' }}>
                     {isAr ? 'لا توجد قطع غيار.' : 'No parts found.'}
                   </td></tr>
                 )}
@@ -673,9 +687,13 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
                   <SearchableCombobox options={locationSelectOpts} value={partForm.locationId} onChange={(v) => setPF('locationId', v)} placeholder={isAr ? 'اختر الفرع…' : 'Select location…'} />
                 </div>
                 <div>
-                  <label className="input-label">{isAr ? 'المورد' : 'Supplier'}</label>
-                  <SearchableCombobox options={supplierOpts} value={partForm.supplierId} onChange={(v) => setPF('supplierId', v)} placeholder={isAr ? 'اختر المورد…' : 'Select supplier…'} clearable clearLabel={isAr ? 'بدون مورد' : 'No supplier'} />
+                  <label className="input-label">{isAr ? 'الفئة' : 'Category'}</label>
+                  <SearchableCombobox options={categoryOpts} value={partForm.categoryId} onChange={(v) => setPF('categoryId', v)} placeholder={isAr ? 'اختر الفئة…' : 'Select category…'} clearable clearLabel={isAr ? 'بدون فئة' : 'No category'} />
                 </div>
+              </div>
+              <div>
+                <label className="input-label">{isAr ? 'المورد' : 'Supplier'}</label>
+                <SearchableCombobox options={supplierOpts} value={partForm.supplierId} onChange={(v) => setPF('supplierId', v)} placeholder={isAr ? 'اختر المورد…' : 'Select supplier…'} clearable clearLabel={isAr ? 'بدون مورد' : 'No supplier'} />
               </div>
               <div>
                 <label className="input-label">{isAr ? 'الوصف' : 'Description'}</label>

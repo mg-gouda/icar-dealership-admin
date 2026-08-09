@@ -354,10 +354,10 @@ function SidebarBrand() {
         <>
           <span style={{ fontSize: '1rem' }} aria-hidden>🚗</span>
           <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: '0.8125rem', fontWeight: 600, lineHeight: 1, color: 'var(--sidebar-active-text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <p suppressHydrationWarning style={{ fontSize: '0.8125rem', fontWeight: 600, lineHeight: 1, color: 'var(--sidebar-active-text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {displayName || t('app.name')}
             </p>
-            <p style={{ fontSize: '0.625rem', marginTop: 2, color: 'var(--sidebar-text)', margin: '2px 0 0' }}>
+            <p suppressHydrationWarning style={{ fontSize: '0.625rem', marginTop: 2, color: 'var(--sidebar-text)', margin: '2px 0 0' }}>
               {t('app.subtitle')}
             </p>
           </div>
