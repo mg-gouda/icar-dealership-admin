@@ -570,7 +570,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                   {user?.role ?? '—'}
                 </p>
               </div>
-              <button onClick={logout} title={t('btn.signout')}
+              <button suppressHydrationWarning onClick={logout} title={t('btn.signout')}
                 style={{ padding: 4, borderRadius: 4, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--sidebar-text)', flexShrink: 0 }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
@@ -588,7 +588,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                 style={{ background: 'var(--primary)', color: '#fff' }}>
                 {initials}
               </span>
-              <button onClick={logout} title={t('btn.signout')}
+              <button suppressHydrationWarning onClick={logout} title={t('btn.signout')}
                 style={{ padding: 4, borderRadius: 4, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--sidebar-text)' }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}

@@ -105,7 +105,7 @@ export default function SearchableCombobox({
           transition: 'border-color 150ms, box-shadow 150ms',
         }}
       >
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span suppressHydrationWarning style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {display || placeholder}
         </span>
         <svg
