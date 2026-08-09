@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, apiFetch } from '../../../lib/useApi';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 import NumericInput from '../../../components/ui/NumericInput';
@@ -173,11 +174,6 @@ const CAR_SECTIONS = [
   { value: 'BODY',         labelEn: 'Body',         labelAr: 'هيكل' },
 ];
 
-const EMPTY_PART_FORM = {
-  partNumber: '', oemNumber: '', name: '', description: '',
-  isUniversal: false, unitOfMeasure: 'EA', costPrice: '', salePrice: '',
-  reorderLevel: '5', locationId: '', supplierId: '', categoryId: '',
-};
 
 // ── Main Component ─────────────────────────────────────────────────────────
 
@@ -233,6 +229,7 @@ export default function PartsPage() {
 // ── Inventory Tab (existing) ───────────────────────────────────────────────
 
 function InventoryTab({ isAr }: { isAr: boolean }) {
+  const router = useRouter();
   const [locationFilter, setLocationFilter] = useState('');
   const [makeFilter, setMakeFilter]     = useState('');
   const [modelFilter, setModelFilter]   = useState('');
@@ -243,25 +240,7 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
   const [page, setPage] = useState(1);
   const limit = 50;
 
-  const [adjustPart, setAdjustPart] = useState<Part | null>(null);
-  const [adjustQty, setAdjustQty] = useState('');
-  const [adjustReason, setAdjustReason] = useState('');
-  const [adjustErr, setAdjustErr] = useState('');
-  const [partDetailTab, setPartDetailTab] = useState<'stock' | 'fitment'>('stock');
-  const [fitmentMakeId, setFitmentMakeId] = useState('');
-  const [fitmentModelId, setFitmentModelId] = useState('');
-  const [fitmentYearFrom, setFitmentYearFrom] = useState('');
-  const [fitmentYearTo, setFitmentYearTo] = useState('');
-  const [fitmentSection, setFitmentSection] = useState('');
-  const [fitmentErr, setFitmentErr] = useState('');
-  const [fitmentSaving, setFitmentSaving] = useState(false);
-  const [adjustSaving, setAdjustSaving] = useState(false);
-
-  const [showAddPart, setShowAddPart] = useState(false);
-  const [partForm, setPartForm] = useState({ ...EMPTY_PART_FORM });
-  const [partErr, setPartErr] = useState('');
-  const [partSaving, setPartSaving] = useState(false);
-  const [scanTarget, setScanTarget] = useState<'addPart' | 'adjust' | null>(null);
+  const [scanTarget, setScanTarget] = useState<'adjust' | null>(null);
 
   const qs = new URLSearchParams({
     page: String(page), limit: String(limit),
@@ -280,11 +259,8 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
   );
 
   const { data: locationsRaw }    = useQuery<any[]>('/locations');
-  const { data: suppliersRaw }    = useQuery<any[]>('/partners?type=VENDOR&limit=100');
   const { data: makesRaw }        = useQuery<any[]>('/part-catalog/makes');
-  const { data: categoriesRaw }   = useQuery<any[]>('/part-catalog/categories');
   const { data: modelsRaw }       = useQuery<any[]>(makeFilter ? `/part-catalog/makes/${makeFilter}/models` : null, [makeFilter]);
-  const { data: fitmentModelsRaw } = useQuery<any[]>(fitmentMakeId ? `/part-catalog/makes/${fitmentMakeId}/models` : null, [fitmentMakeId]);
 
   const parts = data?.items ?? [];
   const total = data?.total ?? 0;
@@ -293,15 +269,6 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
   const locationFilterOpts = [
     { value: '', label: isAr ? 'كل الفروع' : 'All locations' },
     ...((Array.isArray(locationsRaw) ? locationsRaw : []).map((l: any) => ({ value: l.id, label: l.name }))),
-  ];
-  const locationSelectOpts = (Array.isArray(locationsRaw) ? locationsRaw : []).map((l: any) => ({ value: l.id, label: l.name }));
-  const supplierOpts = [
-    { value: '', label: isAr ? 'بدون مورد' : 'No supplier' },
-    ...((Array.isArray(suppliersRaw) ? suppliersRaw : []).map((s: any) => ({ value: s.id, label: s.name }))),
-  ];
-  const categoryOpts = [
-    { value: '', label: isAr ? 'بدون فئة' : 'No category' },
-    ...((Array.isArray(categoriesRaw) ? categoriesRaw : []).map((c: any) => ({ value: c.id, label: c.name }))),
   ];
   const makeOpts = [
     { value: '', label: isAr ? 'كل الماركات' : 'All makes' },
@@ -316,51 +283,6 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
     ...CAR_SECTIONS.map((s) => ({ value: s.value, label: isAr ? s.labelAr : s.labelEn })),
   ];
 
-  const submitAdjust = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!adjustPart || !adjustQty) { setAdjustErr('Quantity required.'); return; }
-    setAdjustSaving(true); setAdjustErr('');
-    try {
-      await apiFetch(`/parts/${adjustPart.id}/adjust`, {
-        method: 'POST',
-        body: JSON.stringify({ qty: Number(adjustQty), reason: adjustReason }),
-      });
-      setAdjustPart(null); setAdjustQty(''); setAdjustReason(''); reload();
-    } catch (e: unknown) { setAdjustErr(e instanceof Error ? e.message : 'Adjustment failed'); }
-    finally { setAdjustSaving(false); }
-  }, [adjustPart, adjustQty, adjustReason, reload]);
-
-  function setPF(k: string, v: string | boolean) { setPartForm((prev) => ({ ...prev, [k]: v })); }
-
-  const submitAddPart = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!partForm.partNumber || !partForm.name || !partForm.locationId) {
-      setPartErr(isAr ? 'رقم القطعة والاسم والفرع مطلوبة.' : 'Part number, name, and location are required.');
-      return;
-    }
-    setPartSaving(true); setPartErr('');
-    try {
-      await apiFetch('/parts', {
-        method: 'POST',
-        body: JSON.stringify({
-          partNumber: partForm.partNumber,
-          ...(partForm.oemNumber && { oemNumber: partForm.oemNumber }),
-          name: partForm.name,
-          ...(partForm.description && { description: partForm.description }),
-          isUniversal: partForm.isUniversal,
-          unitOfMeasure: partForm.unitOfMeasure || 'EA',
-          costPrice: Number(partForm.costPrice) || 0,
-          salePrice: Number(partForm.salePrice) || 0,
-          reorderLevel: Number(partForm.reorderLevel) || 5,
-          locationId: partForm.locationId,
-          ...(partForm.supplierId  && { supplierId:  partForm.supplierId }),
-          ...(partForm.categoryId  && { categoryId:  partForm.categoryId }),
-        }),
-      });
-      setShowAddPart(false); setPartForm({ ...EMPTY_PART_FORM }); reload();
-    } catch (e: unknown) { setPartErr(e instanceof Error ? e.message : 'Error adding part'); }
-    finally { setPartSaving(false); }
-  }, [partForm, reload, isAr]);
 
   return (
     <div>
@@ -371,7 +293,7 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
             style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
             <CameraIcon /> {isAr ? 'مسح للتعديل' : 'Scan to Adjust'}
           </button>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowAddPart(true)}>
+          <button className="btn btn-primary btn-sm" onClick={() => router.push('/parts/new')}>
             {isAr ? '+ إضافة قطعة' : '+ Add Part'}
           </button>
         </div>
@@ -437,13 +359,7 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
                   const isLow = p.onHand <= p.reorderLevel;
                   return (
                     <tr key={p.id} style={{ cursor: 'pointer', background: isLow ? 'color-mix(in srgb, var(--warning) 8%, transparent)' : undefined }}
-                      onClick={async () => {
-                        // fetch with applications for fitment tab
-                        const full = await apiFetch<Part>(`/parts/${p.id}`).catch(() => p);
-                        setAdjustPart(full); setAdjustQty(''); setAdjustReason(''); setAdjustErr('');
-                        setPartDetailTab('stock'); setFitmentMakeId(''); setFitmentModelId('');
-                        setFitmentYearFrom(''); setFitmentYearTo(''); setFitmentSection(''); setFitmentErr('');
-                      }}>
+                      onClick={() => router.push(`/parts/${p.id}`)}>
                       <td><span style={{ color: 'var(--primary)', fontWeight: 500, fontFamily: 'monospace', fontSize: '0.8rem' }}>{p.partNumber}</span></td>
                       <td style={{ color: 'var(--text-3)', fontSize: '0.8rem', fontFamily: 'monospace' }}>{p.oemNumber ?? '—'}</td>
                       <td style={{ fontWeight: 500 }}>{p.name}</td>
@@ -490,239 +406,17 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
         )}
       </div>
 
-      {/* Part Detail Modal (Stock Adjust + Fitment) */}
-      {adjustPart && (
-        <Modal onClose={() => { setAdjustPart(null); setPartDetailTab('stock'); }} wide>
-          <ModalHeader
-            title={adjustPart.name}
-            subtitle={`${adjustPart.partNumber}${adjustPart.isUniversal ? ` · ${isAr ? 'شامل' : 'Universal'}` : ''}`}
-            onClose={() => { setAdjustPart(null); setPartDetailTab('stock'); }}
-          />
-          {/* Mini tab bar */}
-          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', padding: '0 1.5rem' }}>
-            {(['stock', 'fitment'] as const).map((t) => (
-              <button key={t} onClick={() => setPartDetailTab(t)} style={{
-                padding: '0.5rem 1rem', fontSize: '0.8125rem',
-                fontWeight: partDetailTab === t ? 600 : 400,
-                color: partDetailTab === t ? 'var(--primary)' : 'var(--text-2)',
-                background: 'none', border: 'none',
-                borderBottom: partDetailTab === t ? '2px solid var(--primary)' : '2px solid transparent',
-                cursor: 'pointer', marginBottom: -1,
-              }}>
-                {t === 'stock' ? (isAr ? 'تعديل المخزن' : 'Adjust Stock') : (isAr ? 'الملاءمة' : 'Fitment')}
-              </button>
-            ))}
-          </div>
-
-          {partDetailTab === 'stock' && (
-            <form onSubmit={submitAdjust} style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-2)', margin: 0 }}>
-                {isAr ? 'الحالي:' : 'Current:'} <strong>{adjustPart.onHand}</strong>
-              </p>
-              <div>
-                <label className="input-label">{isAr ? 'الكمية (+ للإضافة، − للخصم)' : 'Quantity (+ to add, − to remove)'}</label>
-                <NumericInput step="1" className="input" placeholder="e.g. 5 or -2"
-                  value={adjustQty} onChange={(val) => setAdjustQty(val)} />
-              </div>
-              <div>
-                <label className="input-label">{isAr ? 'السبب' : 'Reason'}</label>
-                <input className="input" placeholder={isAr ? 'مثال: استلام طلب، تالف، جرد…' : 'e.g. Received PO, damaged, cycle count…'}
-                  value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} />
-              </div>
-              {adjustErr && <p style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>{adjustErr}</p>}
-              <ModalFooter onCancel={() => setAdjustPart(null)} saveLabel={isAr ? 'تطبيق التعديل' : 'Apply Adjustment'} saving={adjustSaving} isAr={isAr} />
-            </form>
-          )}
-
-          {partDetailTab === 'fitment' && (
-            <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {adjustPart.isUniversal && (
-                <p style={{ fontSize: '0.875rem', color: 'var(--text-2)', padding: '0.75rem', background: 'color-mix(in srgb, var(--primary) 8%, transparent)', borderRadius: 8 }}>
-                  {isAr ? 'هذه القطعة شاملة — تناسب جميع السيارات.' : 'This is a universal part — fits all vehicles.'}
-                </p>
-              )}
-              {/* Existing applications */}
-              {(adjustPart.applications ?? []).length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  {adjustPart.applications!.map((app) => (
-                    <span key={app.id} style={{
-                      display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
-                      padding: '0.25rem 0.6rem', borderRadius: 20,
-                      background: 'var(--surface-2)', border: '1px solid var(--border)',
-                      fontSize: '0.8rem', color: 'var(--text-1)',
-                    }}>
-                      {app.make.name} · {app.model.name} · {app.yearFrom}–{app.yearTo} · {CAR_SECTIONS.find(s => s.value === app.section)?.[isAr ? 'labelAr' : 'labelEn'] ?? app.section}
-                      <button type="button" onClick={async () => {
-                        await apiFetch(`/parts/${adjustPart.id}/applications/${app.id}`, { method: 'DELETE' });
-                        setAdjustPart((prev) => prev ? { ...prev, applications: prev.applications?.filter(a => a.id !== app.id) } : prev);
-                        reload();
-                      }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', lineHeight: 1, padding: '0 0 0 0.125rem', fontSize: '1rem' }}>×</button>
-                    </span>
-                  ))}
-                </div>
-              )}
-              {(adjustPart.applications ?? []).length === 0 && !adjustPart.isUniversal && (
-                <p style={{ fontSize: '0.875rem', color: 'var(--text-3)' }}>{isAr ? 'لا توجد تطبيقات بعد.' : 'No fitment applications yet.'}</p>
-              )}
-              {/* Add application form */}
-              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-                <p style={{ fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--text-1)' }}>
-                  {isAr ? '+ إضافة تطبيق' : '+ Add Fitment'}
-                </p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                  <div>
-                    <label className="input-label">{isAr ? 'الماركة' : 'Make'}</label>
-                    <SearchableCombobox
-                      options={(Array.isArray(makesRaw) ? makesRaw : []).map((m: any) => ({ value: m.id, label: m.name }))}
-                      value={fitmentMakeId} onChange={(v) => { setFitmentMakeId(v); setFitmentModelId(''); }}
-                      placeholder={isAr ? 'اختر الماركة…' : 'Select make…'} />
-                  </div>
-                  <div>
-                    <label className="input-label">{isAr ? 'الموديل' : 'Model'}</label>
-                    <SearchableCombobox
-                      options={(Array.isArray(fitmentModelsRaw) ? fitmentModelsRaw : []).map((m: any) => ({ value: m.id, label: m.name }))}
-                      value={fitmentModelId} onChange={setFitmentModelId}
-                      placeholder={isAr ? 'اختر الموديل…' : 'Select model…'} />
-                  </div>
-                  <div>
-                    <label className="input-label">{isAr ? 'من سنة' : 'Year From'}</label>
-                    <input className="input" type="number" min="1980" max="2099" placeholder="e.g. 2018"
-                      value={fitmentYearFrom} onChange={(e) => setFitmentYearFrom(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="input-label">{isAr ? 'إلى سنة' : 'Year To'}</label>
-                    <input className="input" type="number" min="1980" max="2099" placeholder="e.g. 2024"
-                      value={fitmentYearTo} onChange={(e) => setFitmentYearTo(e.target.value)} />
-                  </div>
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <label className="input-label">{isAr ? 'قسم السيارة' : 'Car Section'}</label>
-                    <SearchableCombobox
-                      options={CAR_SECTIONS.map((s) => ({ value: s.value, label: isAr ? s.labelAr : s.labelEn }))}
-                      value={fitmentSection} onChange={setFitmentSection}
-                      placeholder={isAr ? 'اختر القسم…' : 'Select section…'} />
-                  </div>
-                </div>
-                {fitmentErr && <p style={{ color: 'var(--danger)', fontSize: '0.8rem', marginTop: '0.5rem' }}>{fitmentErr}</p>}
-                <button type="button" className="btn btn-primary btn-sm" disabled={fitmentSaving}
-                  style={{ marginTop: '0.75rem' }}
-                  onClick={async () => {
-                    if (!fitmentMakeId || !fitmentModelId || !fitmentYearFrom || !fitmentYearTo || !fitmentSection) {
-                      setFitmentErr(isAr ? 'جميع الحقول مطلوبة.' : 'All fields required.');
-                      return;
-                    }
-                    setFitmentSaving(true); setFitmentErr('');
-                    try {
-                      const app = await apiFetch<PartApplication>(`/parts/${adjustPart.id}/applications`, {
-                        method: 'POST',
-                        body: JSON.stringify({ makeId: fitmentMakeId, modelId: fitmentModelId, yearFrom: Number(fitmentYearFrom), yearTo: Number(fitmentYearTo), section: fitmentSection }),
-                      });
-                      setAdjustPart((prev) => prev ? { ...prev, applications: [...(prev.applications ?? []), app] } : prev);
-                      setFitmentMakeId(''); setFitmentModelId(''); setFitmentYearFrom(''); setFitmentYearTo(''); setFitmentSection('');
-                      reload();
-                    } catch (e: unknown) { setFitmentErr(e instanceof Error ? e.message : 'Failed to add fitment'); }
-                    finally { setFitmentSaving(false); }
-                  }}>
-                  {fitmentSaving ? '…' : (isAr ? 'إضافة التطبيق' : 'Add Fitment')}
-                </button>
-              </div>
-            </div>
-          )}
-        </Modal>
-      )}
-
-      {/* Add Part Modal */}
-      {showAddPart && (
-        <Modal onClose={() => setShowAddPart(false)} wide>
-          <ModalHeader title={isAr ? 'إضافة قطعة جديدة' : 'Add New Part'} onClose={() => setShowAddPart(false)} />
-          <form onSubmit={submitAddPart}>
-            <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: '1rem' }}>
-                <div>
-                  <label className="input-label">{isAr ? 'رقم القطعة *' : 'Part Number *'}</label>
-                  <div style={{ display: 'flex', gap: '0.375rem' }}>
-                    <input className="input" value={partForm.partNumber} onChange={(e) => setPF('partNumber', e.target.value)} required style={{ flex: 1 }} />
-                    <button type="button" title="Scan barcode" onClick={() => setScanTarget('addPart')}
-                      style={{ flexShrink: 0, width: 36, height: 38, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-2)' }}>
-                      <CameraIcon />
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="input-label">{isAr ? 'رقم OEM' : 'OEM Number'}</label>
-                  <input className="input" value={partForm.oemNumber} onChange={(e) => setPF('oemNumber', e.target.value)} />
-                </div>
-                <div>
-                  <label className="input-label">{isAr ? 'الاسم *' : 'Name *'}</label>
-                  <input className="input" placeholder={isAr ? 'اسم القطعة…' : 'Part name…'} value={partForm.name} onChange={(e) => setPF('name', e.target.value)} required />
-                </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div>
-                  <label className="input-label">{isAr ? 'وحدة القياس' : 'Unit of Measure'}</label>
-                  <input className="input" placeholder="EA" value={partForm.unitOfMeasure} onChange={(e) => setPF('unitOfMeasure', e.target.value)} />
-                </div>
-                <div>
-                  <label className="input-label">{isAr ? 'مستوى إعادة الطلب' : 'Reorder Level'}</label>
-                  <NumericInput min="0" className="input" value={partForm.reorderLevel} onChange={(val) => setPF('reorderLevel', val)} />
-                </div>
-              </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem' }}>
-                <input type="checkbox" checked={partForm.isUniversal}
-                  onChange={(e) => setPartForm((prev) => ({ ...prev, isUniversal: e.target.checked }))} />
-                <span style={{ fontWeight: 500 }}>{isAr ? 'قطعة شاملة — تناسب جميع السيارات' : 'Universal Part — fits all vehicles'}</span>
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div>
-                  <label className="input-label">{isAr ? 'تكلفة الوحدة' : 'Cost Price'}</label>
-                  <NumericInput min="0" step="0.01" className="input" placeholder="0.00" value={partForm.costPrice} onChange={(val) => setPF('costPrice', val)} />
-                </div>
-                <div>
-                  <label className="input-label">{isAr ? 'سعر البيع' : 'Sale Price'}</label>
-                  <NumericInput min="0" step="0.01" className="input" placeholder="0.00" value={partForm.salePrice} onChange={(val) => setPF('salePrice', val)} />
-                </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div>
-                  <label className="input-label">{isAr ? 'الفرع *' : 'Location *'}</label>
-                  <SearchableCombobox options={locationSelectOpts} value={partForm.locationId} onChange={(v) => setPF('locationId', v)} placeholder={isAr ? 'اختر الفرع…' : 'Select location…'} />
-                </div>
-                <div>
-                  <label className="input-label">{isAr ? 'الفئة' : 'Category'}</label>
-                  <SearchableCombobox options={categoryOpts} value={partForm.categoryId} onChange={(v) => setPF('categoryId', v)} placeholder={isAr ? 'اختر الفئة…' : 'Select category…'} clearable clearLabel={isAr ? 'بدون فئة' : 'No category'} />
-                </div>
-              </div>
-              <div>
-                <label className="input-label">{isAr ? 'المورد' : 'Supplier'}</label>
-                <SearchableCombobox options={supplierOpts} value={partForm.supplierId} onChange={(v) => setPF('supplierId', v)} placeholder={isAr ? 'اختر المورد…' : 'Select supplier…'} clearable clearLabel={isAr ? 'بدون مورد' : 'No supplier'} />
-              </div>
-              <div>
-                <label className="input-label">{isAr ? 'الوصف' : 'Description'}</label>
-                <textarea className="input" style={{ resize: 'vertical', minHeight: '60px' }}
-                  placeholder={isAr ? 'وصف القطعة أو ملاحظات…' : 'Part description or notes…'}
-                  value={partForm.description} onChange={(e) => setPF('description', e.target.value)} />
-              </div>
-              {partErr && <p style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>{partErr}</p>}
-              <ModalFooter onCancel={() => setShowAddPart(false)} saveLabel={isAr ? 'إضافة القطعة' : 'Add Part'} saving={partSaving} isAr={isAr} />
-            </div>
-          </form>
-        </Modal>
-      )}
-
       {scanTarget && (
         <ScannerModal formats={PART_FORMATS}
-          title={scanTarget === 'addPart' ? 'Scan Part Barcode' : 'Scan to Adjust Stock'}
+          title="Scan to Adjust Stock"
           hint="Point camera at the barcode or QR code on the part or packaging"
           onScan={async (value) => {
             setScanTarget(null);
-            if (scanTarget === 'addPart') {
-              setPF('partNumber', value);
-            } else {
-              try {
-                const part = await apiFetch<Part | null>(`/parts/by-scan?code=${encodeURIComponent(value)}`);
-                if (part) { setAdjustPart(part); setAdjustQty(''); setAdjustReason(''); }
-                else alert(`No part found for code: ${value}\nEnter manually.`);
-              } catch { alert('Lookup failed — enter part number manually.'); }
-            }
+            try {
+              const part = await apiFetch<Part | null>(`/parts/by-scan?code=${encodeURIComponent(value)}`);
+              if (part) router.push(`/parts/${part.id}`);
+              else alert(`No part found for code: ${value}\nEnter manually.`);
+            } catch { alert('Lookup failed — enter part number manually.'); }
           }}
           onClose={() => setScanTarget(null)} />
       )}
