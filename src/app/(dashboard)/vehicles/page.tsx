@@ -478,6 +478,7 @@ export default function VehiclesPage() {
                   <th>{isAr ? 'السيارة' : 'Vehicle'}</th>
                   <th>{isAr ? 'السنة' : 'Year'}</th>
                   <th>{isAr ? 'اللون' : 'Color'}</th>
+                  <th style={{ textAlign: 'right' }}>{isAr ? 'سعر البيع (ج.م)' : 'Sale Price (EGP)'}</th>
                   <th style={{ textAlign: 'right' }}>
                     {canSeeCost ? (isAr ? 'السعر الرسمي للوكيل (ج.م)' : 'Official Price (EGP)') : (isAr ? 'السعر الرسمي' : 'Official Price')}
                   </th>
@@ -492,7 +493,7 @@ export default function VehiclesPage() {
               <tbody>
                 {vehicles.length === 0 ? (
                   <tr>
-                    <td colSpan={12} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-3)' }}>
+                    <td colSpan={13} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-3)' }}>
                       {hasFilters
                         ? (isAr ? 'لا توجد مركبات تطابق الفلاتر الحالية.' : 'No vehicles match the current filters.')
                         : (isAr ? 'لا توجد مركبات. أضف أول مركبة.' : 'No vehicles found. Add your first vehicle.')}
@@ -534,6 +535,9 @@ export default function VehiclesPage() {
                         </td>
                         <td style={{ color: 'var(--text-2)' }}>{v.year}</td>
                         <td style={{ color: 'var(--text-2)' }}>{v.color || '—'}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--primary)' }}>
+                          {price > 0 ? fmt(price) : '—'}
+                        </td>
                         <td style={{ textAlign: 'right', fontWeight: 500, color: 'var(--text-1)' }}>
                           {canSeeCost
                             ? (cost != null ? fmt(cost) : '—')
