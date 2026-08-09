@@ -35,8 +35,10 @@ interface Vehicle {
 }
 
 
-const fmt = (n: number) =>
-  'EGP ' + n.toLocaleString('en-EG', { maximumFractionDigits: 0 });
+const fmt = (n: number | string | null | undefined) => {
+  const num = Number(n);
+  return 'EGP ' + (isNaN(num) ? '—' : num.toLocaleString('en-EG', { maximumFractionDigits: 0 }));
+};
 
 function statusBadgeClass(status: string): string {
   switch (status) {
@@ -536,7 +538,7 @@ export default function VehiclesPage() {
                         <td style={{ color: 'var(--text-2)' }}>{v.year}</td>
                         <td style={{ color: 'var(--text-2)' }}>{v.color || '—'}</td>
                         <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--primary)' }}>
-                          {price > 0 ? fmt(price) : '—'}
+                          {v.salePrice != null || v.price != null ? fmt(v.salePrice ?? v.price) : '—'}
                         </td>
                         <td style={{ textAlign: 'right', fontWeight: 500, color: 'var(--text-1)' }}>
                           {canSeeCost
@@ -830,7 +832,7 @@ function VehicleCard({
           {v.year} {v.make} {v.model}
         </p>
         <p style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '0.4rem' }}>
-          {v.price != null || v.salePrice != null ? `EGP ${price.toLocaleString('en-EG', { maximumFractionDigits: 0 })}` : '—'}
+          {v.price != null || v.salePrice != null ? fmt(v.salePrice ?? v.price) : '—'}
         </p>
         <p style={{ fontSize: '0.6875rem', color: 'var(--text-3)', fontFamily: 'monospace', letterSpacing: '0.03em' }}>
           {v.stockNumber ? `#${v.stockNumber} · ` : ''}{v.vin ? v.vin.slice(0, 12) + '…' : '—'}
