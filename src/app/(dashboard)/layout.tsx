@@ -28,6 +28,7 @@ const NAV: { href: string; key: string; icon: React.ReactNode; roles?: string[] 
   },
   {
     href: '/vehicles', key: 'nav.inventory',
+    roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_RECEPTION', 'SERVICE_MANAGER'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <path d="M2 10.5L3.5 6h9l1.5 4.5V12a.5.5 0 01-.5.5H3a.5.5 0 01-.5-.5v-1.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
@@ -40,6 +41,7 @@ const NAV: { href: string; key: string; icon: React.ReactNode; roles?: string[] 
   },
   {
     href: '/import', key: 'nav.imports',
+    roles: ['SALES_REP', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <path d="M1.5 11h13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
@@ -53,6 +55,7 @@ const NAV: { href: string; key: string; icon: React.ReactNode; roles?: string[] 
   },
   {
     href: '/crm', key: 'nav.crm',
+    roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_RECEPTION', 'SERVICE_MANAGER'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <circle cx="6" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.2"/>
@@ -64,7 +67,7 @@ const NAV: { href: string; key: string; icon: React.ReactNode; roles?: string[] 
   },
   {
     href: '/reports', key: 'nav.reports',
-    roles: ['MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN'],
+    roles: ['MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_MANAGER'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <path d="M2 12.5l3-4 2.5 2 3-5L13 9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -74,6 +77,7 @@ const NAV: { href: string; key: string; icon: React.ReactNode; roles?: string[] 
   },
   {
     href: '/whatsapp', key: 'nav.whatsapp',
+    roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_RECEPTION', 'SERVICE_MANAGER'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <rect x="1.5" y="2" width="13" height="10" rx="2" stroke="currentColor" strokeWidth="1.2"/>
@@ -84,6 +88,7 @@ const NAV: { href: string; key: string; icon: React.ReactNode; roles?: string[] 
   },
   {
     href: '/deals', key: 'nav.deals',
+    roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <rect x="1.5" y="3.5" width="13" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
@@ -94,6 +99,7 @@ const NAV: { href: string; key: string; icon: React.ReactNode; roles?: string[] 
   },
   {
     href: '/appointments', key: 'nav.appointments',
+    roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_RECEPTION', 'SERVICE_MANAGER'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <rect x="1.5" y="3" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
@@ -115,6 +121,7 @@ const NAV: { href: string; key: string; icon: React.ReactNode; roles?: string[] 
   },
   {
     href: '/parts', key: 'nav.parts',
+    roles: ['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'TECHNICIAN', 'PARTS_STORE_KEEPER', 'SERVICE_MANAGER'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <path d="M8 1.5L14.5 5v6L8 14.5 1.5 11V5L8 1.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
@@ -124,6 +131,7 @@ const NAV: { href: string; key: string; icon: React.ReactNode; roles?: string[] 
   },
   {
     href: '/transfers', key: 'nav.transfers',
+    roles: ['SALES_REP', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <path d="M2 8h12M10 5l4 3-4 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -133,6 +141,7 @@ const NAV: { href: string; key: string; icon: React.ReactNode; roles?: string[] 
   },
   {
     href: '/floor-plan', key: 'nav.floorplan',
+    roles: ['SALES_REP', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <rect x="1.5" y="5" width="13" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
@@ -143,6 +152,7 @@ const NAV: { href: string; key: string; icon: React.ReactNode; roles?: string[] 
   },
   {
     href: '/petty-cash', key: 'nav.pettycash',
+    roles: ['MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_MANAGER'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <rect x="1.5" y="4" width="13" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
@@ -175,7 +185,7 @@ const NAV: { href: string; key: string; icon: React.ReactNode; roles?: string[] 
   },
   {
     href: '/executive', key: 'nav.executive',
-    roles: ['MANAGER', 'ADMIN', 'SUPER_ADMIN'],
+    roles: ['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_MANAGER'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <path d="M8 3C4.5 3 1.5 8 1.5 8s3 5 6.5 5 6.5-5 6.5-5-3-5-6.5-5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>

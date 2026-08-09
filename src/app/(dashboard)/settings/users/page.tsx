@@ -22,19 +22,27 @@ interface User {
 interface Location { id: string; name: string; }
 
 const ROLE_OPTS = [
-  { value: 'SALES_REP',   label: 'Sales Rep'   },
-  { value: 'MANAGER',     label: 'Manager'      },
-  { value: 'FINANCE',     label: 'Finance'      },
-  { value: 'ADMIN',       label: 'Admin'        },
-  { value: 'SUPER_ADMIN', label: 'Super Admin'  },
+  { value: 'SALES_REP',          label: 'Sales Rep'          },
+  { value: 'TECHNICIAN',         label: 'Technician'         },
+  { value: 'PARTS_STORE_KEEPER', label: 'Parts Store Keeper' },
+  { value: 'SERVICE_RECEPTION',  label: 'Service Reception'  },
+  { value: 'SERVICE_MANAGER',    label: 'Service Manager'    },
+  { value: 'MANAGER',            label: 'Manager'            },
+  { value: 'FINANCE',            label: 'Finance'            },
+  { value: 'ADMIN',              label: 'Admin'              },
+  { value: 'SUPER_ADMIN',        label: 'Super Admin'        },
 ];
 
 const ROLE_OPTS_AR = [
-  { value: 'SALES_REP',   label: 'مندوب مبيعات' },
-  { value: 'MANAGER',     label: 'مدير'          },
-  { value: 'FINANCE',     label: 'مالية'         },
-  { value: 'ADMIN',       label: 'مسؤول'         },
-  { value: 'SUPER_ADMIN', label: 'المسؤول الأعلى'},
+  { value: 'SALES_REP',          label: 'مندوب مبيعات'        },
+  { value: 'TECHNICIAN',         label: 'فني'                  },
+  { value: 'PARTS_STORE_KEEPER', label: 'أمين مخزن قطع الغيار'},
+  { value: 'SERVICE_RECEPTION',  label: 'استقبال الصيانة'      },
+  { value: 'SERVICE_MANAGER',    label: 'مدير الصيانة'         },
+  { value: 'MANAGER',            label: 'مدير'                 },
+  { value: 'FINANCE',            label: 'مالية'                },
+  { value: 'ADMIN',              label: 'مسؤول'                },
+  { value: 'SUPER_ADMIN',        label: 'المسؤول الأعلى'       },
 ];
 
 const ROLE_FILTER_OPTS    = [{ value: '', label: 'All Roles'    }, ...ROLE_OPTS];
@@ -52,30 +60,42 @@ const STATUS_OPTS_AR = [
 ];
 
 const ROLE_BADGE: Record<string, string> = {
-  SUPER_ADMIN: 'badge badge-danger',
-  ADMIN:       'badge badge-orange',
-  FINANCE:     'badge badge-purple',
-  MANAGER:     'badge badge-warning',
-  SALES_REP:   'badge badge-info',
-  CUSTOMER:    'badge badge-neutral',
+  SUPER_ADMIN:        'badge badge-danger',
+  ADMIN:              'badge badge-orange',
+  FINANCE:            'badge badge-purple',
+  MANAGER:            'badge badge-warning',
+  SALES_REP:          'badge badge-info',
+  TECHNICIAN:         'badge badge-info',
+  PARTS_STORE_KEEPER: 'badge badge-warning',
+  SERVICE_RECEPTION:  'badge badge-neutral',
+  SERVICE_MANAGER:    'badge badge-success',
+  CUSTOMER:           'badge badge-neutral',
 };
 
 const ROLE_LABEL: Record<string, string> = {
-  SUPER_ADMIN: 'Super Admin',
-  ADMIN:       'Admin',
-  FINANCE:     'Finance',
-  MANAGER:     'Manager',
-  SALES_REP:   'Sales Rep',
-  CUSTOMER:    'Customer',
+  SUPER_ADMIN:        'Super Admin',
+  ADMIN:              'Admin',
+  FINANCE:            'Finance',
+  MANAGER:            'Manager',
+  SALES_REP:          'Sales Rep',
+  TECHNICIAN:         'Technician',
+  PARTS_STORE_KEEPER: 'Parts Keeper',
+  SERVICE_RECEPTION:  'Svc Reception',
+  SERVICE_MANAGER:    'Svc Manager',
+  CUSTOMER:           'Customer',
 };
 
 const ROLE_LABEL_AR: Record<string, string> = {
-  SUPER_ADMIN: 'المسؤول الأعلى',
-  ADMIN:       'مسؤول',
-  FINANCE:     'مالية',
-  MANAGER:     'مدير',
-  SALES_REP:   'مندوب مبيعات',
-  CUSTOMER:    'عميل',
+  SUPER_ADMIN:        'المسؤول الأعلى',
+  ADMIN:              'مسؤول',
+  FINANCE:            'مالية',
+  MANAGER:            'مدير',
+  SALES_REP:          'مندوب مبيعات',
+  TECHNICIAN:         'فني',
+  PARTS_STORE_KEEPER: 'أمين مخزن',
+  SERVICE_RECEPTION:  'استقبال الصيانة',
+  SERVICE_MANAGER:    'مدير الصيانة',
+  CUSTOMER:           'عميل',
 };
 
 // Module → permission list for Roles & Permissions tab
@@ -157,11 +177,15 @@ const PERM_LABEL_AR: Record<string, string> = {
 
 // Which roles have which permissions by default
 const ROLE_PERMISSIONS: Record<string, Set<string>> = {
-  SUPER_ADMIN: new Set(PERMISSION_MATRIX.flatMap((m) => m.permissions.map((p) => p.key))),
-  ADMIN:       new Set(PERMISSION_MATRIX.flatMap((m) => m.permissions.map((p) => p.key))),
-  FINANCE:     new Set(['vehicle:view','deal:view','deal:view-all-loc','crm:view','finance:view','finance:post','finance:view-invoice','settings:view']),
-  MANAGER:     new Set(['vehicle:view','vehicle:create','vehicle:edit','vehicle:view-cost','deal:view','deal:create','deal:finalize','deal:view-all-loc','crm:view','crm:create','crm:assign','finance:view','settings:view']),
-  SALES_REP:   new Set(['vehicle:view','deal:view','deal:create','crm:view','crm:create']),
+  SUPER_ADMIN:        new Set(PERMISSION_MATRIX.flatMap((m) => m.permissions.map((p) => p.key))),
+  ADMIN:              new Set(PERMISSION_MATRIX.flatMap((m) => m.permissions.map((p) => p.key))),
+  FINANCE:            new Set(['vehicle:view','deal:view','deal:view-all-loc','crm:view','finance:view','finance:post','finance:view-invoice','settings:view']),
+  MANAGER:            new Set(['vehicle:view','vehicle:create','vehicle:edit','vehicle:view-cost','deal:view','deal:create','deal:finalize','deal:view-all-loc','crm:view','crm:create','crm:assign','finance:view','settings:view']),
+  SALES_REP:          new Set(['vehicle:view','deal:view','deal:create','crm:view','crm:create']),
+  TECHNICIAN:         new Set(['vehicle:view']),
+  PARTS_STORE_KEEPER: new Set(['vehicle:view']),
+  SERVICE_RECEPTION:  new Set(['vehicle:view','crm:view','crm:create']),
+  SERVICE_MANAGER:    new Set(['vehicle:view','crm:view','crm:create','crm:assign','finance:view-invoice','settings:view']),
 };
 
 function initials(name: string) {
@@ -391,7 +415,10 @@ function UserModal({
 }) {
   const editing = !!user;
   const { isAr } = useLang();
-  const [modalTab, setModalTab] = useState<'details' | 'permissions' | 'schedule'>('details');
+  const [modalTab, setModalTab] = useState<'details' | 'permissions' | 'schedule' | 'security'>('details');
+  const [pwForm, setPwForm] = useState({ password: '', confirm: '' });
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwMsg, setPwMsg] = useState('');
   const [form, setForm] = useState({
     name:       user?.name       ?? '',
     email:      user?.email      ?? '',
@@ -405,7 +432,20 @@ function UserModal({
 
   function set(k: string, v: string) { setForm((p) => ({ ...p, [k]: v })); }
 
-  const needs2fa = ['FINANCE', 'ADMIN', 'SUPER_ADMIN'].includes(form.role);
+  const needs2fa = ['FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_MANAGER'].includes(form.role);
+
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (pwForm.password !== pwForm.confirm) { setPwMsg(isAr ? 'كلمتا المرور غير متطابقتين' : 'Passwords do not match'); return; }
+    if (pwForm.password.length < 8) { setPwMsg(isAr ? '8 أحرف على الأقل' : 'Minimum 8 characters'); return; }
+    setPwSaving(true); setPwMsg('');
+    try {
+      await apiFetch(`/users/${user!.id}/password`, { method: 'PATCH', body: JSON.stringify({ password: pwForm.password }) });
+      setPwMsg(isAr ? 'تم تغيير كلمة المرور ✓' : 'Password changed ✓');
+      setPwForm({ password: '', confirm: '' });
+    } catch (e: unknown) { setPwMsg(e instanceof Error ? e.message : String(e)); }
+    finally { setPwSaving(false); }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -443,12 +483,13 @@ function UserModal({
     details:     isAr ? 'الملف والدور'  : 'Profile & Role',
     permissions: isAr ? 'الصلاحيات'    : 'Permissions',
     schedule:    isAr ? 'الجدول'        : 'Schedule',
+    security:    isAr ? 'الأمان'        : 'Security',
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose} />
-      <div className="relative w-full max-w-md rounded-xl card shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-md rounded-xl card shadow-2xl" style={{ overflow: 'visible' }}>
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
           <div>
             <h2 className="page-title" style={{ fontSize: '0.9375rem' }}>
@@ -464,7 +505,7 @@ function UserModal({
         {/* Modal tabs — only when editing */}
         {editing && (
           <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
-            {(['details', 'permissions', 'schedule'] as const).map((t) => (
+            {(['details', 'permissions', 'schedule', 'security'] as const).map((t) => (
               <button key={t} onClick={() => setModalTab(t)}
                 style={{
                   flex: 1, padding: '0.6rem 0.5rem', fontSize: '0.75rem', fontWeight: 600, border: 'none', cursor: 'pointer',
@@ -546,6 +587,34 @@ function UserModal({
         )}
         {editing && modalTab === 'schedule' && (
           <UserScheduleTab userId={user!.id} />
+        )}
+        {editing && modalTab === 'security' && (
+          <form onSubmit={changePassword} className="p-5 space-y-3">
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
+              {isAr ? 'تغيير كلمة مرور هذا المستخدم. يجب أن تكون 8 أحرف على الأقل.' : "Change this user's password. Minimum 8 characters."}
+            </p>
+            <div>
+              <label className="input-label">{isAr ? 'كلمة المرور الجديدة' : 'New Password'}</label>
+              <input required type="password" minLength={8} className="input" value={pwForm.password}
+                onChange={(e) => setPwForm((p) => ({ ...p, password: e.target.value }))} />
+            </div>
+            <div>
+              <label className="input-label">{isAr ? 'تأكيد كلمة المرور' : 'Confirm Password'}</label>
+              <input required type="password" minLength={8} className="input" value={pwForm.confirm}
+                onChange={(e) => setPwForm((p) => ({ ...p, confirm: e.target.value }))} />
+            </div>
+            {pwMsg && (
+              <p style={{ fontSize: '0.75rem', color: pwMsg.includes('✓') ? 'var(--success-fg)' : 'var(--danger-fg)' }}>{pwMsg}</p>
+            )}
+            <div className="flex gap-3 pt-1">
+              <button type="button" onClick={onClose} className="btn btn-secondary" style={{ flex: 1 }}>
+                {isAr ? 'إغلاق' : 'Close'}
+              </button>
+              <button type="submit" disabled={pwSaving} className="btn btn-primary" style={{ flex: 1 }}>
+                {pwSaving ? '…' : (isAr ? 'تغيير كلمة المرور' : 'Change Password')}
+              </button>
+            </div>
+          </form>
         )}
       </div>
     </div>
