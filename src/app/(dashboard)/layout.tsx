@@ -545,7 +545,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                 }}
               >
                 <span style={{ opacity: active ? 1 : 0.7, flexShrink: 0 }}>{icon}</span>
-                {sidebarOpen && <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{t(key)}</span>}
+                {sidebarOpen && <span suppressHydrationWarning style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{t(key)}</span>}
                 {sidebarOpen && active && (
                   <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: 'var(--sidebar-active-dot)', marginInlineStart: 'auto' }} />
                 )}
