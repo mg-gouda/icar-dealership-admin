@@ -617,7 +617,7 @@ function ShipmentDetailModal({ shipmentId, onClose, onChanged }: {
               </div>
 
               {/* Vehicles section */}
-              <div className="card" style={{ overflow: 'hidden' }}>
+              <div className="card">
                 {/* Section header */}
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap',
