@@ -226,10 +226,22 @@ export default function PartsPage() {
   );
 }
 
+const DELETE_ROLES = ['MANAGER', 'ADMIN', 'SUPER_ADMIN'];
+
+function useUserRole(): string {
+  const cookie = typeof document !== 'undefined'
+    ? document.cookie.split('; ').find((c) => c.startsWith('admin_role='))
+    : undefined;
+  return cookie ? cookie.split('=')[1] : '';
+}
+
 // ── Inventory Tab (existing) ───────────────────────────────────────────────
 
 function InventoryTab({ isAr }: { isAr: boolean }) {
   const router = useRouter();
+  const userRole = useUserRole();
+  const canDelete = DELETE_ROLES.includes(userRole);
+
   const [locationFilter, setLocationFilter] = useState('');
   const [makeFilter, setMakeFilter]     = useState('');
   const [modelFilter, setModelFilter]   = useState('');
@@ -241,6 +253,7 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
   const limit = 50;
 
   const [scanTarget, setScanTarget] = useState<'adjust' | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const qs = new URLSearchParams({
     page: String(page), limit: String(limit),
@@ -283,6 +296,14 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
     ...CAR_SECTIONS.map((s) => ({ value: s.value, label: isAr ? s.labelAr : s.labelEn })),
   ];
 
+  async function deletePart(id: string) {
+    const confirmed = window.confirm(isAr ? 'هل أنت متأكد من حذف هذه القطعة؟ لا يمكن التراجع عن هذا الإجراء.' : 'Delete this part? This cannot be undone.');
+    if (!confirmed) return;
+    try {
+      await apiFetch(`/parts/${id}`, { method: 'DELETE' });
+      reload();
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Delete failed'); }
+  }
 
   return (
     <div>
@@ -352,14 +373,15 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
                   <th style={{ textAlign: 'right' }}>{isAr ? 'تكلفة الوحدة' : 'Cost'}</th>
                   <th style={{ textAlign: 'right' }}>{isAr ? 'سعر البيع' : 'Sale Price'}</th>
                   <th>{isAr ? 'الحالة' : 'Status'}</th>
+                  <th style={{ width: canDelete ? 120 : 72 }}></th>
                 </tr>
               </thead>
               <tbody>
                 {parts.map((p) => {
                   const isLow = p.onHand <= p.reorderLevel;
+                  const isDel = deleting === p.id;
                   return (
-                    <tr key={p.id} style={{ cursor: 'pointer', background: isLow ? 'color-mix(in srgb, var(--warning) 8%, transparent)' : undefined }}
-                      onClick={() => router.push(`/parts/${p.id}`)}>
+                    <tr key={p.id} style={{ background: isLow ? 'color-mix(in srgb, var(--warning) 8%, transparent)' : undefined }}>
                       <td><span style={{ color: 'var(--primary)', fontWeight: 500, fontFamily: 'monospace', fontSize: '0.8rem' }}>{p.partNumber}</span></td>
                       <td style={{ color: 'var(--text-3)', fontSize: '0.8rem', fontFamily: 'monospace' }}>{p.oemNumber ?? '—'}</td>
                       <td style={{ fontWeight: 500 }}>{p.name}</td>
@@ -385,11 +407,30 @@ function InventoryTab({ isAr }: { isAr: boolean }) {
                         <span className={`badge ${(p.status ?? 'ACTIVE') === 'ACTIVE' ? 'badge-success' : 'badge-neutral'}`}>{p.status ?? 'ACTIVE'}</span>
                         {isLow && <span className="badge badge-warning" style={{ marginLeft: '0.3rem' }}>{isAr ? 'منخفض' : 'Low'}</span>}
                       </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '0.375rem', justifyContent: 'flex-end' }}>
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ padding: '0.25rem 0.625rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                            onClick={() => router.push(`/parts/${p.id}`)}>
+                            <EditIcon /> {isAr ? 'تعديل' : 'Edit'}
+                          </button>
+                          {canDelete && (
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              disabled={isDel}
+                              style={{ padding: '0.25rem 0.625rem', fontSize: '0.75rem', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                              onClick={async () => { setDeleting(p.id); await deletePart(p.id); setDeleting(null); }}>
+                              <TrashIcon /> {isDel ? '…' : (isAr ? 'حذف' : 'Delete')}
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
                 {parts.length === 0 && (
-                  <tr><td colSpan={10} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-3)' }}>
+                  <tr><td colSpan={11} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-3)' }}>
                     {isAr ? 'لا توجد قطع غيار.' : 'No parts found.'}
                   </td></tr>
                 )}
@@ -1341,6 +1382,22 @@ function CameraIcon() {
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
       <path d="M1.5 5.5A1 1 0 0 1 2.5 4.5h1l1-2h5l1 2h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-6z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
       <circle cx="8" cy="9" r="2" stroke="currentColor" strokeWidth="1.2"/>
+    </svg>
+  );
+}
+
+function EditIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <path d="M11 2l3 3-9 9H2v-3L11 2z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
     </svg>
   );
 }

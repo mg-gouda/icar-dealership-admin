@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useQuery } from '../../../lib/useApi';
 import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 import { useLang } from '@/lib/lang-context';
@@ -40,6 +40,7 @@ function statusBadgeClass(s: string): string {
 
 export default function ServiceOrdersPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const { isAr } = useLang();
   const [statusFilter, setStatusFilter] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
@@ -101,6 +102,35 @@ export default function ServiceOrdersPage() {
         <Link href="/service/new" className="btn btn-primary">
           {isAr ? '+ أمر جديد' : '+ New Order'}
         </Link>
+      </div>
+
+      {/* Tab nav */}
+      <div style={{ padding: '0 1.5rem', display: 'flex', gap: '0.25rem', borderBottom: '1px solid var(--border)', marginBottom: 0 }}>
+        {[
+          { href: '/service',            labelEn: 'Service Orders', labelAr: 'أوامر الصيانة', exact: true },
+          { href: '/service/by-vehicle', labelEn: 'By Vehicle',     labelAr: 'حسب السيارة',   exact: false },
+          { href: '/service/part-picks', labelEn: 'Part Picks',     labelAr: 'سحب القطع',      exact: false },
+        ].map((t) => {
+          const active = t.exact ? pathname === t.href : pathname.startsWith(t.href);
+          return (
+            <Link
+              key={t.href}
+              href={t.href}
+              style={{
+                padding: '0.5rem 1rem',
+                fontSize: '0.8125rem',
+                fontWeight: active ? 600 : 400,
+                textDecoration: 'none',
+                borderBottom: active ? '2px solid var(--primary)' : '2px solid transparent',
+                color: active ? 'var(--primary)' : 'var(--text-2)',
+                marginBottom: -1,
+                transition: 'color 120ms, border-color 120ms',
+              }}
+            >
+              {isAr ? t.labelAr : t.labelEn}
+            </Link>
+          );
+        })}
       </div>
 
       {/* Filters */}

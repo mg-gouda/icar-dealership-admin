@@ -472,13 +472,17 @@ const LangContext = createContext<LangCtx>({
 });
 
 export function LangProvider({ children }: { children: React.ReactNode }) {
-  // ponytail: lazy init reads localStorage synchronously on client so language
-  // is correct on first render — avoids Arabic flash that breaks E2E selectors
-  const [lang, setLangState] = useState<Lang>(() => {
-    if (typeof window === 'undefined') return 'ar';
+  // Always start with 'ar' — matches SSR default. useEffect syncs from localStorage
+  // after hydration. Lazy init with typeof window caused SSR/client mismatch.
+  const [lang, setLangState] = useState<Lang>('ar');
+
+  useEffect(() => {
     const saved = localStorage.getItem('dealerms_lang') as Lang | null;
-    return (saved === 'en' || saved === 'ar') ? saved : 'ar';
-  });
+    const resolved: Lang = (saved === 'en' || saved === 'ar') ? saved : 'ar';
+    setLangState(resolved);
+    document.documentElement.lang = resolved;
+    document.documentElement.dir = resolved === 'ar' ? 'rtl' : 'ltr';
+  }, []);
 
   function setLang(l: Lang) {
     setLangState(l);
