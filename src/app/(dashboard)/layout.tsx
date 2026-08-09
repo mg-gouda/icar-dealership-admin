@@ -13,216 +13,253 @@ import { ThemeProvider, useTheme } from '@/lib/theme-context';
 import SearchableCombobox from '@/components/ui/SearchableCombobox';
 import { API_BASE } from '@/lib/config';
 
-/* ─── Nav items ──────────────────────────────────────────────────────────── */
-const NAV: { href: string; key: string; icon: React.ReactNode; roles?: string[] }[] = [
+/* ─── Nav items (grouped) ─────────────────────────────────────────────────── */
+type NavItem = { href: string; key: string; icon: React.ReactNode; roles?: string[] };
+type NavGroup = { label?: { en: string; ar: string }; items: NavItem[] };
+
+const NAV_GROUPS: NavGroup[] = [
   {
-    href: '/', key: 'nav.dashboard',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <rect x="1" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity=".9"/>
-        <rect x="9" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity=".55"/>
-        <rect x="1" y="9" width="6" height="6" rx="1.5" fill="currentColor" opacity=".55"/>
-        <rect x="9" y="9" width="6" height="6" rx="1.5" fill="currentColor" opacity=".9"/>
-      </svg>
-    ),
+    items: [
+      {
+        href: '/', key: 'nav.dashboard',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="1" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity=".9"/>
+            <rect x="9" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity=".55"/>
+            <rect x="1" y="9" width="6" height="6" rx="1.5" fill="currentColor" opacity=".55"/>
+            <rect x="9" y="9" width="6" height="6" rx="1.5" fill="currentColor" opacity=".9"/>
+          </svg>
+        ),
+      },
+    ],
   },
   {
-    href: '/vehicles', key: 'nav.inventory',
-    roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_RECEPTION', 'SERVICE_MANAGER'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <path d="M2 10.5L3.5 6h9l1.5 4.5V12a.5.5 0 01-.5.5H3a.5.5 0 01-.5-.5v-1.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
-        <path d="M3.5 6L4.5 3.5h7L12.5 6" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
-        <circle cx="5" cy="11.5" r="1" fill="currentColor"/>
-        <circle cx="11" cy="11.5" r="1" fill="currentColor"/>
-        <path d="M2 9.5h12" stroke="currentColor" strokeWidth="1.2"/>
-      </svg>
-    ),
+    label: { en: 'Inventory', ar: 'المخزن' },
+    items: [
+      {
+        href: '/vehicles', key: 'nav.inventory',
+        roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_RECEPTION', 'SERVICE_MANAGER'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M2 10.5L3.5 6h9l1.5 4.5V12a.5.5 0 01-.5.5H3a.5.5 0 01-.5-.5v-1.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+            <path d="M3.5 6L4.5 3.5h7L12.5 6" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+            <circle cx="5" cy="11.5" r="1" fill="currentColor"/>
+            <circle cx="11" cy="11.5" r="1" fill="currentColor"/>
+            <path d="M2 9.5h12" stroke="currentColor" strokeWidth="1.2"/>
+          </svg>
+        ),
+      },
+      {
+        href: '/import', key: 'nav.imports',
+        roles: ['SALES_REP', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M1.5 11h13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+            <path d="M2.5 11V7.5L4 4.5h8l1.5 3V11" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+            <path d="M6 7h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+            <circle cx="5" cy="12.5" r="1" fill="currentColor"/>
+            <circle cx="11" cy="12.5" r="1" fill="currentColor"/>
+            <path d="M8 1v3.5M6.5 3l1.5-1.5 1.5 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        ),
+      },
+      {
+        href: '/transfers', key: 'nav.transfers',
+        roles: ['SALES_REP', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M2 8h12M10 5l4 3-4 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M14 5H2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity=".4"/>
+          </svg>
+        ),
+      },
+      {
+        href: '/floor-plan', key: 'nav.floorplan',
+        roles: ['SALES_REP', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="1.5" y="5" width="13" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
+            <path d="M4 5V3.5a1.5 1.5 0 013 0V5M9 5V3.5a1.5 1.5 0 013 0V5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+            <path d="M4.5 9.5h7M4.5 11.5h4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+          </svg>
+        ),
+      },
+    ],
   },
   {
-    href: '/import', key: 'nav.imports',
-    roles: ['SALES_REP', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <path d="M1.5 11h13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-        <path d="M2.5 11V7.5L4 4.5h8l1.5 3V11" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
-        <path d="M6 7h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-        <circle cx="5" cy="12.5" r="1" fill="currentColor"/>
-        <circle cx="11" cy="12.5" r="1" fill="currentColor"/>
-        <path d="M8 1v3.5M6.5 3l1.5-1.5 1.5 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    ),
+    label: { en: 'Sales', ar: 'المبيعات' },
+    items: [
+      {
+        href: '/deals', key: 'nav.deals',
+        roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="1.5" y="3.5" width="13" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
+            <path d="M5 7.5h6M5 10h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+            <path d="M1.5 6.5h13" stroke="currentColor" strokeWidth="1.2"/>
+          </svg>
+        ),
+      },
+      {
+        href: '/crm', key: 'nav.crm',
+        roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_RECEPTION', 'SERVICE_MANAGER'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="6" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.2"/>
+            <path d="M1.5 13.5c0-2.485 2.015-4.5 4.5-4.5s4.5 2.015 4.5 4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+            <circle cx="11.5" cy="5.5" r="2" stroke="currentColor" strokeWidth="1.2"/>
+            <path d="M13 10c1.1.5 1.5 1.5 1.5 2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+          </svg>
+        ),
+      },
+      {
+        href: '/appointments', key: 'nav.appointments',
+        roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_RECEPTION', 'SERVICE_MANAGER'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="1.5" y="3" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
+            <path d="M1.5 6.5h13" stroke="currentColor" strokeWidth="1.2"/>
+            <path d="M5.5 1.5v3M10.5 1.5v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+            <path d="M5 9.5h2v2H5z" fill="currentColor" opacity=".8"/>
+          </svg>
+        ),
+      },
+      {
+        href: '/whatsapp', key: 'nav.whatsapp',
+        roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_RECEPTION', 'SERVICE_MANAGER'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="1.5" y="2" width="13" height="10" rx="2" stroke="currentColor" strokeWidth="1.2"/>
+            <path d="M4 13.5l1-2h6l1 2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M4.5 7h7M4.5 9.5h4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+          </svg>
+        ),
+      },
+    ],
   },
   {
-    href: '/crm', key: 'nav.crm',
-    roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_RECEPTION', 'SERVICE_MANAGER'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <circle cx="6" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.2"/>
-        <path d="M1.5 13.5c0-2.485 2.015-4.5 4.5-4.5s4.5 2.015 4.5 4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-        <circle cx="11.5" cy="5.5" r="2" stroke="currentColor" strokeWidth="1.2"/>
-        <path d="M13 10c1.1.5 1.5 1.5 1.5 2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-      </svg>
-    ),
+    label: { en: 'Service', ar: 'الصيانة' },
+    items: [
+      {
+        href: '/service', key: 'nav.service',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M10.5 2.5a4 4 0 0 1 0 5.657L5.657 13.1a2 2 0 1 1-2.828-2.828L7.672 5.43A4 4 0 0 1 10.5 2.5z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+            <circle cx="4.5" cy="11.5" r="1" fill="currentColor"/>
+            <path d="M12 2l2 2-1.5 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        ),
+      },
+      {
+        href: '/parts', key: 'nav.parts',
+        roles: ['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'TECHNICIAN', 'PARTS_STORE_KEEPER', 'SERVICE_MANAGER'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 1.5L14.5 5v6L8 14.5 1.5 11V5L8 1.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+            <path d="M8 1.5v13M1.5 5l6.5 3.5L14.5 5" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+          </svg>
+        ),
+      },
+    ],
   },
   {
-    href: '/reports', key: 'nav.reports',
-    roles: ['MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_MANAGER'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <path d="M2 12.5l3-4 2.5 2 3-5L13 9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M1.5 14h13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-      </svg>
-    ),
+    label: { en: 'Finance', ar: 'المالية' },
+    items: [
+      {
+        href: '/finance', key: 'nav.finance',
+        roles: ['MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.2"/>
+            <path d="M8 5v1.5M8 9.5V11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+            <path d="M6 7.2c0-.66.9-1.2 2-1.2s2 .54 2 1.2-1 1.1-2 1.2c-1.1.1-2 .6-2 1.4 0 .77.9 1.4 2 1.4s2-.63 2-1.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+          </svg>
+        ),
+      },
+      {
+        href: '/petty-cash', key: 'nav.pettycash',
+        roles: ['MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_MANAGER'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="1.5" y="4" width="13" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
+            <path d="M5 7.5h6M5 10h3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+            <path d="M1.5 6.5h13" stroke="currentColor" strokeWidth="1.2"/>
+            <circle cx="11.5" cy="2.5" r="1" fill="currentColor" opacity=".6"/>
+            <path d="M11.5 3.5v.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+          </svg>
+        ),
+      },
+    ],
   },
   {
-    href: '/whatsapp', key: 'nav.whatsapp',
-    roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_RECEPTION', 'SERVICE_MANAGER'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <rect x="1.5" y="2" width="13" height="10" rx="2" stroke="currentColor" strokeWidth="1.2"/>
-        <path d="M4 13.5l1-2h6l1 2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M4.5 7h7M4.5 9.5h4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-      </svg>
-    ),
+    label: { en: 'Analytics', ar: 'التحليلات' },
+    items: [
+      {
+        href: '/reports', key: 'nav.reports',
+        roles: ['MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_MANAGER'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M2 12.5l3-4 2.5 2 3-5L13 9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M1.5 14h13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+          </svg>
+        ),
+      },
+      {
+        href: '/reports/my-commissions', key: 'nav.commissions',
+        roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 2L9.8 6H14l-3.4 2.5 1.3 4L8 10l-3.9 2.5 1.3-4L2 6h4.2z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+          </svg>
+        ),
+      },
+      {
+        href: '/executive', key: 'nav.executive',
+        roles: ['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_MANAGER'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 3C4.5 3 1.5 8 1.5 8s3 5 6.5 5 6.5-5 6.5-5-3-5-6.5-5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+            <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2"/>
+          </svg>
+        ),
+      },
+    ],
   },
   {
-    href: '/deals', key: 'nav.deals',
-    roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <rect x="1.5" y="3.5" width="13" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
-        <path d="M5 7.5h6M5 10h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-        <path d="M1.5 6.5h13" stroke="currentColor" strokeWidth="1.2"/>
-      </svg>
-    ),
-  },
-  {
-    href: '/appointments', key: 'nav.appointments',
-    roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_RECEPTION', 'SERVICE_MANAGER'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <rect x="1.5" y="3" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
-        <path d="M1.5 6.5h13" stroke="currentColor" strokeWidth="1.2"/>
-        <path d="M5.5 1.5v3M10.5 1.5v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-        <path d="M5 9.5h2v2H5z" fill="currentColor" opacity=".8"/>
-      </svg>
-    ),
-  },
-  {
-    href: '/service', key: 'nav.service',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <path d="M10.5 2.5a4 4 0 0 1 0 5.657L5.657 13.1a2 2 0 1 1-2.828-2.828L7.672 5.43A4 4 0 0 1 10.5 2.5z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-        <circle cx="4.5" cy="11.5" r="1" fill="currentColor"/>
-        <path d="M12 2l2 2-1.5 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    ),
-  },
-  {
-    href: '/parts', key: 'nav.parts',
-    roles: ['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'TECHNICIAN', 'PARTS_STORE_KEEPER', 'SERVICE_MANAGER'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <path d="M8 1.5L14.5 5v6L8 14.5 1.5 11V5L8 1.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
-        <path d="M8 1.5v13M1.5 5l6.5 3.5L14.5 5" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
-      </svg>
-    ),
-  },
-  {
-    href: '/transfers', key: 'nav.transfers',
-    roles: ['SALES_REP', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <path d="M2 8h12M10 5l4 3-4 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M14 5H2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity=".4"/>
-      </svg>
-    ),
-  },
-  {
-    href: '/floor-plan', key: 'nav.floorplan',
-    roles: ['SALES_REP', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <rect x="1.5" y="5" width="13" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
-        <path d="M4 5V3.5a1.5 1.5 0 013 0V5M9 5V3.5a1.5 1.5 0 013 0V5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-        <path d="M4.5 9.5h7M4.5 11.5h4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-      </svg>
-    ),
-  },
-  {
-    href: '/petty-cash', key: 'nav.pettycash',
-    roles: ['MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_MANAGER'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <rect x="1.5" y="4" width="13" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
-        <path d="M5 7.5h6M5 10h3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-        <path d="M1.5 6.5h13" stroke="currentColor" strokeWidth="1.2"/>
-        <circle cx="11.5" cy="2.5" r="1" fill="currentColor" opacity=".6"/>
-        <path d="M11.5 3.5v.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-      </svg>
-    ),
-  },
-  {
-    href: '/finance', key: 'nav.finance',
-    roles: ['MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.2"/>
-        <path d="M8 5v1.5M8 9.5V11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-        <path d="M6 7.2c0-.66.9-1.2 2-1.2s2 .54 2 1.2-1 1.1-2 1.2c-1.1.1-2 .6-2 1.4 0 .77.9 1.4 2 1.4s2-.63 2-1.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-      </svg>
-    ),
-  },
-  {
-    href: '/reports/my-commissions', key: 'nav.commissions',
-    roles: ['SALES_REP', 'MANAGER', 'FINANCE', 'ADMIN', 'SUPER_ADMIN'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <path d="M8 2L9.8 6H14l-3.4 2.5 1.3 4L8 10l-3.9 2.5 1.3-4L2 6h4.2z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
-      </svg>
-    ),
-  },
-  {
-    href: '/executive', key: 'nav.executive',
-    roles: ['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'SERVICE_MANAGER'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <path d="M8 3C4.5 3 1.5 8 1.5 8s3 5 6.5 5 6.5-5 6.5-5-3-5-6.5-5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
-        <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2"/>
-      </svg>
-    ),
-  },
-  {
-    href: '/settings/users', key: 'nav.users',
-    roles: ['ADMIN', 'SUPER_ADMIN'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <circle cx="5.5" cy="5" r="2" stroke="currentColor" strokeWidth="1.2"/>
-        <path d="M2 12.5c0-1.933 1.567-3.5 3.5-3.5s3.5 1.567 3.5 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-        <path d="M12 4.5v5M9.5 7H14" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-      </svg>
-    ),
-  },
-  {
-    href: '/audit-log', key: 'nav.auditlog',
-    roles: ['ADMIN', 'SUPER_ADMIN'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <path d="M2.5 4h11M2.5 7.5h11M2.5 11h6.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-        <circle cx="12" cy="12" r="2.5" stroke="currentColor" strokeWidth="1.2"/>
-        <path d="M13.8 13.8l1.2 1.2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-      </svg>
-    ),
-  },
-  {
-    href: '/settings', key: 'nav.settings',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2"/>
-        <path d="M8 1.5v1.2M8 13.3v1.2M1.5 8h1.2M13.3 8h1.2M3.4 3.4l.85.85M11.75 11.75l.85.85M3.4 12.6l.85-.85M11.75 4.25l.85-.85" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-      </svg>
-    ),
+    label: { en: 'Admin', ar: 'الإدارة' },
+    items: [
+      {
+        href: '/settings/users', key: 'nav.users',
+        roles: ['ADMIN', 'SUPER_ADMIN'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="5.5" cy="5" r="2" stroke="currentColor" strokeWidth="1.2"/>
+            <path d="M2 12.5c0-1.933 1.567-3.5 3.5-3.5s3.5 1.567 3.5 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+            <path d="M12 4.5v5M9.5 7H14" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+          </svg>
+        ),
+      },
+      {
+        href: '/audit-log', key: 'nav.auditlog',
+        roles: ['ADMIN', 'SUPER_ADMIN'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M2.5 4h11M2.5 7.5h11M2.5 11h6.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+            <circle cx="12" cy="12" r="2.5" stroke="currentColor" strokeWidth="1.2"/>
+            <path d="M13.8 13.8l1.2 1.2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+          </svg>
+        ),
+      },
+      {
+        href: '/settings', key: 'nav.settings',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2"/>
+            <path d="M8 1.5v1.2M8 13.3v1.2M1.5 8h1.2M13.3 8h1.2M3.4 3.4l.85.85M11.75 11.75l.85.85M3.4 12.6l.85-.85M11.75 4.25l.85-.85" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+          </svg>
+        ),
+      },
+    ],
   },
 ];
 
@@ -437,7 +474,7 @@ function resolveTitle(pathname: string): string {
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { t } = useLang();
+  const { t, isAr } = useLang();
   const [user, setUser] = useState<{ name: string; role: string } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true); // ponytail: SSR-safe; localStorage applied after mount
 
@@ -532,35 +569,62 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
         {/* Nav */}
         <nav style={{ flex: 1, padding: '10px 6px', overflowY: 'auto', overflowX: 'hidden' }}>
-          {NAV.filter(n => !n.roles || (user && n.roles.includes(user.role))).map(({ href, key, icon }) => {
-            const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
+          {NAV_GROUPS.map((group, gi) => {
+            const visibleItems = group.items.filter(n => !n.roles || (user && n.roles.includes(user.role)));
+            if (!visibleItems.length) return null;
             return (
-              <Link key={href} href={href}
-                title={!sidebarOpen ? t(key) : undefined}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: sidebarOpen ? '8px 10px' : '8px',
-                  justifyContent: sidebarOpen ? 'flex-start' : 'center',
-                  borderRadius: 8,
-                  fontSize: '0.8125rem',
-                  fontWeight: 500,
-                  background: active ? 'var(--sidebar-active-bg)' : 'transparent',
-                  color: active ? 'var(--sidebar-active-text)' : 'var(--sidebar-text)',
-                  textDecoration: 'none',
-                  marginBottom: 2,
-                  transition: 'background 120ms',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                }}
-              >
-                <span style={{ opacity: active ? 1 : 0.7, flexShrink: 0 }}>{icon}</span>
-                {sidebarOpen && <span suppressHydrationWarning style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{t(key)}</span>}
-                {sidebarOpen && active && (
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: 'var(--sidebar-active-dot)', marginInlineStart: 'auto' }} />
+              <div key={gi} style={{ marginBottom: 2 }}>
+                {/* Group header */}
+                {group.label && sidebarOpen && (
+                  <div style={{
+                    padding: '0.55rem 10px 0.2rem',
+                    fontSize: '0.6rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.09em',
+                    textTransform: 'uppercase',
+                    color: 'var(--sidebar-text)',
+                    opacity: 0.45,
+                    userSelect: 'none',
+                    marginTop: gi > 0 ? 4 : 0,
+                  }}>
+                    {isAr ? group.label.ar : group.label.en}
+                  </div>
                 )}
-              </Link>
+                {group.label && !sidebarOpen && gi > 0 && (
+                  <div style={{ height: 1, background: 'var(--sidebar-border)', margin: '6px 8px', opacity: 0.5 }} />
+                )}
+                {visibleItems.map(({ href, key, icon }) => {
+                  const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
+                  return (
+                    <Link key={href} href={href}
+                      title={!sidebarOpen ? t(key) : undefined}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: sidebarOpen ? '8px 10px' : '8px',
+                        justifyContent: sidebarOpen ? 'flex-start' : 'center',
+                        borderRadius: 8,
+                        fontSize: '0.8125rem',
+                        fontWeight: 500,
+                        background: active ? 'var(--sidebar-active-bg)' : 'transparent',
+                        color: active ? 'var(--sidebar-active-text)' : 'var(--sidebar-text)',
+                        textDecoration: 'none',
+                        marginBottom: 2,
+                        transition: 'background 120ms',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <span style={{ opacity: active ? 1 : 0.7, flexShrink: 0 }}>{icon}</span>
+                      {sidebarOpen && <span suppressHydrationWarning style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{t(key)}</span>}
+                      {sidebarOpen && active && (
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: 'var(--sidebar-active-dot)', marginInlineStart: 'auto' }} />
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>
