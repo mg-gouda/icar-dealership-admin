@@ -13,53 +13,51 @@ interface Counts {
   pendingPartPicks: number;
 }
 
+const ZERO: Counts = { draftInvoices: 0, payableCommissions: 0, overdueInstallments: 0, newLeads: 0, pendingPartPicks: 0 };
 const POLL_MS = 60_000;
+const LS_KEY = 'notif_seen';
+
+function loadSeen(): Counts {
+  try { return { ...ZERO, ...JSON.parse(localStorage.getItem(LS_KEY) ?? '{}') }; } catch { return { ...ZERO }; }
+}
+function saveSeen(c: Counts) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(c)); } catch { /* */ }
+}
 
 export default function NotificationBell() {
   const { isAr } = useLang();
-  const [counts, setCounts] = useState<Counts>({ draftInvoices: 0, payableCommissions: 0, overdueInstallments: 0, newLeads: 0, pendingPartPicks: 0 });
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [counts, setCounts]   = useState<Counts>({ ...ZERO });
+  const [seen, setSeen]       = useState<Counts>({ ...ZERO });
+  const [open, setOpen]       = useState(false);
+  const [pos, setPos]         = useState({ top: 0, right: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const fetchCounts = useCallback(async () => {
     try {
-      // ponytail: invoices returns raw array → use limit=200 for count; commissions returns {items,total}
       const [invoices, commissions, installments, leads, partPicks] = await Promise.all([
         apiFetch<unknown[]>('/finance/invoices?status=DRAFT&limit=200').then(
-          (r) => (Array.isArray(r) ? r.length : 0),
-          () => 0,
+          (r) => (Array.isArray(r) ? r.length : 0), () => 0,
         ),
         apiFetch<{ total?: number }>('/finance/commissions?status=PAYABLE&limit=1').then(
-          (r) => r?.total ?? 0,
-          () => 0,
+          (r) => r?.total ?? 0, () => 0,
         ),
         apiFetch<{ count?: number }>('/deals/installments/overdue-count').then(
-          (r) => r?.count ?? 0,
-          () => 0,
+          (r) => r?.count ?? 0, () => 0,
         ),
         apiFetch<{ total?: number }>('/leads?status=NEW&limit=1').then(
-          (r) => (r as any)?.total ?? 0,
-          () => 0,
+          (r) => (r as { total?: number })?.total ?? 0, () => 0,
         ),
         apiFetch<{ pending: number }>('/service-orders/part-picks/count').then(
-          (r) => r?.pending ?? 0,
-          () => 0,
+          (r) => r?.pending ?? 0, () => 0,
         ),
       ]);
-
-      setCounts({
-        draftInvoices: invoices as number,
-        payableCommissions: commissions as number,
-        overdueInstallments: installments as number,
-        newLeads: leads as number,
-        pendingPartPicks: partPicks as number,
-      });
-    } catch {
-      // silent — notification badge is best-effort
-    }
+      setCounts({ draftInvoices: invoices as number, payableCommissions: commissions as number, overdueInstallments: installments as number, newLeads: leads as number, pendingPartPicks: partPicks as number });
+    } catch { /* silent */ }
   }, []);
 
   useEffect(() => {
+    setSeen(loadSeen());
     fetchCounts();
     const id = setInterval(fetchCounts, POLL_MS);
     return () => clearInterval(id);
@@ -68,102 +66,167 @@ export default function NotificationBell() {
   // close on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (
+        panelRef.current && !panelRef.current.contains(e.target as Node) &&
+        btnRef.current  && !btnRef.current.contains(e.target as Node)
+      ) setOpen(false);
     }
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const total = counts.draftInvoices + counts.payableCommissions + counts.overdueInstallments + counts.newLeads + counts.pendingPartPicks;
+  function openPanel() {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 8, right: window.innerWidth - r.right });
+    }
+    setOpen((v) => !v);
+  }
+
+  function markAllRead() {
+    saveSeen(counts);
+    setSeen({ ...counts });
+    setOpen(false);
+  }
+
+  function newCount(key: keyof Counts) {
+    return Math.max(0, counts[key] - (seen[key] ?? 0));
+  }
+
+  const totalNew =
+    newCount('draftInvoices') +
+    newCount('payableCommissions') +
+    newCount('overdueInstallments') +
+    newCount('newLeads') +
+    newCount('pendingPartPicks');
+
+  const ITEMS: { key: keyof Counts; labelEn: string; labelAr: string; href: string; color: string }[] = [
+    { key: 'draftInvoices',      labelEn: 'Draft Invoices',          labelAr: 'فواتير مسودة',                    href: '/finance/invoices?status=DRAFT', color: 'var(--warning)' },
+    { key: 'payableCommissions', labelEn: 'Payable Commissions',     labelAr: 'عمولات مستحقة',                   href: '/finance/commissions',           color: 'var(--warning)' },
+    { key: 'overdueInstallments',labelEn: 'Overdue Installments',    labelAr: 'أقساط متأخرة',                    href: '/deals?tab=installments',        color: 'var(--danger)'  },
+    { key: 'newLeads',           labelEn: 'New B2C Leads',           labelAr: 'عملاء محتملون جدد',               href: '/crm?status=NEW',                color: 'var(--info)'    },
+    { key: 'pendingPartPicks',   labelEn: 'Parts to Fetch',          labelAr: 'قطع غيار للسحب من المستودع',     href: '/service/part-picks',            color: 'var(--warning)' },
+  ];
 
   return (
-    <div ref={ref} className="relative">
+    <>
       <button
-        onClick={() => setOpen((v) => !v)}
-        className="relative p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition"
+        ref={btnRef}
+        onClick={openPanel}
         aria-label="Notifications"
+        style={{
+          position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: 34, height: 34, borderRadius: 8, border: 'none', cursor: 'pointer',
+          background: open ? 'var(--surface-2)' : 'transparent',
+          color: 'var(--text-2)', transition: 'background 120ms, color 120ms',
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-2)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-1)'; }}
+        onMouseLeave={e => { if (!open) { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-2)'; } }}
       >
-        {/* Bell SVG */}
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
         </svg>
-        {total > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-            {total > 99 ? '99+' : total}
+        {totalNew > 0 && (
+          <span style={{
+            position: 'absolute', top: 1, right: 1,
+            minWidth: 16, height: 16, borderRadius: 8,
+            background: 'var(--danger)', color: '#fff',
+            fontSize: '0.625rem', fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '0 3px', lineHeight: 1, pointerEvents: 'none',
+          }}>
+            {totalNew > 99 ? '99+' : totalNew}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-72 rounded-lg border border-white/10 bg-gray-900 shadow-xl z-50">
-          <div className="px-4 py-2.5 border-b border-white/5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-            {isAr ? 'الإجراءات المطلوبة' : 'Action Items'}
+        <div
+          ref={panelRef}
+          style={{
+            position: 'fixed',
+            top: pos.top,
+            right: pos.right,
+            width: 300,
+            borderRadius: '0.625rem',
+            border: '1px solid var(--border)',
+            background: 'var(--surface)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+            zIndex: 9999,
+            overflow: 'hidden',
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              {isAr ? 'الإجراءات المطلوبة' : 'Action Items'}
+            </span>
+            <button
+              onClick={markAllRead}
+              style={{ fontSize: '0.6875rem', color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', padding: '0.1rem 0.25rem', borderRadius: 4 }}
+            >
+              {isAr ? 'تعليم الكل كمقروء' : 'Mark all as read'}
+            </button>
           </div>
-          <ul className="py-1">
-            <li>
-              <Link
-                href="/finance/invoices?status=DRAFT"
-                onClick={() => setOpen(false)}
-                className="flex items-center justify-between px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition"
-              >
-                <span>{isAr ? 'فواتير مسودة' : 'Draft Invoices'}</span>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${counts.draftInvoices > 0 ? 'bg-amber-500/20 text-amber-400' : 'bg-white/5 text-gray-500'}`}>
-                  {counts.draftInvoices}
-                </span>
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/finance/commissions"
-                onClick={() => setOpen(false)}
-                className="flex items-center justify-between px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition"
-              >
-                <span>{isAr ? 'عمولات مستحقة' : 'Payable Commissions'}</span>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${counts.payableCommissions > 0 ? 'bg-amber-500/20 text-amber-400' : 'bg-white/5 text-gray-500'}`}>
-                  {counts.payableCommissions}
-                </span>
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/deals?tab=installments"
-                onClick={() => setOpen(false)}
-                className="flex items-center justify-between px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition"
-              >
-                <span>{isAr ? 'أقساط متأخرة' : 'Overdue Installments'}</span>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${counts.overdueInstallments > 0 ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-gray-500'}`}>
-                  {counts.overdueInstallments}
-                </span>
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/crm?status=NEW"
-                onClick={() => setOpen(false)}
-                className="flex items-center justify-between px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition"
-              >
-                <span>{isAr ? 'عملاء محتملون جدد' : 'New B2C Leads'}</span>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${counts.newLeads > 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-gray-500'}`}>
-                  {counts.newLeads}
-                </span>
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/service/part-picks"
-                onClick={() => setOpen(false)}
-                className="flex items-center justify-between px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition"
-              >
-                <span>{isAr ? 'قطع غيار للسحب من المستودع' : 'Parts to Fetch'}</span>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${counts.pendingPartPicks > 0 ? 'bg-orange-500/20 text-orange-400' : 'bg-white/5 text-gray-500'}`}>
-                  {counts.pendingPartPicks}
-                </span>
-              </Link>
-            </li>
+
+          {/* Items */}
+          <ul style={{ margin: 0, padding: '0.375rem 0', listStyle: 'none' }}>
+            {ITEMS.map(({ key, labelEn, labelAr, href, color }) => {
+              const total = counts[key];
+              const fresh = newCount(key);
+              return (
+                <li key={key}>
+                  <Link
+                    href={href}
+                    onClick={() => setOpen(false)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '0.625rem 1rem', textDecoration: 'none',
+                      background: fresh > 0 ? 'color-mix(in srgb, var(--primary) 5%, transparent)' : 'transparent',
+                      transition: 'background 120ms',
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = 'var(--surface-2)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = fresh > 0 ? 'color-mix(in srgb, var(--primary) 5%, transparent)' : 'transparent'; }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+                      {fresh > 0 && (
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                      )}
+                      {fresh === 0 && (
+                        <span style={{ width: 6, height: 6, flexShrink: 0 }} />
+                      )}
+                      <span style={{ fontSize: '0.8125rem', color: fresh > 0 ? 'var(--text-1)' : 'var(--text-3)', fontWeight: fresh > 0 ? 500 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {isAr ? labelAr : labelEn}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', flexShrink: 0 }}>
+                      {fresh > 0 && (
+                        <span style={{ fontSize: '0.625rem', fontWeight: 700, color, background: `color-mix(in srgb, ${color} 15%, transparent)`, borderRadius: 4, padding: '0.1rem 0.35rem' }}>
+                          +{fresh} {isAr ? 'جديد' : 'new'}
+                        </span>
+                      )}
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: total > 0 ? 'var(--text-2)' : 'var(--text-3)', minWidth: '1.5rem', textAlign: 'right' }}>
+                        {total}
+                      </span>
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
+
+          {/* Footer */}
+          <div style={{ padding: '0.5rem 1rem', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => setOpen(false)}
+              style={{ fontSize: '0.75rem', color: 'var(--text-3)', background: 'none', border: 'none', cursor: 'pointer', padding: '0.1rem 0' }}
+            >
+              {isAr ? 'إغلاق' : 'Close'}
+            </button>
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
