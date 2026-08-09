@@ -6,6 +6,7 @@ import NumericInput from '../../../components/ui/NumericInput';
 import { useQuery, apiFetch } from '../../../lib/useApi';
 import { useLang } from '../../../lib/lang-context';
 import { fmtDate } from '@/lib/fmt';
+import { API_BASE } from '@/lib/config';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Shipment {
@@ -59,6 +60,32 @@ interface Location {
   name: string;
 }
 
+interface CarMake  { id: string; name: string; logoUrl?: string; }
+interface CarModel { id: string; name: string; }
+interface LI       { id: string; value: string; label: string; labelAr?: string; }
+
+const YEARS = Array.from({ length: 40 }, (_, i) => {
+  const y = 2026 - i;
+  return { value: String(y), label: String(y) };
+});
+
+const NHTSA_BODY: Record<string, string> = {
+  'sedan/saloon': 'Sedan', 'sedan': 'Sedan',
+  'sport utility vehicle (suv)/multi-purpose vehicle (mpv)': 'SUV', 'suv': 'SUV',
+  'hatchback/liftback/notchback': 'Hatchback', 'hatchback': 'Hatchback',
+  'pickup': 'Pickup', 'truck': 'Pickup',
+  'van': 'Van', 'minivan': 'Van',
+  'coupe': 'Coupe',
+  'convertible/cabriolet': 'Convertible', 'convertible': 'Convertible',
+  'wagon': 'Wagon', 'station wagon/estate': 'Wagon',
+};
+const NHTSA_FUEL: Record<string, string> = {
+  'gasoline': 'Petrol', 'petrol': 'Petrol',
+  'diesel': 'Diesel',
+  'electric': 'Electric',
+  'hybrid - unspecified': 'Hybrid', 'hybrid': 'Hybrid',
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   IN_TRANSIT:        { label: 'In Transit',        cls: 'badge-info'    },
@@ -66,6 +93,7 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   CUSTOMS_CLEARANCE: { label: 'Customs Clearance',  cls: 'badge-orange'  },
   CLEARED:           { label: 'Cleared',            cls: 'badge-purple'  },
   DELIVERED:         { label: 'Delivered',          cls: 'badge-success' },
+  CLOSED:            { label: 'Closed ✓',           cls: 'badge-neutral' },
 };
 const STATUS_OPTIONS = Object.entries(STATUS_CFG).map(([k, v]) => ({ value: k, label: v.label }));
 
@@ -276,12 +304,43 @@ function ShipmentDetailModal({ shipmentId, onClose, onChanged }: {
   const { data: ship, loading, reload } =
     useQuery<Shipment>(`/import-shipments/${shipmentId}`, [shipmentId]);
 
+  // Lookup data for add vehicle form
+  const { data: rawCarMakes }      = useQuery<CarMake[]>('/settings/car-makes');
+  const { data: rawColors }        = useQuery<LI[]>('/lookup-items?category=car_color');
+  const { data: rawBodyTypes }     = useQuery<LI[]>('/lookup-items?category=body_type');
+  const { data: rawFuelTypes }     = useQuery<LI[]>('/lookup-items?category=fuel_type');
+  const { data: rawTransmissions } = useQuery<LI[]>('/lookup-items?category=transmission');
+
+  const carMakes = Array.isArray(rawCarMakes) ? rawCarMakes : [];
+  const toOpts   = (r: LI[] | null | undefined) => (Array.isArray(r) ? r : []).map(i => ({ value: i.value, label: i.label }));
+  const MAKE_OPTS         = carMakes.map(m => ({ value: m.name, label: m.name }));
+  const COLOR_OPTS        = toOpts(rawColors);
+  const BODY_TYPE_OPTS    = toOpts(rawBodyTypes);
+  const FUEL_TYPE_OPTS    = toOpts(rawFuelTypes);
+  const TRANSMISSION_OPTS = toOpts(rawTransmissions);
+
+  // Cascaded models — depends on selected make name
+  const [addMakeName, setAddMakeName] = useState('');
+  const addMake = carMakes.find(m => m.name === addMakeName) ?? null;
+  const { data: rawAddModels } = useQuery<CarModel[]>(
+    addMake ? `/settings/car-makes/${addMake.id}/models` : null,
+    [addMake?.id],
+  );
+  const MODEL_OPTS = (Array.isArray(rawAddModels) ? rawAddModels : []).map(m => ({ value: m.name, label: m.name }));
+
   // Add vehicle
-  const BLANK_ADD = { make: '', model: '', year: '', vin: '', trim: '', color: '', price: '', cost: '', mileage: '', customsDuty: '' };
+  const BLANK_ADD = {
+    make: '', model: '', year: '2024', vin: '', trim: '', color: '', bodyType: '',
+    fuelType: '', transmission: '', engineSize: '', hp: '', doors: '', seats: '',
+    mileage: '', price: '', cost: '', customsDuty: '',
+  };
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState(BLANK_ADD);
   const [addingSv, setAddingSv]   = useState(false);
   const [addErr, setAddErr]       = useState('');
+  const [vinDecoding, setVinDecoding] = useState(false);
+  const [vinMsg, setVinMsg]       = useState('');
+
 
   // Inline duty edit
   const [editDutyId, setEditDutyId] = useState<string | null>(null);
@@ -307,6 +366,39 @@ function ShipmentDetailModal({ shipmentId, onClose, onChanged }: {
   const setInsp = (k: string, v: string) => setInspForm((p) => ({ ...p, [k]: v }));
 
   // ── Actions ────────────────────────────────────────────────────────────────
+  async function decodeVin() {
+    if (addForm.vin.length !== 17) return;
+    setVinDecoding(true); setVinMsg('');
+    try {
+      const data = await apiFetch<any>(`/vehicles/decode-vin?vin=${addForm.vin}`);
+      const d = data?.decoded;
+      if (!d) { setVinMsg('VIN not recognised'); return; }
+      const matchedMake = carMakes.find(m => m.name.toLowerCase() === (d.make || '').toLowerCase());
+      const mappedBody  = NHTSA_BODY[(d.bodyType || '').toLowerCase()];
+      const mappedFuel  = NHTSA_FUEL[(d.fuelType || '').toLowerCase()];
+      const newMake = matchedMake?.name || d.make || addForm.make;
+      setAddMakeName(newMake);
+      setAddForm(p => ({
+        ...p,
+        make:         newMake,
+        model:        d.model        || p.model,
+        year:         d.year         ? String(d.year) : p.year,
+        trim:         d.trim         || p.trim,
+        bodyType:     mappedBody     || d.bodyType || p.bodyType,
+        engineSize:   d.engineSize   || p.engineSize,
+        fuelType:     mappedFuel     || d.fuelType || p.fuelType,
+        transmission: d.transmission || p.transmission,
+        doors:        d.doors        ? String(d.doors) : p.doors,
+      }));
+      const filled = [d.make, d.model, d.year, d.bodyType].filter(Boolean).length;
+      setVinMsg(filled === 0 ? 'VIN not found in NHTSA database' : '✓ Fields filled from VIN');
+    } catch {
+      setVinMsg('Error reaching VIN decode API');
+    } finally {
+      setVinDecoding(false);
+    }
+  }
+
   async function addVehicle(e: React.FormEvent) {
     e.preventDefault();
     if (!addForm.make || !addForm.model || !addForm.year || !addForm.price) {
@@ -317,17 +409,26 @@ function ShipmentDetailModal({ shipmentId, onClose, onChanged }: {
       await apiFetch(`/import-shipments/${shipmentId}/vehicles/new`, {
         method: 'POST',
         body: JSON.stringify({
-          make: addForm.make, model: addForm.model, year: Number(addForm.year),
-          vin:         addForm.vin         || undefined,
-          trim:        addForm.trim        || undefined,
-          color:       addForm.color       || undefined,
-          price:       Number(addForm.price),
-          cost:        addForm.cost        ? Number(addForm.cost)        : undefined,
-          mileage:     addForm.mileage     ? Number(addForm.mileage)     : undefined,
-          customsDuty: addForm.customsDuty ? Number(addForm.customsDuty) : undefined,
+          make:         addForm.make,
+          model:        addForm.model,
+          year:         Number(addForm.year),
+          vin:          addForm.vin         || undefined,
+          trim:         addForm.trim        || undefined,
+          color:        addForm.color       || undefined,
+          bodyType:     addForm.bodyType    || undefined,
+          fuelType:     addForm.fuelType    || undefined,
+          transmission: addForm.transmission || undefined,
+          engineSize:   addForm.engineSize  || undefined,
+          hp:           addForm.hp          ? Number(addForm.hp)          : undefined,
+          doors:        addForm.doors       ? Number(addForm.doors)       : undefined,
+          seats:        addForm.seats       ? Number(addForm.seats)       : undefined,
+          mileage:      addForm.mileage     ? Number(addForm.mileage)     : undefined,
+          price:        Number(addForm.price),
+          cost:         addForm.cost        ? Number(addForm.cost)        : undefined,
+          customsDuty:  addForm.customsDuty ? Number(addForm.customsDuty) : undefined,
         }),
       });
-      setAddForm(BLANK_ADD); setShowAdd(false);
+      setAddForm(BLANK_ADD); setAddMakeName(''); setShowAdd(false); setVinMsg('');
       reload(); onChanged();
     } catch (e: unknown) { setAddErr(e instanceof Error ? e.message : String(e)); }
     finally { setAddingSv(false); }
@@ -473,14 +574,22 @@ function ShipmentDetailModal({ shipmentId, onClose, onChanged }: {
             {ship && <StatusBadge status={ship.status} />}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            {ship && (
+            {ship && ship.status !== 'CLOSED' && (
               <SearchableCombobox
-                options={STATUS_OPTIONS}
+                options={STATUS_OPTIONS.filter(o => o.value !== 'CLOSED')}
                 value={ship.status}
                 onChange={updateStatus}
                 disabled={statusSaving}
                 className="w-44"
               />
+            )}
+            {ship?.status === 'CLOSED' && (
+              <span style={{
+                fontSize: '0.75rem', fontWeight: 600, color: '#fff',
+                background: '#374151', padding: '0.25rem 0.75rem', borderRadius: '0.375rem',
+              }}>
+                Shipment Closed
+              </span>
             )}
             <button onClick={onClose} className="btn btn-ghost btn-sm"
               style={{ padding: '0.2rem 0.5rem', fontSize: '1.1rem', lineHeight: 1 }}>✕</button>
@@ -535,54 +644,156 @@ function ShipmentDetailModal({ shipmentId, onClose, onChanged }: {
                   </button>
                 </div>
 
-                {/* Add vehicle inline form */}
+                {/* Add vehicle inline form — mirrors the New Vehicle wizard fields */}
                 {showAdd && (
                   <form onSubmit={addVehicle} style={{
-                    padding: '1rem', borderBottom: '1px solid var(--border)',
-                    background: 'var(--surface-2)', display: 'flex', flexDirection: 'column', gap: '0.75rem',
+                    padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)',
+                    background: 'var(--surface-2)', display: 'flex', flexDirection: 'column', gap: '1rem',
                   }}>
-                    <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-1)' }}>Add Vehicle to Shipment</p>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.5rem' }}>
-                      <div>
-                        <label className="input-label">Make *</label>
-                        <input className="input" value={addForm.make} onChange={(e) => setAdd('make', e.target.value)} placeholder="Toyota" autoFocus />
+                    <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-1)', marginBottom: '-0.25rem' }}>
+                      Add Vehicle to Shipment
+                    </p>
+
+                    {/* VIN row */}
+                    <div>
+                      <label className="input-label">
+                        VIN <span style={{ fontWeight: 400, color: 'var(--text-3)' }}>(optional — enter to auto-fill specs)</span>
+                      </label>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <input
+                          className="input"
+                          value={addForm.vin}
+                          onChange={(e) => setAdd('vin', e.target.value.toUpperCase().slice(0, 17))}
+                          placeholder="17-character VIN"
+                          maxLength={17}
+                          style={{ fontFamily: 'monospace', letterSpacing: '0.05em', flex: 1 }}
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          disabled={addForm.vin.length !== 17 || vinDecoding}
+                          onClick={decodeVin}
+                          style={{
+                            flexShrink: 0, padding: '0 0.875rem', height: 38,
+                            borderRadius: 8, border: '1px solid var(--primary)',
+                            background: addForm.vin.length === 17 ? 'var(--primary)' : 'var(--surface)',
+                            cursor: addForm.vin.length === 17 ? 'pointer' : 'not-allowed',
+                            fontSize: '0.8125rem', fontWeight: 600,
+                            color: addForm.vin.length === 17 ? '#fff' : 'var(--text-3)',
+                            opacity: addForm.vin.length === 17 ? 1 : 0.5, whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {vinDecoding ? '…' : 'Decode VIN'}
+                        </button>
                       </div>
-                      <div>
-                        <label className="input-label">Model *</label>
-                        <input className="input" value={addForm.model} onChange={(e) => setAdd('model', e.target.value)} placeholder="Camry" />
-                      </div>
-                      <div>
-                        <label className="input-label">Year *</label>
-                        <NumericInput className="input" min="1950" max="2035" value={addForm.year} onChange={(v) => setAdd('year', v)} placeholder="2024" />
-                      </div>
-                      <div>
-                        <label className="input-label">VIN</label>
-                        <input className="input" value={addForm.vin} onChange={(e) => setAdd('vin', e.target.value)} placeholder="1HGBH41JXMN109186" />
-                      </div>
-                      <div>
-                        <label className="input-label">Trim</label>
-                        <input className="input" value={addForm.trim} onChange={(e) => setAdd('trim', e.target.value)} placeholder="SE, XLE…" />
-                      </div>
-                      <div>
-                        <label className="input-label">Color</label>
-                        <input className="input" value={addForm.color} onChange={(e) => setAdd('color', e.target.value)} placeholder="Pearl White" />
-                      </div>
-                      <div>
-                        <label className="input-label">Price (EGP) *</label>
-                        <NumericInput className="input" min="0" value={addForm.price} onChange={(v) => setAdd('price', v)} placeholder="1,500,000" />
-                      </div>
-                      <div>
-                        <label className="input-label">Cost (EGP)</label>
-                        <NumericInput className="input" min="0" value={addForm.cost} onChange={(v) => setAdd('cost', v)} placeholder="Optional" />
-                      </div>
-                      <div>
-                        <label className="input-label">Customs Duty (EGP)</label>
-                        <NumericInput className="input" min="0" value={addForm.customsDuty} onChange={(v) => setAdd('customsDuty', v)} placeholder="0" />
+                      {vinMsg && (
+                        <p style={{ fontSize: '0.6875rem', marginTop: '0.2rem', color: vinMsg.startsWith('✓') ? 'var(--success-fg)' : 'var(--danger)' }}>
+                          {vinMsg}
+                        </p>
+                      )}
+                      <p style={{ fontSize: '0.6rem', color: addForm.vin.length === 17 ? 'var(--success-fg)' : 'var(--text-3)', marginTop: '0.15rem' }}>
+                        {addForm.vin.length}/17 characters
+                      </p>
+                    </div>
+
+                    {/* Basic Info grid */}
+                    <div>
+                      <p className="section-label" style={{ fontSize: '0.6875rem', marginBottom: '0.5rem' }}>Basic Info</p>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.5rem' }}>
+                        <div>
+                          <label className="input-label">Make <span style={{ color: 'var(--danger)' }}>*</span></label>
+                          <SearchableCombobox
+                            options={MAKE_OPTS}
+                            value={addForm.make}
+                            onChange={(v) => { setAdd('make', v); setAdd('model', ''); setAddMakeName(v); }}
+                            placeholder="Select make…"
+                          />
+                        </div>
+                        <div>
+                          <label className="input-label">Model <span style={{ color: 'var(--danger)' }}>*</span></label>
+                          {addForm.make && MODEL_OPTS.length > 0
+                            ? <SearchableCombobox options={MODEL_OPTS} value={addForm.model} onChange={(v) => setAdd('model', v)} placeholder="Select model…" />
+                            : <input className="input" value={addForm.model} onChange={(e) => setAdd('model', e.target.value)}
+                                placeholder={addForm.make ? 'Type model name…' : 'Select a make first…'}
+                                disabled={!addForm.make} />
+                          }
+                        </div>
+                        <div>
+                          <label className="input-label">Year <span style={{ color: 'var(--danger)' }}>*</span></label>
+                          <SearchableCombobox options={YEARS} value={addForm.year} onChange={(v) => setAdd('year', v)} placeholder="Select year…" />
+                        </div>
+                        <div>
+                          <label className="input-label">Trim / Variant</label>
+                          <input className="input" value={addForm.trim} onChange={(e) => setAdd('trim', e.target.value)} placeholder="SE, XLE, Sport…" />
+                        </div>
+                        <div>
+                          <label className="input-label">Color</label>
+                          <SearchableCombobox options={COLOR_OPTS} value={addForm.color} onChange={(v) => setAdd('color', v)} placeholder="Select color…" clearable />
+                        </div>
+                        <div>
+                          <label className="input-label">Body Type</label>
+                          <SearchableCombobox options={BODY_TYPE_OPTS} value={addForm.bodyType} onChange={(v) => setAdd('bodyType', v)} placeholder="Sedan, SUV…" clearable />
+                        </div>
+                        <div>
+                          <label className="input-label">Mileage (km)</label>
+                          <NumericInput className="input" min="0" value={addForm.mileage} onChange={(v) => setAdd('mileage', v)} placeholder="0 for new" />
+                        </div>
                       </div>
                     </div>
+
+                    {/* Specs grid */}
+                    <div>
+                      <p className="section-label" style={{ fontSize: '0.6875rem', marginBottom: '0.5rem' }}>Specs</p>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.5rem' }}>
+                        <div>
+                          <label className="input-label">Fuel Type</label>
+                          <SearchableCombobox options={FUEL_TYPE_OPTS} value={addForm.fuelType} onChange={(v) => setAdd('fuelType', v)} placeholder="Petrol, Diesel…" clearable />
+                        </div>
+                        <div>
+                          <label className="input-label">Transmission</label>
+                          <SearchableCombobox options={TRANSMISSION_OPTS} value={addForm.transmission} onChange={(v) => setAdd('transmission', v)} placeholder="Auto, Manual…" clearable />
+                        </div>
+                        <div>
+                          <label className="input-label">Engine Size</label>
+                          <input className="input" value={addForm.engineSize} onChange={(e) => setAdd('engineSize', e.target.value)} placeholder="2.0L Inline-4…" />
+                        </div>
+                        <div>
+                          <label className="input-label">Horsepower (HP)</label>
+                          <NumericInput className="input" min="0" value={addForm.hp} onChange={(v) => setAdd('hp', v)} placeholder="180" />
+                        </div>
+                        <div>
+                          <label className="input-label">Doors</label>
+                          <NumericInput className="input" min="2" max="6" value={addForm.doors} onChange={(v) => setAdd('doors', v)} placeholder="4" />
+                        </div>
+                        <div>
+                          <label className="input-label">Seats</label>
+                          <NumericInput className="input" min="1" max="9" value={addForm.seats} onChange={(v) => setAdd('seats', v)} placeholder="5" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Pricing grid */}
+                    <div>
+                      <p className="section-label" style={{ fontSize: '0.6875rem', marginBottom: '0.5rem' }}>Pricing</p>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.5rem' }}>
+                        <div>
+                          <label className="input-label">Listed Price (EGP) <span style={{ color: 'var(--danger)' }}>*</span></label>
+                          <NumericInput className="input" min="0" value={addForm.price} onChange={(v) => setAdd('price', v)} placeholder="1,500,000" />
+                        </div>
+                        <div>
+                          <label className="input-label">Acquisition Cost (EGP)</label>
+                          <NumericInput className="input" min="0" value={addForm.cost} onChange={(v) => setAdd('cost', v)} placeholder="Optional" />
+                        </div>
+                        <div>
+                          <label className="input-label">Customs Duty (EGP)</label>
+                          <NumericInput className="input" min="0" value={addForm.customsDuty} onChange={(v) => setAdd('customsDuty', v)} placeholder="0" />
+                        </div>
+                      </div>
+                    </div>
+
                     {addErr && <p style={{ color: 'var(--danger)', fontSize: '0.75rem' }}>{addErr}</p>}
                     <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setShowAdd(false); setAddErr(''); }}>Cancel</button>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setShowAdd(false); setAddErr(''); setVinMsg(''); }}>Cancel</button>
                       <button type="submit" className="btn btn-primary btn-sm" disabled={addingSv}>
                         {addingSv ? 'Adding…' : 'Add to Shipment'}
                       </button>
