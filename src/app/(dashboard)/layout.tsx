@@ -429,12 +429,13 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { t } = useLang();
   const [user, setUser] = useState<{ name: string; role: string } | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    return localStorage.getItem('sidebar_open') !== 'false';
-  });
+  const [sidebarOpen, setSidebarOpen] = useState(true); // ponytail: SSR-safe; localStorage applied after mount
 
   useEffect(() => { document.title = resolveTitle(pathname); }, [pathname]);
+
+  useEffect(() => {
+    if (localStorage.getItem('sidebar_open') === 'false') setSidebarOpen(false);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('sidebar_open', String(sidebarOpen));
