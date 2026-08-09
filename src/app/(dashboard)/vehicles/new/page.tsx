@@ -1853,7 +1853,9 @@ export default function NewVehiclePage() {
                   const done   = step > s.n;
                   const active = step === s.n;
                   return (
-                    <div key={s.n} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                    <button key={s.n} onClick={() => { setErr(''); setStep(s.n); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', background: 'none', border: 'none', padding: '0.25rem 0', cursor: 'pointer', textAlign: 'left', width: '100%', borderRadius: '0.375rem' }}
+                    >
                       <div style={{
                         width: '20px', height: '20px', borderRadius: '9999px', flexShrink: 0,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1875,7 +1877,7 @@ export default function NewVehiclePage() {
                       }}>
                         {sl(s.label)}
                       </span>
-                    </div>
+                    </button>
                   );
                 })}
               </div>

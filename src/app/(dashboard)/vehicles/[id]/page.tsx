@@ -1400,7 +1400,9 @@ export default function EditVehiclePage() {
                   const done = step > s.n;
                   const active = step === s.n;
                   return (
-                    <div key={s.n} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                    <button key={s.n} onClick={() => { setErr(''); setStep(s.n); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', background: 'none', border: 'none', padding: '0.25rem 0', cursor: 'pointer', textAlign: 'left', width: '100%', borderRadius: '0.375rem' }}
+                    >
                       <div style={{
                         width: '20px', height: '20px', borderRadius: '9999px', flexShrink: 0,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1416,7 +1418,7 @@ export default function EditVehiclePage() {
                       <span style={{ fontSize: '0.8125rem', color: active ? 'var(--text-1)' : done ? 'var(--success-fg)' : 'var(--text-3)', fontWeight: active ? 600 : 400 }}>
                         {sl(s.label)}
                       </span>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
