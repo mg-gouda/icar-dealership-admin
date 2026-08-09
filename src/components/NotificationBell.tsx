@@ -179,7 +179,12 @@ export default function NotificationBell() {
                 <li key={key}>
                   <Link
                     href={href}
-                    onClick={() => setOpen(false)}
+                    onClick={() => {
+                      const updated = { ...seen, [key]: counts[key] };
+                      saveSeen(updated);
+                      setSeen(updated);
+                      setOpen(false);
+                    }}
                     style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       padding: '0.625rem 1rem', textDecoration: 'none',
