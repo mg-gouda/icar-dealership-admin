@@ -38,12 +38,19 @@ interface SalesPipelineData {
   byStage:  { stage: string; count: number; pct: number }[];
   byMethod: { cash: number; installment: number; bankFinancing: number };
 }
+interface AgingVehicle {
+  id: string; make: string; model: string; year: number; color: string | null;
+  vin: string; daysInStock: number; price: number; cost: number | null;
+  accreditedDealer: { id: string; name: string } | null;
+}
 interface InventoryAgingData {
-  avgDaysInStock: number;
+  total: number; totalValue: number; avgDaysInStock: number;
   buckets: { d0_30: B; d31_60: B; d61_90: B; d90plus: B };
-  stale: { id: string; make: string; model: string; year: number; vin: string; daysInStock: number; price: number }[];
+  vehicles: AgingVehicle[];
+  stale: AgingVehicle[]; // vehicles > 90 days
 }
 type B = { count: number; value: number; pct: number };
+interface AccreditedDealer { id: string; name: string; }
 
 interface LeadConversionData {
   totalLeads: number; converted: number; conversionRate: number; avgDaysToConvert: number;
@@ -310,79 +317,217 @@ function SalesPipelineTab() {
 
 function InventoryAgingTab() {
   const { isAr } = useLang();
-  const [locationId, setLocationId] = useState('');
-  const [data, setData]             = useState<InventoryAgingData | null>(null);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState('');
+  const [locationId,  setLocationId]  = useState('');
+  const [dealerId,    setDealerId]    = useState('');
+  const [dateFrom,    setDateFrom]    = useState('');
+  const [dateTo,      setDateTo]      = useState('');
+  const [ageMin,      setAgeMin]      = useState('');
+  const [ageMax,      setAgeMax]      = useState('');
+  const [data, setData]               = useState<InventoryAgingData | null>(null);
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState('');
+
+  const { data: locRaw } = useQuery<Location[]>('/locations');
+  const locations = Array.isArray(locRaw) ? locRaw : [];
+  const locOpts = [{ value: '', label: isAr ? 'جميع الفروع' : 'All Locations' }, ...locations.map((l) => ({ value: l.id, label: l.name }))];
+
+  const { data: dealersRaw } = useQuery<AccreditedDealer[]>('/accredited-dealers');
+  const dealers = Array.isArray(dealersRaw) ? dealersRaw : (dealersRaw as any)?.items ?? [];
+  const dealerOpts = [
+    { value: '', label: isAr ? 'كل الوكلاء' : 'All Dealers' },
+    ...dealers.map((d: AccreditedDealer) => ({ value: d.id, label: d.name })),
+  ];
 
   async function generate() {
     setLoading(true); setError('');
     try {
       const qs = new URLSearchParams();
       if (locationId) qs.set('locationId', locationId);
+      if (dealerId)   qs.set('accreditedDealerId', dealerId);
+      if (dateFrom)   qs.set('dateFrom', dateFrom);
+      if (dateTo)     qs.set('dateTo', dateTo);
+      if (ageMin)     qs.set('ageMin', ageMin);
+      if (ageMax)     qs.set('ageMax', ageMax);
       setData(await apiFetch<InventoryAgingData>(`/reports/inventory-aging?${qs}`));
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load report.'); }
     finally { setLoading(false); }
   }
 
   const BUCKETS = data ? [
-    { label: isAr ? '0–30 يوم' : '0–30 days',   color: 'var(--success)', ...data.buckets.d0_30  },
-    { label: isAr ? '31–60 يوم' : '31–60 days',  color: 'var(--primary)', ...data.buckets.d31_60 },
-    { label: isAr ? '61–90 يوم' : '61–90 days',  color: 'var(--warning)', ...data.buckets.d61_90 },
-    { label: isAr ? 'أكثر من 90' : 'Over 90 days', color: 'var(--danger)', ...data.buckets.d90plus },
+    { label: isAr ? '0–30 يوم' : '0–30 days',     color: 'var(--success)', ...data.buckets.d0_30  },
+    { label: isAr ? '31–60 يوم' : '31–60 days',   color: 'var(--primary)', ...data.buckets.d31_60 },
+    { label: isAr ? '61–90 يوم' : '61–90 days',   color: 'var(--warning)', ...data.buckets.d61_90 },
+    { label: isAr ? 'أكثر من 90' : 'Over 90 days', color: 'var(--danger)',  ...data.buckets.d90plus },
   ] : [];
+
+  function ageBucket(days: number) {
+    if (days <= 30) return BUCKETS[0];
+    if (days <= 60) return BUCKETS[1];
+    if (days <= 90) return BUCKETS[2];
+    return BUCKETS[3];
+  }
 
   function getKpis(): KpiItem[] {
     if (!data) return [];
     return [
       ...BUCKETS.map((b) => ({ label: b.label, value: `${b.count} vehicles` })),
       { label: isAr ? 'متوسط أيام المخزن' : 'Avg Days in Stock', value: `${data.avgDaysInStock.toFixed(1)} days` },
+      { label: isAr ? 'إجمالي القيمة' : 'Total Value', value: egp(data.totalValue) },
     ];
   }
   function getTables(): TableSheet[] {
     if (!data) return [];
     return [
       {
-        title:   'Inventory Aging Buckets',
+        title:   'Aging Bucket Summary',
         headers: ['Age Range', 'Vehicles', 'Value (EGP)', '%'],
         rows:    BUCKETS.map((b) => [b.label, b.count, egp(b.value), pct(b.pct)]),
       },
       {
-        title:   'Vehicles Over 90 Days (Stale)',
-        headers: ['Make', 'Model', 'Year', 'VIN', 'Days in Stock', 'Price (EGP)'],
-        rows:    data.stale.map((v) => [v.make, v.model, v.year, v.vin, v.daysInStock, egp(v.price)]),
+        title:   'Vehicle Inventory Detail',
+        headers: ['Vehicle', 'VIN', 'Color', 'Accredited Dealer', 'Days in Stock', 'Age Bucket', 'Listed Price (EGP)', 'Cost (EGP)'],
+        rows:    data.vehicles.map((v) => [
+          `${v.year} ${v.make} ${v.model}`,
+          v.vin ?? '—',
+          v.color ?? '—',
+          v.accreditedDealer?.name ?? '—',
+          v.daysInStock,
+          ageBucket(v.daysInStock)?.label ?? '',
+          egp(v.price),
+          v.cost != null ? egp(v.cost) : '—',
+        ]),
       },
     ];
   }
 
+  const totalCost = data?.vehicles.reduce((s, v) => s + (v.cost ?? 0), 0) ?? 0;
+
   return (
     <div>
-      <FilterBar
-        isAr={isAr} loading={loading} hasData={!!data}
-        locationId={locationId} onLocation={setLocationId}
-        dateFrom="" onDateFrom={() => {}} dateTo="" onDateTo={() => {}} noDate
-        onGenerate={generate}
-        onExcel={() => exportToExcel('inventory-aging', isAr ? 'تقادم المخزن' : 'Inventory Aging', getKpis(), getTables())}
-        onPdf={()   => exportToPdf('inventory-aging',  isAr ? 'تقادم المخزن' : 'Inventory Aging', getKpis(), getTables())}
-      />
+      {/* Filter bar */}
+      <div className="px-6 py-3 flex flex-wrap gap-3 items-end border-b" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+        <div>
+          <label className="input-label">{isAr ? 'الفرع' : 'Location'}</label>
+          <SearchableCombobox options={locOpts} value={locationId} onChange={setLocationId} placeholder={isAr ? 'جميع الفروع' : 'All Locations'} className="w-44" />
+        </div>
+        <div>
+          <label className="input-label">{isAr ? 'الوكيل المعتمد' : 'Accredited Dealer'}</label>
+          <SearchableCombobox options={dealerOpts} value={dealerId} onChange={setDealerId} placeholder={isAr ? 'كل الوكلاء' : 'All Dealers'} className="w-48" />
+        </div>
+        <div>
+          <label className="input-label">{isAr ? 'تاريخ الإضافة من' : 'Added From'}</label>
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="input w-36" />
+        </div>
+        <div>
+          <label className="input-label">{isAr ? 'إلى تاريخ' : 'Added To'}</label>
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="input w-36" />
+        </div>
+        <div>
+          <label className="input-label">{isAr ? 'عمر المخزن من (أيام)' : 'Age Min (days)'}</label>
+          <input type="number" min={0} value={ageMin} onChange={(e) => setAgeMin(e.target.value)} className="input w-24" placeholder="0" />
+        </div>
+        <div>
+          <label className="input-label">{isAr ? 'إلى (أيام)' : 'Age Max (days)'}</label>
+          <input type="number" min={0} value={ageMax} onChange={(e) => setAgeMax(e.target.value)} className="input w-24" placeholder="∞" />
+        </div>
+        <button onClick={generate} disabled={loading} className="btn btn-primary btn-sm">
+          {loading ? (isAr ? 'جارٍ الإنشاء…' : 'Generating…') : (isAr ? 'إنشاء التقرير' : 'Generate Report')}
+        </button>
+        {data && <ExportButtons onExcel={() => exportToExcel('inventory-aging', isAr ? 'تقادم المخزن' : 'Inventory Aging', getKpis(), getTables())} onPdf={() => exportToPdf('inventory-aging', isAr ? 'تقادم المخزن' : 'Inventory Aging', getKpis(), getTables())} isAr={isAr} />}
+      </div>
+
       <div className="px-6 py-5 space-y-5">
         {loading && <Spinner isAr={isAr} />}
         {error   && <ErrorBanner error={error} retry={generate} />}
         {!loading && !error && !data && <EmptyState onGenerate={generate} isAr={isAr} />}
         {!loading && data && (
           <>
+            {/* Summary cards */}
             <div className="flex flex-wrap gap-3">
               {BUCKETS.map((b) => (
-                <div key={b.label} className="card p-4 flex-1 min-w-[150px]" style={{ borderTop: `3px solid ${b.color}` }}>
+                <div key={b.label} className="card p-4 flex-1 min-w-[140px]" style={{ borderTop: `3px solid ${b.color}` }}>
                   <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-3)' }}>{b.label}</p>
                   <p className="text-2xl font-bold tabular-nums" style={{ color: 'var(--text-1)' }}>{b.count}</p>
                   <p className="text-xs mt-0.5 tabular-nums" style={{ color: 'var(--text-3)' }}>{egp(b.value)} · {pct(b.pct)}</p>
                 </div>
               ))}
               <KpiCard label={isAr ? 'متوسط أيام المخزن' : 'Avg Days in Stock'} value={data.avgDaysInStock.toFixed(1)} sub={isAr ? 'يوم' : 'days'} />
+              <KpiCard label={isAr ? 'إجمالي قيمة المخزن' : 'Total Inventory Value'} value={egp(data.totalValue)} sub={`${data.total} ${isAr ? 'مركبة' : 'vehicles'}`} />
             </div>
 
-            <TableSection title={isAr ? 'توزيع فترات التقادم' : 'Aging Bucket Breakdown'}>
+            {/* Vehicle detail table */}
+            <TableSection title={isAr ? 'تفاصيل المركبات' : 'Vehicle Inventory Detail'}>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="data-table" style={{ minWidth: 860 }}>
+                  <thead>
+                    <tr>
+                      <th>{isAr ? 'المركبة' : 'Vehicle'}</th>
+                      <th>{isAr ? 'الشاسيه' : 'VIN'}</th>
+                      <th>{isAr ? 'اللون' : 'Color'}</th>
+                      <th>{isAr ? 'الوكيل المعتمد' : 'Accredited Dealer'}</th>
+                      <th className="text-right">{isAr ? 'أيام في المخزن' : 'Days in Inventory'}</th>
+                      <th>{isAr ? 'الفترة' : 'Age Bucket'}</th>
+                      <th className="text-right">{isAr ? 'سعر البيع' : 'Listed Price'}</th>
+                      <th className="text-right">{isAr ? 'تكلفة الاقتناء' : 'Acquisition Cost'}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.vehicles.map((v) => {
+                      const bucket = ageBucket(v.daysInStock);
+                      return (
+                        <tr key={v.id}>
+                          <td>
+                            <Link href={`/vehicles/${v.id}`} style={{ fontWeight: 600, color: 'var(--text-1)', textDecoration: 'none' }}
+                              onMouseOver={(e) => (e.currentTarget.style.color = 'var(--primary)')}
+                              onMouseOut={(e)  => (e.currentTarget.style.color = 'var(--text-1)')}>
+                              {v.year} {v.make} {v.model}
+                            </Link>
+                          </td>
+                          <td className="font-mono text-xs" style={{ color: 'var(--text-3)' }}>{v.vin ?? '—'}</td>
+                          <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>{v.color ?? '—'}</td>
+                          <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>
+                            {v.accreditedDealer
+                              ? <span className="badge badge-info">{v.accreditedDealer.name}</span>
+                              : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                          </td>
+                          <td className="text-right tabular-nums">
+                            <span style={{ fontWeight: 700, color: bucket?.color ?? 'var(--text-1)' }}>{v.daysInStock}</span>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: bucket?.color ?? 'var(--text-3)', background: `${bucket?.color ?? 'transparent'}18`, padding: '2px 6px', borderRadius: 4 }}>
+                              {bucket?.label}
+                            </span>
+                          </td>
+                          <td className="text-right tabular-nums" style={{ color: 'var(--text-1)' }}>{egp(v.price)}</td>
+                          <td className="text-right tabular-nums" style={{ color: v.cost != null ? 'var(--text-1)' : 'var(--text-3)' }}>
+                            {v.cost != null ? egp(v.cost) : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  {/* Footer totals */}
+                  <tfoot>
+                    <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--surface-2)', fontWeight: 700 }}>
+                      <td colSpan={4} style={{ color: 'var(--text-1)', fontSize: '0.8125rem' }}>
+                        {isAr ? `الإجمالي — ${data.total} مركبة` : `Total — ${data.total} vehicle${data.total !== 1 ? 's' : ''}`}
+                      </td>
+                      <td className="text-right tabular-nums" style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>
+                        ø {data.avgDaysInStock.toFixed(1)} {isAr ? 'يوم' : 'days'}
+                      </td>
+                      <td />
+                      <td className="text-right tabular-nums" style={{ color: 'var(--text-1)' }}>{egp(data.totalValue)}</td>
+                      <td className="text-right tabular-nums" style={{ color: totalCost > 0 ? 'var(--text-1)' : 'var(--text-3)' }}>
+                        {totalCost > 0 ? egp(totalCost) : '—'}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </TableSection>
+
+            {/* Bucket summary table */}
+            <TableSection title={isAr ? 'ملخص فترات التقادم' : 'Aging Bucket Summary'}>
               <table className="data-table">
                 <thead><tr>
                   <th>{isAr ? 'الفترة' : 'Age Range'}</th>
@@ -393,44 +538,28 @@ function InventoryAgingTab() {
                 <tbody>
                   {BUCKETS.map((b) => (
                     <tr key={b.label}>
-                      <td style={{ color: 'var(--text-1)', fontWeight: 500 }}>{b.label}</td>
+                      <td>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ width: 10, height: 10, borderRadius: '50%', background: b.color, display: 'inline-block', flexShrink: 0 }} />
+                          <span style={{ color: 'var(--text-1)', fontWeight: 500 }}>{b.label}</span>
+                        </span>
+                      </td>
                       <td className="text-right tabular-nums">{b.count}</td>
                       <td className="text-right tabular-nums">{egp(b.value)}</td>
                       <td className="text-right tabular-nums" style={{ color: 'var(--text-3)' }}>{pct(b.pct)}</td>
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--surface-2)', fontWeight: 700 }}>
+                    <td style={{ color: 'var(--text-1)' }}>{isAr ? 'الإجمالي' : 'Total'}</td>
+                    <td className="text-right tabular-nums">{data.total}</td>
+                    <td className="text-right tabular-nums">{egp(data.totalValue)}</td>
+                    <td className="text-right" style={{ color: 'var(--text-3)' }}>100%</td>
+                  </tr>
+                </tfoot>
               </table>
             </TableSection>
-
-            {data.stale.length > 0 && (
-              <TableSection title={isAr ? 'مركبات تجاوزت 90 يوم' : 'Vehicles Over 90 Days'}>
-                <table className="data-table">
-                  <thead><tr>
-                    <th>{isAr ? 'الماركة' : 'Make'}</th>
-                    <th>{isAr ? 'الموديل' : 'Model'}</th>
-                    <th>{isAr ? 'السنة' : 'Year'}</th>
-                    <th>{isAr ? 'الشاسيه' : 'VIN'}</th>
-                    <th className="text-right">{isAr ? 'أيام' : 'Days'}</th>
-                    <th className="text-right">{isAr ? 'السعر' : 'Price'}</th>
-                    <th></th>
-                  </tr></thead>
-                  <tbody>
-                    {data.stale.map((v) => (
-                      <tr key={v.id}>
-                        <td style={{ color: 'var(--text-1)', fontWeight: 500 }}>{v.make}</td>
-                        <td style={{ color: 'var(--text-2)' }}>{v.model}</td>
-                        <td style={{ color: 'var(--text-3)' }}>{v.year}</td>
-                        <td className="font-mono text-xs" style={{ color: 'var(--text-3)' }}>{v.vin}</td>
-                        <td className="text-right tabular-nums" style={{ color: 'var(--danger-fg)', fontWeight: 600 }}>{v.daysInStock}</td>
-                        <td className="text-right tabular-nums">{egp(v.price)}</td>
-                        <td><Link href={`/vehicles/${v.id}`} className="btn btn-ghost btn-sm">{isAr ? 'عرض' : 'View'}</Link></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </TableSection>
-            )}
           </>
         )}
       </div>
