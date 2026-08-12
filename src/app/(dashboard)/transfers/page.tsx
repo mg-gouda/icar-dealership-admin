@@ -9,23 +9,23 @@ import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 interface Transfer {
   id: string;
   fromLocationId: string;
-  fromLocation?: { name: string };
+  fromLocation: { id: string; name: string };
   toLocationId: string;
-  toLocation?: { name: string };
+  toLocation: { id: string; name: string };
   vehicleId: string;
-  vehicle?: { make: string; model: string; year: number; vin: string };
-  amount: number;
+  vehicle: { id: string; make: string; model: string; year: number; vin: string };
+  amount: number | string;
   notes?: string;
   status: 'PENDING' | 'APPROVED' | 'CANCELLED';
   createdAt: string;
 }
 
 interface Location { id: string; name: string; }
-interface Vehicle  { id: string; make: string; model: string; year: number; vin: string; price: number; salePrice: number | null; }
+interface Vehicle  { id: string; make: string; model: string; year: number; vin: string; price: number | string; salePrice: number | string | null; }
 
 const STATUS_BADGE: Record<string, string> = {
-  PENDING: 'badge-warning',
-  APPROVED: 'badge-success',
+  PENDING:   'badge-warning',
+  APPROVED:  'badge-success',
   CANCELLED: 'badge-neutral',
 };
 
@@ -46,13 +46,13 @@ export default function TransfersPage() {
   const list = data?.data ?? [];
 
   // Locations for dropdowns
-  const { data: locRaw }  = useQuery<Location[]>('/locations');
+  const { data: locRaw } = useQuery<Location[]>('/locations');
   const locations = Array.isArray(locRaw) ? locRaw : [];
   const locOpts   = locations.map((l) => ({ value: l.id, label: l.name }));
 
   // Vehicles for VIN search
   const { data: vehRaw } = useQuery<{ items: Vehicle[] }>('/vehicles?limit=2000&status=AVAILABLE');
-  const vehicles  = vehRaw?.items ?? [];
+  const vehicles = vehRaw?.items ?? [];
   const vehicleOpts = vehicles.map((v) => ({
     value: v.id,
     label: `${v.vin ?? '—'}  ·  ${v.year} ${v.make} ${v.model}`,
@@ -63,7 +63,9 @@ export default function TransfersPage() {
     if (!form.vehicleId) return;
     const v = vehicles.find((x) => x.id === form.vehicleId);
     if (v) setForm((p) => ({ ...p, amount: String(v.salePrice ?? v.price) }));
-  }, [form.vehicleId]);  // ponytail: vehicles dep intentionally omitted — stale ref is fine here
+  }, [form.vehicleId]); // ponytail: vehicles dep intentionally omitted
+
+  const selectedVehicle = vehicles.find((v) => v.id === form.vehicleId);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,14 +82,28 @@ export default function TransfersPage() {
     finally { setActing(null); }
   };
 
-  const selectedVehicle = vehicles.find((v) => v.id === form.vehicleId);
+  const handleApprove = async (id: string) => {
+    if (!confirm(isAr ? 'تأكيد اعتماد التحويل؟' : 'Approve this transfer?')) return;
+    setActing(id + ':approve');
+    try { await apiFetch(`/transfers/${id}/approve`, { method: 'PATCH' }); reload(); }
+    catch (err: any) { alert(err.message); }
+    finally { setActing(null); }
+  };
+
+  const handleCancel = async (id: string) => {
+    if (!confirm(isAr ? 'تأكيد إلغاء التحويل؟' : 'Cancel this transfer?')) return;
+    setActing(id + ':cancel');
+    try { await apiFetch(`/transfers/${id}/cancel`, { method: 'PATCH' }); reload(); }
+    catch (err: any) { alert(err.message); }
+    finally { setActing(null); }
+  };
 
   return (
     <div className="page-body">
       <div className="page-header">
         <div>
           <h1 className="page-title">{isAr ? 'تحويلات السيارات' : 'Inter-Location Transfers'}</h1>
-          <p className="page-subtitle">{isAr ? 'تحويل السيارات بين الفروع' : 'Vehicle and fund movements between branches'}</p>
+          <p className="page-subtitle">{isAr ? 'تحويل السيارات بين الفروع' : 'Vehicle movements between branches'}</p>
         </div>
         <button className="btn btn-primary" onClick={() => setAddOpen(true)}>{isAr ? '+ تحويل جديد' : '+ New Transfer'}</button>
       </div>
@@ -98,6 +114,7 @@ export default function TransfersPage() {
             <thead>
               <tr>
                 <th>{isAr ? 'السيارة' : 'Vehicle'}</th>
+                <th>{isAr ? 'شاسيه VIN' : 'VIN'}</th>
                 <th>{isAr ? 'من' : 'From'}</th>
                 <th>{isAr ? 'إلى' : 'To'}</th>
                 <th>{isAr ? 'المبلغ' : 'Amount'}</th>
@@ -109,32 +126,49 @@ export default function TransfersPage() {
             </thead>
             <tbody>
               {list.length === 0 && (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-2)' }}>{isAr ? 'لا توجد تحويلات' : 'No transfers found'}</td></tr>
+                <tr>
+                  <td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-2)' }}>
+                    {isAr ? 'لا توجد تحويلات' : 'No transfers found'}
+                  </td>
+                </tr>
               )}
               {list.map(t => (
                 <tr key={t.id}>
                   <td>
-                    <div style={{ fontWeight: 500 }}>
-                      {t.vehicle ? `${t.vehicle.year} ${t.vehicle.make} ${t.vehicle.model}` : t.vehicleId}
-                    </div>
-                    {t.vehicle?.vin && <div style={{ fontSize: '0.75rem', color: 'var(--text-2)' }}>{t.vehicle.vin}</div>}
+                    <span style={{ fontWeight: 600, color: 'var(--text-1)' }}>
+                      {t.vehicle ? `${t.vehicle.year} ${t.vehicle.make} ${t.vehicle.model}` : '—'}
+                    </span>
                   </td>
-                  <td>{t.fromLocation?.name ?? t.fromLocationId}</td>
-                  <td>{t.toLocation?.name  ?? t.toLocationId}</td>
-                  <td>{fmt(t.amount)}</td>
-                  <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td>
+                    <span className="font-mono text-xs" style={{ color: 'var(--text-3)' }}>
+                      {t.vehicle?.vin ?? '—'}
+                    </span>
+                  </td>
+                  <td style={{ color: 'var(--text-2)' }}>{t.fromLocation?.name ?? '—'}</td>
+                  <td style={{ color: 'var(--text-2)' }}>{t.toLocation?.name  ?? '—'}</td>
+                  <td style={{ tabularNums: true } as any}>{fmt(t.amount)}</td>
+                  <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-3)' }}>
                     {t.notes ?? '—'}
                   </td>
                   <td><span className={`badge ${STATUS_BADGE[t.status] ?? 'badge-neutral'}`}>{t.status}</span></td>
-                  <td>{fmtDate(t.createdAt, isAr)}</td>
+                  <td style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>{fmtDate(t.createdAt, isAr)}</td>
                   <td>
                     {t.status === 'PENDING' && (
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button className="btn btn-sm btn-primary" disabled title={isAr ? 'غير متاح بعد' : 'Not yet available'}>
-                          {isAr ? 'اعتماد' : 'Approve'}
+                        <button
+                          className="btn btn-sm btn-primary"
+                          disabled={acting === t.id + ':approve'}
+                          onClick={() => handleApprove(t.id)}
+                        >
+                          {acting === t.id + ':approve' ? '…' : (isAr ? 'اعتماد' : 'Approve')}
                         </button>
-                        <button className="btn btn-sm" disabled title={isAr ? 'غير متاح بعد' : 'Not yet available'} style={{ color: 'var(--danger)' }}>
-                          {isAr ? 'إلغاء' : 'Cancel'}
+                        <button
+                          className="btn btn-sm"
+                          disabled={acting === t.id + ':cancel'}
+                          onClick={() => handleCancel(t.id)}
+                          style={{ color: 'var(--danger)' }}
+                        >
+                          {acting === t.id + ':cancel' ? '…' : (isAr ? 'إلغاء' : 'Cancel')}
                         </button>
                       </div>
                     )}
@@ -148,8 +182,7 @@ export default function TransfersPage() {
 
       {addOpen && (
         <div className="modal-backdrop" onClick={() => setAddOpen(false)}>
-          <form className="modal" onClick={e => e.stopPropagation()} onSubmit={handleAdd}
-            style={{ maxWidth: 560 }}>
+          <form className="modal" onClick={e => e.stopPropagation()} onSubmit={handleAdd} style={{ maxWidth: 560 }}>
             <div className="modal-header">
               <h3>{isAr ? 'تحويل جديد' : 'New Transfer'}</h3>
             </div>
@@ -194,7 +227,7 @@ export default function TransfersPage() {
                 )}
               </div>
 
-              {/* Amount — auto-filled from vehicle price, editable */}
+              {/* Amount — auto-filled from official price */}
               <div>
                 <label className="field-label">
                   {isAr ? 'المبلغ (ج.م)' : 'Amount (EGP)'}
@@ -230,8 +263,11 @@ export default function TransfersPage() {
 
             <div className="modal-footer">
               <button type="button" className="btn" onClick={() => setAddOpen(false)}>{isAr ? 'إلغاء' : 'Cancel'}</button>
-              <button type="submit" className="btn btn-primary"
-                disabled={acting === 'add' || !form.fromLocationId || !form.toLocationId || !form.vehicleId || !form.amount}>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={acting === 'add' || !form.fromLocationId || !form.toLocationId || !form.vehicleId || !form.amount}
+              >
                 {acting === 'add' ? (isAr ? 'جارٍ الحفظ…' : 'Saving…') : (isAr ? 'إنشاء التحويل' : 'Create Transfer')}
               </button>
             </div>
