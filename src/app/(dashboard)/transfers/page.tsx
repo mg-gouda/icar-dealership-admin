@@ -29,8 +29,10 @@ const STATUS_BADGE: Record<string, string> = {
   CANCELLED: 'badge-neutral',
 };
 
-const fmt = (n: number) =>
-  'EGP ' + n.toLocaleString('en-EG', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const fmt = (n: number | string | null | undefined) => {
+  const v = Number(n);
+  return isNaN(v) ? '—' : 'EGP ' + v.toLocaleString('en-EG', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+};
 
 export default function TransfersPage() {
   const { isAr } = useLang();
