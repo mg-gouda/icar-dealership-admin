@@ -686,33 +686,103 @@ function UserModal({
   );
 }
 
+interface RolePerm { role: string; permissionKey: string; granted: boolean; }
+
 // ── Roles & Permissions Tab ───────────────────────────────────────────────────
 function RolesPermissionsTab() {
   const { isAr } = useLang();
+  const { data: rawOverrides, reload: reloadOverrides } = useQuery<RolePerm[]>('/users/role-permissions');
+  const [busy, setBusy] = useState<string | null>(null); // "ROLE:key"
 
-  function CheckCell({ granted }: { granted: boolean }) {
+  // Build override map: { "SALES_REP:vehicle:view": true/false }
+  const overrideMap = useMemo<Record<string, boolean>>(() => {
+    const map: Record<string, boolean> = {};
+    (rawOverrides ?? []).forEach((o) => { map[`${o.role}:${o.permissionKey}`] = o.granted; });
+    return map;
+  }, [rawOverrides]);
+
+  async function toggleCell(role: string, permKey: string) {
+    const okey = `${role}:${permKey}`;
+    if (busy === okey) return;
+    setBusy(okey);
+    try {
+      const hasOverride = okey in overrideMap;
+      const base = ROLE_PERMISSIONS[role]?.has(permKey) ?? false;
+      if (hasOverride) {
+        // revert to base
+        await apiFetch(`/users/role-permissions/${role}/${encodeURIComponent(permKey)}`, { method: 'DELETE' });
+      } else {
+        // set override = opposite of base
+        await apiFetch(`/users/role-permissions/${role}/${encodeURIComponent(permKey)}`, {
+          method: 'POST',
+          body: JSON.stringify({ granted: !base }),
+        });
+      }
+      reloadOverrides();
+    } catch (e) { alert(e instanceof Error ? e.message : 'Error'); }
+    finally { setBusy(null); }
+  }
+
+  function ToggleCell({ role, permKey, type }: { role: string; permKey: string; type: 'action' | 'field' }) {
+    const okey = `${role}:${permKey}`;
+    const base = ROLE_PERMISSIONS[role]?.has(permKey) ?? false;
+    const hasOverride = okey in overrideMap;
+    const effective = hasOverride ? overrideMap[okey] : base;
+    const isBusy = busy === okey;
+    const fieldTint = type === 'field' ? 'oklch(0.65 0.16 72 / 0.02)' : undefined;
+
     return (
-      <td style={{ textAlign: 'center' }}>
-        {granted ? (
-          <svg className="inline w-4 h-4" style={{ color: 'var(--success)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-          </svg>
-        ) : (
-          <svg className="inline w-4 h-4" style={{ color: 'var(--border-strong)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        )}
+      <td style={{ textAlign: 'center', background: fieldTint }}>
+        <button
+          onClick={() => toggleCell(role, permKey)}
+          disabled={isBusy}
+          title={hasOverride
+            ? (isAr ? 'تجاوز نشط — انقر للرجوع للافتراضي' : `Override active (base: ${base ? 'granted' : 'denied'}) — click to revert`)
+            : (isAr ? 'انقر لإضافة تجاوز' : `Role default: ${base ? 'granted' : 'denied'} — click to override`)}
+          style={{ background: 'none', border: 'none', cursor: isBusy ? 'wait' : 'pointer', padding: 4, borderRadius: 6, opacity: isBusy ? 0.4 : 1, position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          {effective ? (
+            <svg className="w-4 h-4" style={{ color: hasOverride ? 'var(--primary)' : 'var(--success)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4" style={{ color: hasOverride ? 'var(--danger-fg)' : 'var(--border-strong)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          {/* override dot */}
+          {hasOverride && (
+            <span style={{ position: 'absolute', top: 2, right: 2, width: 5, height: 5, borderRadius: '50%', background: effective ? 'var(--primary)' : 'var(--danger-fg)' }} />
+          )}
+        </button>
       </td>
     );
   }
 
   return (
     <div className="space-y-4">
-      <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
-        {isAr
-          ? 'مصفوفة الصلاحيات الافتراضية حسب الدور. يمكن ضبط تجاوزات فردية لكل مستخدم عبر تبويب حسابات الموظفين.'
-          : 'Default permission matrix by role. Individual overrides can be set per user via the Staff Accounts tab.'}
-      </p>
+      <div className="flex items-start gap-3">
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', flex: 1 }}>
+          {isAr
+            ? 'انقر على أي خلية لتفعيل أو إلغاء صلاحية على مستوى الدور. النقطة الصغيرة تعني وجود تجاوز نشط. انقر مرة أخرى للرجوع للإعداد الافتراضي.'
+            : 'Click any cell to grant or deny a permission for a role. A small dot marks an active override. Click again to revert to the built-in default.'}
+        </p>
+        <div className="flex items-center gap-3 shrink-0" style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>
+          <span className="flex items-center gap-1">
+            <svg className="w-3.5 h-3.5" style={{ color: 'var(--success)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+            {isAr ? 'ممنوح' : 'Default granted'}
+          </span>
+          <span className="flex items-center gap-1">
+            <svg className="w-3.5 h-3.5" style={{ color: 'var(--primary)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+            {isAr ? 'تجاوز: ممنوح' : 'Override: granted'}
+          </span>
+          <span className="flex items-center gap-1">
+            <svg className="w-3.5 h-3.5" style={{ color: 'var(--danger-fg)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            {isAr ? 'تجاوز: مرفوض' : 'Override: denied'}
+          </span>
+        </div>
+      </div>
+
       {PERMISSION_MATRIX.map((mod) => {
         const actions = mod.permissions.filter((p) => p.type === 'action');
         const fields  = mod.permissions.filter((p) => p.type === 'field');
@@ -721,48 +791,48 @@ function RolesPermissionsTab() {
             <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
               <span className="section-label" style={{ marginBottom: 0 }}>{isAr ? (MODULE_AR[mod.module] ?? mod.module) : mod.module}</span>
             </div>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '32%' }}>{isAr ? 'الصلاحية' : 'Permission'}</th>
-                  {(isAr ? ROLE_OPTS_AR : ROLE_OPTS).map((r) => (
-                    <th key={r.value} style={{ textAlign: 'center' }}>
-                      <span className={ROLE_BADGE[r.value] ?? 'badge badge-neutral'}>{r.label}</span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {/* Actions section */}
-                <tr>
-                  <td colSpan={ROLE_OPTS.length + 1} style={{ padding: '0.25rem 1rem', fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--primary)', background: 'var(--surface-2)', opacity: 0.8 }}>
-                    {isAr ? 'الإجراءات' : 'Actions'}
-                  </td>
-                </tr>
-                {actions.map((perm) => (
-                  <tr key={perm.key}>
-                    <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>{isAr ? (PERM_LABEL_AR[perm.label] ?? perm.label) : perm.label}</td>
-                    {ROLE_OPTS.map((r) => <CheckCell key={r.value} granted={ROLE_PERMISSIONS[r.value]?.has(perm.key) ?? false} />)}
-                  </tr>
-                ))}
-                {/* Field access section */}
-                {fields.length > 0 && (
-                  <>
-                    <tr>
-                      <td colSpan={ROLE_OPTS.length + 1} style={{ padding: '0.25rem 1rem', fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'oklch(0.65 0.16 72)', background: 'oklch(0.65 0.16 72 / 0.05)', opacity: 0.9 }}>
-                        {isAr ? 'حقول البيانات' : 'Field Access'}
-                      </td>
-                    </tr>
-                    {fields.map((perm) => (
-                      <tr key={perm.key} style={{ background: 'oklch(0.65 0.16 72 / 0.02)' }}>
-                        <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>{isAr ? (PERM_LABEL_AR[perm.label] ?? perm.label) : perm.label}</td>
-                        {ROLE_OPTS.map((r) => <CheckCell key={r.value} granted={ROLE_PERMISSIONS[r.value]?.has(perm.key) ?? false} />)}
-                      </tr>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table" style={{ minWidth: 700 }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '30%' }}>{isAr ? 'الصلاحية' : 'Permission'}</th>
+                    {(isAr ? ROLE_OPTS_AR : ROLE_OPTS).map((r) => (
+                      <th key={r.value} style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <span className={ROLE_BADGE[r.value] ?? 'badge badge-neutral'}>{r.label}</span>
+                      </th>
                     ))}
-                  </>
-                )}
-              </tbody>
-            </table>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colSpan={ROLE_OPTS.length + 1} style={{ padding: '0.2rem 1rem', fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--primary)', background: 'var(--surface-2)', opacity: 0.8 }}>
+                      {isAr ? 'الإجراءات' : 'Actions'}
+                    </td>
+                  </tr>
+                  {actions.map((perm) => (
+                    <tr key={perm.key}>
+                      <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>{isAr ? (PERM_LABEL_AR[perm.label] ?? perm.label) : perm.label}</td>
+                      {ROLE_OPTS.map((r) => <ToggleCell key={r.value} role={r.value} permKey={perm.key} type="action" />)}
+                    </tr>
+                  ))}
+                  {fields.length > 0 && (
+                    <>
+                      <tr>
+                        <td colSpan={ROLE_OPTS.length + 1} style={{ padding: '0.2rem 1rem', fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'oklch(0.65 0.16 72)', background: 'oklch(0.65 0.16 72 / 0.06)', opacity: 0.9 }}>
+                          {isAr ? 'حقول البيانات' : 'Field Access'}
+                        </td>
+                      </tr>
+                      {fields.map((perm) => (
+                        <tr key={perm.key}>
+                          <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem', background: 'oklch(0.65 0.16 72 / 0.02)' }}>{isAr ? (PERM_LABEL_AR[perm.label] ?? perm.label) : perm.label}</td>
+                          {ROLE_OPTS.map((r) => <ToggleCell key={r.value} role={r.value} permKey={perm.key} type="field" />)}
+                        </tr>
+                      ))}
+                    </>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         );
       })}
