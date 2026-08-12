@@ -99,49 +99,58 @@ const ROLE_LABEL_AR: Record<string, string> = {
 };
 
 // Module → permission list for Roles & Permissions tab
+// type: 'action' = page/endpoint access; 'field' = field-level data access
 const PERMISSION_MATRIX = [
   {
     module: 'Inventory',
     permissions: [
-      { key: 'vehicle:view',        label: 'View Vehicles'        },
-      { key: 'vehicle:create',      label: 'Add Vehicles'         },
-      { key: 'vehicle:edit',        label: 'Edit Vehicles'        },
-      { key: 'vehicle:delete',      label: 'Delete Vehicles'      },
-      { key: 'vehicle:view-cost',   label: 'View Vehicle Cost'    },
+      { key: 'vehicle:view',        label: 'View Vehicles',               type: 'action' as const },
+      { key: 'vehicle:create',      label: 'Add Vehicles',                type: 'action' as const },
+      { key: 'vehicle:edit',        label: 'Edit Vehicles',               type: 'action' as const },
+      { key: 'vehicle:delete',      label: 'Delete Vehicles',             type: 'action' as const },
+      { key: 'vehicle:view-cost',   label: 'View Purchase Cost',          type: 'field'  as const },
+      { key: 'vehicle:edit-price',  label: 'Edit Listed Price',           type: 'field'  as const },
+      { key: 'vehicle:view-fees',   label: 'View Admin & Insurance Fees', type: 'field'  as const },
+      { key: 'vehicle:edit-fees',   label: 'Edit Admin & Insurance Fees', type: 'field'  as const },
     ],
   },
   {
     module: 'Deals',
     permissions: [
-      { key: 'deal:view',           label: 'View Deals'           },
-      { key: 'deal:create',         label: 'Create Deals'         },
-      { key: 'deal:finalize',       label: 'Finalize Deals'       },
-      { key: 'deal:view-all-loc',   label: 'View All Locations'   },
+      { key: 'deal:view',                      label: 'View Deals',                           type: 'action' as const },
+      { key: 'deal:create',                    label: 'Create Deals',                         type: 'action' as const },
+      { key: 'deal:finalize',                  label: 'Finalize Deals',                       type: 'action' as const },
+      { key: 'deal:view-all-loc',              label: 'View All Locations',                   type: 'action' as const },
+      { key: 'deal:view-bank-approval',        label: 'View Bank Approval Amount & Docs',     type: 'field'  as const },
+      { key: 'deal:override-purchase-method',  label: 'Override Purchase Method (post-Draft)',type: 'field'  as const },
     ],
   },
   {
     module: 'CRM',
     permissions: [
-      { key: 'crm:view',            label: 'View Leads'           },
-      { key: 'crm:create',          label: 'Create Leads'         },
-      { key: 'crm:assign',          label: 'Assign Leads'         },
+      { key: 'crm:view',       label: 'View Leads',       type: 'action' as const },
+      { key: 'crm:create',     label: 'Create Leads',     type: 'action' as const },
+      { key: 'crm:assign',     label: 'Assign Leads',     type: 'action' as const },
+      { key: 'crm:view-pii',   label: 'View Customer PII (National ID, Income)', type: 'field' as const },
     ],
   },
   {
     module: 'Finance',
     permissions: [
-      { key: 'finance:view',        label: 'View Finance'         },
-      { key: 'finance:post',        label: 'Post GL Entries'      },
-      { key: 'finance:lock-period', label: 'Lock Fiscal Period'   },
-      { key: 'finance:view-invoice','label': 'View Invoice Status'},
+      { key: 'finance:view',            label: 'View Finance',           type: 'action' as const },
+      { key: 'finance:post',            label: 'Post GL Entries',        type: 'action' as const },
+      { key: 'finance:lock-period',     label: 'Lock Fiscal Period',     type: 'action' as const },
+      { key: 'finance:view-invoice',    label: 'View Invoice Status',    type: 'action' as const },
+      { key: 'finance:view-gl-detail',  label: 'View GL Line Detail',    type: 'field'  as const },
+      { key: 'finance:view-tax-fields', label: 'View Tax & Account IDs', type: 'field'  as const },
     ],
   },
   {
     module: 'Settings',
     permissions: [
-      { key: 'settings:view',       label: 'View Settings'        },
-      { key: 'settings:edit',       label: 'Edit Settings'        },
-      { key: 'users:manage',        label: 'Manage Users'         },
+      { key: 'settings:view',  label: 'View Settings',  type: 'action' as const },
+      { key: 'settings:edit',  label: 'Edit Settings',  type: 'action' as const },
+      { key: 'users:manage',   label: 'Manage Users',   type: 'action' as const },
     ],
   },
 ];
@@ -155,37 +164,60 @@ const MODULE_AR: Record<string, string> = {
 };
 
 const PERM_LABEL_AR: Record<string, string> = {
+  // Actions
   'View Vehicles':    'عرض السيارات',
   'Add Vehicles':     'إضافة سيارات',
   'Edit Vehicles':    'تعديل السيارات',
   'Delete Vehicles':  'حذف السيارات',
   'View Deals':       'عرض الصفقات',
   'Create Deals':     'إنشاء صفقات',
-  'Approve Deals':    'الموافقة على الصفقات',
   'Finalize Deals':   'إتمام الصفقات',
+  'View All Locations': 'عرض كل الفروع',
   'View Leads':       'عرض العملاء',
   'Create Leads':     'إنشاء عملاء',
   'Assign Leads':     'تعيين العملاء',
-  'View Invoices':    'عرض الفواتير',
+  'View Finance':     'عرض المالية',
   'Post GL Entries':  'ترحيل قيود',
-  'View Reports':     'عرض التقارير',
-  'Manage Bank':      'إدارة البنك',
+  'Lock Fiscal Period': 'قفل الفترة المالية',
+  'View Invoice Status': 'عرض حالة الفاتورة',
   'View Settings':    'عرض الإعدادات',
+  'Edit Settings':    'تعديل الإعدادات',
   'Manage Users':     'إدارة المستخدمين',
-  'System Config':    'إعدادات النظام',
+  // Fields
+  'View Purchase Cost':               'عرض تكلفة الشراء',
+  'Edit Listed Price':                'تعديل السعر المعلن',
+  'View Admin & Insurance Fees':      'عرض رسوم الإدارة والتأمين',
+  'Edit Admin & Insurance Fees':      'تعديل رسوم الإدارة والتأمين',
+  'View Bank Approval Amount & Docs': 'عرض قيمة الموافقة البنكية والمستندات',
+  'Override Purchase Method (post-Draft)': 'تغيير طريقة الشراء بعد المسودة',
+  'View Customer PII (National ID, Income)': 'عرض البيانات الشخصية للعميل',
+  'View GL Line Detail':   'عرض تفاصيل سطور القيود',
+  'View Tax & Account IDs': 'عرض معرّفات الحسابات والضرائب',
 };
 
-// Which roles have which permissions by default
+// Which roles have which permissions by default (actions + field-level)
 const ROLE_PERMISSIONS: Record<string, Set<string>> = {
   SUPER_ADMIN:        new Set(PERMISSION_MATRIX.flatMap((m) => m.permissions.map((p) => p.key))),
   ADMIN:              new Set(PERMISSION_MATRIX.flatMap((m) => m.permissions.map((p) => p.key))),
-  FINANCE:            new Set(['vehicle:view','deal:view','deal:view-all-loc','crm:view','finance:view','finance:post','finance:view-invoice','settings:view']),
-  MANAGER:            new Set(['vehicle:view','vehicle:create','vehicle:edit','vehicle:view-cost','deal:view','deal:create','deal:finalize','deal:view-all-loc','crm:view','crm:create','crm:assign','finance:view','settings:view']),
-  SALES_REP:          new Set(['vehicle:view','deal:view','deal:create','crm:view','crm:create']),
+  FINANCE:            new Set([
+    'vehicle:view', 'vehicle:view-cost', 'vehicle:view-fees',
+    'deal:view', 'deal:view-all-loc', 'deal:view-bank-approval', 'deal:override-purchase-method',
+    'crm:view', 'crm:view-pii',
+    'finance:view', 'finance:post', 'finance:view-invoice', 'finance:view-gl-detail', 'finance:view-tax-fields',
+    'settings:view',
+  ]),
+  MANAGER:            new Set([
+    'vehicle:view', 'vehicle:create', 'vehicle:edit', 'vehicle:view-cost', 'vehicle:edit-price', 'vehicle:view-fees',
+    'deal:view', 'deal:create', 'deal:finalize', 'deal:view-all-loc',
+    'crm:view', 'crm:create', 'crm:assign', 'crm:view-pii',
+    'finance:view', 'finance:view-invoice',
+    'settings:view',
+  ]),
+  SALES_REP:          new Set(['vehicle:view', 'deal:view', 'deal:create', 'crm:view', 'crm:create', 'finance:view-invoice']),
   TECHNICIAN:         new Set(['vehicle:view']),
   PARTS_STORE_KEEPER: new Set(['vehicle:view']),
-  SERVICE_RECEPTION:  new Set(['vehicle:view','crm:view','crm:create']),
-  SERVICE_MANAGER:    new Set(['vehicle:view','crm:view','crm:create','crm:assign','finance:view-invoice','settings:view']),
+  SERVICE_RECEPTION:  new Set(['vehicle:view', 'crm:view', 'crm:create']),
+  SERVICE_MANAGER:    new Set(['vehicle:view', 'crm:view', 'crm:create', 'crm:assign', 'crm:view-pii', 'finance:view-invoice', 'settings:view']),
 };
 
 function initials(name: string) {
@@ -239,11 +271,9 @@ function UserPermissionsTab({ user }: { user: User }) {
     setBusy(key);
     try {
       if (key in overrides) {
-        // remove override → revert to role default
         await apiFetch(`/users/${user.id}/permissions/${key}`, { method: 'DELETE' });
         setOverrides((p) => { const n = { ...p }; delete n[key]; return n; });
       } else {
-        // grant override (opposite of role default)
         const defaultGranted = ROLE_PERMISSIONS[user.role]?.has(key) ?? false;
         const newGranted = !defaultGranted;
         await apiFetch(`/users/${user.id}/permissions`, {
@@ -256,66 +286,101 @@ function UserPermissionsTab({ user }: { user: User }) {
     finally { setBusy(null); }
   }
 
+  function PermRow({ perm }: { perm: typeof PERMISSION_MATRIX[0]['permissions'][0] }) {
+    const roleDefault = ROLE_PERMISSIONS[user.role]?.has(perm.key) ?? false;
+    const hasOverride = perm.key in overrides;
+    const effective = hasOverride ? overrides[perm.key] : roleDefault;
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.45rem 1.25rem', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: '0.8125rem', color: 'var(--text-1)', fontWeight: 500 }}>{isAr ? (PERM_LABEL_AR[perm.label] ?? perm.label) : perm.label}</p>
+          <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 1 }}>
+            {hasOverride
+              ? <span style={{ color: effective ? 'var(--success-fg)' : 'var(--danger-fg)', fontWeight: 600 }}>
+                  {isAr ? (effective ? 'تجاوز: ممنوح' : 'تجاوز: مرفوض') : (effective ? 'Override: Granted' : 'Override: Denied')}
+                </span>
+              : <span>{isAr ? (roleDefault ? 'افتراضي: ممنوح' : 'افتراضي: مرفوض') : (roleDefault ? 'Role default: Granted' : 'Role default: Denied')}</span>}
+          </p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+          <button
+            disabled={busy === perm.key}
+            onClick={() => toggle(perm.key)}
+            style={{
+              width: 36, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer',
+              background: effective ? 'var(--success)' : 'var(--border-strong)',
+              position: 'relative', transition: 'background 0.15s', opacity: busy === perm.key ? 0.5 : 1,
+            }}
+            title={isAr
+              ? (hasOverride ? 'انقر لإزالة التجاوز' : 'انقر لإضافة تجاوز')
+              : (hasOverride ? 'Click to remove override (revert to role default)' : 'Click to add override')}
+          >
+            <span style={{
+              position: 'absolute', top: 3, left: effective ? 18 : 3,
+              width: 14, height: 14, borderRadius: '50%', background: '#fff',
+              transition: 'left 0.15s', boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
+            }} />
+          </button>
+          {hasOverride && (
+            <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--primary)', background: 'var(--primary-light)', padding: '1px 5px', borderRadius: 4 }}>
+              {isAr ? 'تجاوز' : 'OVERRIDE'}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ padding: '0.75rem 0', maxHeight: 400, overflowY: 'auto' }}>
+    <div style={{ padding: '0.75rem 0', maxHeight: 460, overflowY: 'auto' }}>
       <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginBottom: '0.75rem', padding: '0 1.25rem' }}>
         {isAr
-          ? 'التجاوزات تُطبَّق فوق الإعدادات الافتراضية للدور. انقر على صلاحية لإضافة تجاوز أو إزالته.'
-          : 'Overrides apply on top of the user\'s role defaults. Click a permission to add or remove an override.'}
+          ? 'التجاوزات تُطبَّق فوق إعدادات الدور. الصلاحيات مقسّمة إلى إجراءات (وصول للصفحات) وحقول (وصول للبيانات).'
+          : 'Overrides apply on top of role defaults. Permissions split into Actions (page/endpoint access) and Fields (data-level access).'}
       </p>
-      {PERMISSION_MATRIX.map((mod) => (
-        <div key={mod.module} style={{ marginBottom: '0.5rem' }}>
-          <p style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.07em', color: 'var(--text-3)', textTransform: 'uppercase', padding: '0.3rem 1.25rem', background: 'var(--surface-2)' }}>
-            {isAr ? (MODULE_AR[mod.module] ?? mod.module) : mod.module}
-          </p>
-          {mod.permissions.map((perm) => {
-            const roleDefault = ROLE_PERMISSIONS[user.role]?.has(perm.key) ?? false;
-            const hasOverride = perm.key in overrides;
-            const effective = hasOverride ? overrides[perm.key] : roleDefault;
-            return (
-              <div key={perm.key}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 1.25rem', borderBottom: '1px solid var(--border)' }}>
-                <div>
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-1)', fontWeight: 500 }}>{isAr ? (PERM_LABEL_AR[perm.label] ?? perm.label) : perm.label}</p>
-                  <p style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>
-                    {hasOverride
-                      ? <span style={{ color: effective ? 'var(--success-fg)' : 'var(--danger-fg)', fontWeight: 600 }}>
-                          {isAr ? (effective ? 'تجاوز: ممنوح' : 'تجاوز: مرفوض') : (effective ? 'Override: Granted' : 'Override: Denied')}
-                        </span>
-                      : <span>{isAr ? (roleDefault ? 'افتراضي الدور: ممنوح' : 'افتراضي الدور: مرفوض') : (roleDefault ? 'Role default: Granted' : 'Role default: Denied')}</span>}
-                  </p>
+      {PERMISSION_MATRIX.map((mod) => {
+        const actions = mod.permissions.filter((p) => p.type === 'action');
+        const fields  = mod.permissions.filter((p) => p.type === 'field');
+        return (
+          <div key={mod.module} style={{ marginBottom: '0.75rem' }}>
+            {/* Module header */}
+            <p style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.07em', color: 'var(--text-3)', textTransform: 'uppercase', padding: '0.35rem 1.25rem', background: 'var(--surface-2)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+              {isAr ? (MODULE_AR[mod.module] ?? mod.module) : mod.module}
+            </p>
+
+            {/* Actions sub-group */}
+            {actions.length > 0 && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.25rem 1.25rem 0.2rem', background: 'var(--surface)' }}>
+                  <span style={{ fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--primary)', opacity: 0.7 }}>
+                    {isAr ? 'الإجراءات' : 'Actions'}
+                  </span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  {/* Toggle pill */}
-                  <button
-                    disabled={busy === perm.key}
-                    onClick={() => toggle(perm.key)}
-                    style={{
-                      width: 36, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer',
-                      background: effective ? 'var(--success)' : 'var(--border-strong)',
-                      position: 'relative', transition: 'background 0.15s', opacity: busy === perm.key ? 0.5 : 1,
-                    }}
-                    title={isAr
-                      ? (hasOverride ? 'انقر لإزالة التجاوز (إعادة للافتراضي)' : 'انقر لإضافة تجاوز')
-                      : (hasOverride ? 'Click to remove override (revert to role default)' : 'Click to add override')}
-                  >
-                    <span style={{
-                      position: 'absolute', top: 3, left: effective ? 18 : 3,
-                      width: 14, height: 14, borderRadius: '50%', background: '#fff',
-                      transition: 'left 0.15s', boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
-                    }} />
-                  </button>
-                  {hasOverride && (
-                    <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--primary)', background: 'var(--primary-light)', padding: '1px 5px', borderRadius: 4 }}>
-                      {isAr ? 'تجاوز' : 'OVERRIDE'}
-                    </span>
-                  )}
+                {actions.map((perm) => <PermRow key={perm.key} perm={perm} />)}
+              </>
+            )}
+
+            {/* Field-level sub-group */}
+            {fields.length > 0 && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.25rem 1.25rem 0.2rem', background: 'var(--surface)' }}>
+                  <span style={{ fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'oklch(0.65 0.16 72)', opacity: 0.85 }}>
+                    {isAr ? 'حقول البيانات' : 'Field Access'}
+                  </span>
+                  <span style={{ fontSize: '0.6rem', color: 'var(--text-3)' }}>
+                    {isAr ? '— ما يمكن رؤيته/تعديله داخل الصفحة' : '— what data is visible/editable within the page'}
+                  </span>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      ))}
+                {fields.map((perm) => (
+                  <div key={perm.key} style={{ background: 'oklch(0.65 0.16 72 / 0.03)' }}>
+                    <PermRow perm={perm} />
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -624,6 +689,23 @@ function UserModal({
 // ── Roles & Permissions Tab ───────────────────────────────────────────────────
 function RolesPermissionsTab() {
   const { isAr } = useLang();
+
+  function CheckCell({ granted }: { granted: boolean }) {
+    return (
+      <td style={{ textAlign: 'center' }}>
+        {granted ? (
+          <svg className="inline w-4 h-4" style={{ color: 'var(--success)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+          </svg>
+        ) : (
+          <svg className="inline w-4 h-4" style={{ color: 'var(--border-strong)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        )}
+      </td>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <p style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
@@ -631,48 +713,59 @@ function RolesPermissionsTab() {
           ? 'مصفوفة الصلاحيات الافتراضية حسب الدور. يمكن ضبط تجاوزات فردية لكل مستخدم عبر تبويب حسابات الموظفين.'
           : 'Default permission matrix by role. Individual overrides can be set per user via the Staff Accounts tab.'}
       </p>
-      {PERMISSION_MATRIX.map((module) => (
-        <div key={module.module} className="card overflow-hidden">
-          <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
-            <span className="section-label" style={{ marginBottom: 0 }}>{isAr ? (MODULE_AR[module.module] ?? module.module) : module.module}</span>
-          </div>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th style={{ width: '30%' }}>{isAr ? 'الصلاحية' : 'Permission'}</th>
-                {(isAr ? ROLE_OPTS_AR : ROLE_OPTS).map((r) => (
-                  <th key={r.value} style={{ textAlign: 'center' }}>
-                    <span className={ROLE_BADGE[r.value] ?? 'badge badge-neutral'}>{r.label}</span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {module.permissions.map((perm) => (
-                <tr key={perm.key}>
-                  <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>{isAr ? (PERM_LABEL_AR[perm.label] ?? perm.label) : perm.label}</td>
-                  {ROLE_OPTS.map((r) => {
-                    const granted = ROLE_PERMISSIONS[r.value]?.has(perm.key) ?? false;
-                    return (
-                      <td key={r.value} style={{ textAlign: 'center' }}>
-                        {granted ? (
-                          <svg className="inline w-4 h-4" style={{ color: 'var(--success)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                          </svg>
-                        ) : (
-                          <svg className="inline w-4 h-4" style={{ color: 'var(--border-strong)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        )}
-                      </td>
-                    );
-                  })}
+      {PERMISSION_MATRIX.map((mod) => {
+        const actions = mod.permissions.filter((p) => p.type === 'action');
+        const fields  = mod.permissions.filter((p) => p.type === 'field');
+        return (
+          <div key={mod.module} className="card overflow-hidden">
+            <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+              <span className="section-label" style={{ marginBottom: 0 }}>{isAr ? (MODULE_AR[mod.module] ?? mod.module) : mod.module}</span>
+            </div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '32%' }}>{isAr ? 'الصلاحية' : 'Permission'}</th>
+                  {(isAr ? ROLE_OPTS_AR : ROLE_OPTS).map((r) => (
+                    <th key={r.value} style={{ textAlign: 'center' }}>
+                      <span className={ROLE_BADGE[r.value] ?? 'badge badge-neutral'}>{r.label}</span>
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
+              </thead>
+              <tbody>
+                {/* Actions section */}
+                <tr>
+                  <td colSpan={ROLE_OPTS.length + 1} style={{ padding: '0.25rem 1rem', fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--primary)', background: 'var(--surface-2)', opacity: 0.8 }}>
+                    {isAr ? 'الإجراءات' : 'Actions'}
+                  </td>
+                </tr>
+                {actions.map((perm) => (
+                  <tr key={perm.key}>
+                    <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>{isAr ? (PERM_LABEL_AR[perm.label] ?? perm.label) : perm.label}</td>
+                    {ROLE_OPTS.map((r) => <CheckCell key={r.value} granted={ROLE_PERMISSIONS[r.value]?.has(perm.key) ?? false} />)}
+                  </tr>
+                ))}
+                {/* Field access section */}
+                {fields.length > 0 && (
+                  <>
+                    <tr>
+                      <td colSpan={ROLE_OPTS.length + 1} style={{ padding: '0.25rem 1rem', fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'oklch(0.65 0.16 72)', background: 'oklch(0.65 0.16 72 / 0.05)', opacity: 0.9 }}>
+                        {isAr ? 'حقول البيانات' : 'Field Access'}
+                      </td>
+                    </tr>
+                    {fields.map((perm) => (
+                      <tr key={perm.key} style={{ background: 'oklch(0.65 0.16 72 / 0.02)' }}>
+                        <td style={{ color: 'var(--text-2)', fontSize: '0.8125rem' }}>{isAr ? (PERM_LABEL_AR[perm.label] ?? perm.label) : perm.label}</td>
+                        {ROLE_OPTS.map((r) => <CheckCell key={r.value} granted={ROLE_PERMISSIONS[r.value]?.has(perm.key) ?? false} />)}
+                      </tr>
+                    ))}
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
     </div>
   );
 }

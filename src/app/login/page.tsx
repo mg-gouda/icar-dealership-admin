@@ -107,12 +107,12 @@ export default function LoginPage() {
     finally { setLoading(false); }
   }
 
-  async function handleTotpVerify(e: React.FormEvent) {
+  async function handleTotpVerify(e: React.FormEvent, code?: string) {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const data = await post('/auth/2fa/verify', { token: totpCode }, preToken);
+      const data = await post('/auth/2fa/verify', { token: code ?? totpCode }, preToken);
       localStorage.setItem('accessToken', data.accessToken);
       setSessionCookies(data.accessToken, data.user.role);
       await fetchAndCacheFieldPerms(data.accessToken);
@@ -121,12 +121,12 @@ export default function LoginPage() {
     finally { setLoading(false); }
   }
 
-  async function handleTotpConfirm(e: React.FormEvent) {
+  async function handleTotpConfirm(e: React.FormEvent, code?: string) {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const data = await post('/auth/2fa/confirm', { token: totpCode }, preToken);
+      const data = await post('/auth/2fa/confirm', { token: code ?? totpCode }, preToken);
       localStorage.setItem('accessToken', data.accessToken);
       setSessionCookies(data.accessToken, data.user.role);
       await fetchAndCacheFieldPerms(data.accessToken);
@@ -266,7 +266,7 @@ export default function LoginPage() {
                     onChange={(e) => {
                       const val = e.target.value.replace(/\D/g, '');
                       setTotpCode(val);
-                      if (val.length === 6) handleTotpVerify(new Event('submit') as unknown as React.FormEvent);
+                      if (val.length === 6) handleTotpVerify(new Event('submit') as unknown as React.FormEvent, val);
                     }}
                     required autoFocus aria-label="6-digit code"
                     style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'text', width: '100%', height: '100%' }} />
@@ -385,7 +385,7 @@ export default function LoginPage() {
                     onChange={(e) => {
                       const val = e.target.value.replace(/\D/g, '');
                       setTotpCode(val);
-                      if (val.length === 6) handleTotpConfirm(new Event('submit') as unknown as React.FormEvent);
+                      if (val.length === 6) handleTotpConfirm(new Event('submit') as unknown as React.FormEvent, val);
                     }}
                     required autoFocus aria-label="6-digit code"
                     style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'text', width: '100%', height: '100%' }} />
