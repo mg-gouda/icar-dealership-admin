@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, apiFetch } from '../../../lib/useApi';
 import { useLang } from '../../../lib/lang-context';
 import { fmtDate } from '@/lib/fmt';
+import SearchableCombobox from '../../../components/ui/SearchableCombobox';
 
 interface Transfer {
   id: string;
@@ -19,6 +20,9 @@ interface Transfer {
   createdAt: string;
 }
 
+interface Location { id: string; name: string; }
+interface Vehicle  { id: string; make: string; model: string; year: number; vin: string; price: number; salePrice: number | null; }
+
 const STATUS_BADGE: Record<string, string> = {
   PENDING: 'badge-warning',
   APPROVED: 'badge-success',
@@ -31,13 +35,33 @@ const fmt = (n: number) =>
 export default function TransfersPage() {
   const { isAr } = useLang();
   const [addOpen, setAddOpen] = useState(false);
-  const [acting, setActing] = useState<string | null>(null);
+  const [acting, setActing]   = useState<string | null>(null);
   const [form, setForm] = useState({
     fromLocationId: '', toLocationId: '', vehicleId: '', amount: '', notes: '',
   });
 
   const { data, reload } = useQuery<{ data: Transfer[] }>('/transfers');
   const list = data?.data ?? [];
+
+  // Locations for dropdowns
+  const { data: locRaw }  = useQuery<Location[]>('/locations');
+  const locations = Array.isArray(locRaw) ? locRaw : [];
+  const locOpts   = locations.map((l) => ({ value: l.id, label: l.name }));
+
+  // Vehicles for VIN search
+  const { data: vehRaw } = useQuery<{ items: Vehicle[] }>('/vehicles?limit=2000&status=AVAILABLE');
+  const vehicles  = vehRaw?.items ?? [];
+  const vehicleOpts = vehicles.map((v) => ({
+    value: v.id,
+    label: `${v.vin ?? '—'}  ·  ${v.year} ${v.make} ${v.model}`,
+  }));
+
+  // Auto-fill amount when vehicle changes
+  useEffect(() => {
+    if (!form.vehicleId) return;
+    const v = vehicles.find((x) => x.id === form.vehicleId);
+    if (v) setForm((p) => ({ ...p, amount: String(v.salePrice ?? v.price) }));
+  }, [form.vehicleId]);  // ponytail: vehicles dep intentionally omitted — stale ref is fine here
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,9 +78,7 @@ export default function TransfersPage() {
     finally { setActing(null); }
   };
 
-  // ponytail: approve/cancel not yet implemented on API — buttons disabled
-  const handleApprove = (_id: string) => {};
-  const handleCancel = (_id: string) => {};
+  const selectedVehicle = vehicles.find((v) => v.id === form.vehicleId);
 
   return (
     <div className="page-body">
@@ -96,7 +118,7 @@ export default function TransfersPage() {
                     {t.vehicle?.vin && <div style={{ fontSize: '0.75rem', color: 'var(--text-2)' }}>{t.vehicle.vin}</div>}
                   </td>
                   <td>{t.fromLocation?.name ?? t.fromLocationId}</td>
-                  <td>{t.toLocation?.name ?? t.toLocationId}</td>
+                  <td>{t.toLocation?.name  ?? t.toLocationId}</td>
                   <td>{fmt(t.amount)}</td>
                   <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {t.notes ?? '—'}
@@ -106,19 +128,10 @@ export default function TransfersPage() {
                   <td>
                     {t.status === 'PENDING' && (
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button
-                          className="btn btn-sm btn-primary"
-                          disabled
-                          title={isAr ? 'غير متاح بعد' : 'Not yet available'}
-                        >
+                        <button className="btn btn-sm btn-primary" disabled title={isAr ? 'غير متاح بعد' : 'Not yet available'}>
                           {isAr ? 'اعتماد' : 'Approve'}
                         </button>
-                        <button
-                          className="btn btn-sm"
-                          disabled
-                          title={isAr ? 'غير متاح بعد' : 'Not yet available'}
-                          style={{ color: 'var(--danger)' }}
-                        >
+                        <button className="btn btn-sm" disabled title={isAr ? 'غير متاح بعد' : 'Not yet available'} style={{ color: 'var(--danger)' }}>
                           {isAr ? 'إلغاء' : 'Cancel'}
                         </button>
                       </div>
@@ -133,32 +146,90 @@ export default function TransfersPage() {
 
       {addOpen && (
         <div className="modal-backdrop" onClick={() => setAddOpen(false)}>
-          <form className="modal" onClick={e => e.stopPropagation()} onSubmit={handleAdd}>
-            <div className="modal-header"><h3>{isAr ? 'تحويل جديد' : 'New Transfer'}</h3></div>
-            <div className="modal-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              {[
-                { label: isAr ? 'معرف الفرع المُرسِل' : 'From Location ID', key: 'fromLocationId', full: false },
-                { label: isAr ? 'معرف الفرع المُستقبِل' : 'To Location ID', key: 'toLocationId', full: false },
-                { label: isAr ? 'معرف السيارة' : 'Vehicle ID', key: 'vehicleId', full: true },
-                { label: isAr ? 'المبلغ (ج.م)' : 'Amount (EGP)', key: 'amount', type: 'number', full: false },
-                { label: isAr ? 'ملاحظات' : 'Notes', key: 'notes', full: true },
-              ].map(f => (
-                <div key={f.key} style={{ gridColumn: f.full ? '1 / -1' : undefined }}>
-                  <label className="field-label">{f.label}</label>
-                  <input
-                    className="input"
-                    type={f.type ?? 'text'}
-                    step={f.type === 'number' ? '0.01' : undefined}
-                    required={f.key !== 'notes'}
-                    value={(form as any)[f.key]}
-                    onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+          <form className="modal" onClick={e => e.stopPropagation()} onSubmit={handleAdd}
+            style={{ maxWidth: 560 }}>
+            <div className="modal-header">
+              <h3>{isAr ? 'تحويل جديد' : 'New Transfer'}</h3>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+
+              {/* Locations row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label className="field-label">{isAr ? 'الفرع المُرسِل' : 'From Location'}</label>
+                  <SearchableCombobox
+                    options={locOpts}
+                    value={form.fromLocationId}
+                    onChange={(v) => setForm(p => ({ ...p, fromLocationId: v }))}
+                    placeholder={isAr ? 'اختر الفرع' : 'Select branch'}
                   />
                 </div>
-              ))}
+                <div>
+                  <label className="field-label">{isAr ? 'الفرع المُستقبِل' : 'To Location'}</label>
+                  <SearchableCombobox
+                    options={locOpts.filter(o => o.value !== form.fromLocationId)}
+                    value={form.toLocationId}
+                    onChange={(v) => setForm(p => ({ ...p, toLocationId: v }))}
+                    placeholder={isAr ? 'اختر الفرع' : 'Select branch'}
+                  />
+                </div>
+              </div>
+
+              {/* Vehicle VIN search */}
+              <div>
+                <label className="field-label">{isAr ? 'السيارة (بحث بالشاسيه VIN)' : 'Vehicle (search by VIN)'}</label>
+                <SearchableCombobox
+                  options={vehicleOpts}
+                  value={form.vehicleId}
+                  onChange={(v) => setForm(p => ({ ...p, vehicleId: v }))}
+                  placeholder={isAr ? 'ابحث بالشاسيه أو الموديل…' : 'Search VIN or model…'}
+                />
+                {selectedVehicle && (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginTop: 4 }}>
+                    {selectedVehicle.year} {selectedVehicle.make} {selectedVehicle.model}
+                    {selectedVehicle.vin ? ` · VIN: ${selectedVehicle.vin}` : ''}
+                  </p>
+                )}
+              </div>
+
+              {/* Amount — auto-filled from vehicle price, editable */}
+              <div>
+                <label className="field-label">
+                  {isAr ? 'المبلغ (ج.م)' : 'Amount (EGP)'}
+                  {selectedVehicle && (
+                    <span style={{ fontWeight: 400, color: 'var(--text-3)', marginInlineStart: 6 }}>
+                      {isAr ? '← السعر الرسمي' : '← auto-filled from official price'}
+                    </span>
+                  )}
+                </label>
+                <input
+                  className="input"
+                  type="number"
+                  step="0.01"
+                  required
+                  value={form.amount}
+                  onChange={e => setForm(p => ({ ...p, amount: e.target.value }))}
+                  placeholder="0"
+                />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="field-label">{isAr ? 'ملاحظات' : 'Notes'}</label>
+                <input
+                  className="input"
+                  type="text"
+                  value={form.notes}
+                  onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+                  placeholder={isAr ? 'اختياري' : 'Optional'}
+                />
+              </div>
             </div>
+
             <div className="modal-footer">
               <button type="button" className="btn" onClick={() => setAddOpen(false)}>{isAr ? 'إلغاء' : 'Cancel'}</button>
-              <button type="submit" className="btn btn-primary" disabled={acting === 'add'}>
+              <button type="submit" className="btn btn-primary"
+                disabled={acting === 'add' || !form.fromLocationId || !form.toLocationId || !form.vehicleId || !form.amount}>
                 {acting === 'add' ? (isAr ? 'جارٍ الحفظ…' : 'Saving…') : (isAr ? 'إنشاء التحويل' : 'Create Transfer')}
               </button>
             </div>
